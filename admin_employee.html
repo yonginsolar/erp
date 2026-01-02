@@ -294,7 +294,7 @@
 <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content text-center p-4"><div class="spinner-border text-primary mb-3"></div><h6 class="mb-0">처리 중...</h6></div></div></div>
 
 <script>
-// Supabase 설정
+// Supabase 설정 (기존과 동일)
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -304,7 +304,6 @@ let companyInfo = {};
 let advancedSettingsRaw = [];
 let currentEmpId = null, currentEmpName = null;
 let currentAnnualSalary = 0; 
-let currentRrnFront = ""; 
 let confirmCallback = null;
 let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal;
 let hasCheckedExpired = false;
@@ -406,67 +405,57 @@ async function runInvite() {
     if(error) showAlert("오류: "+error.message); else { showAlert(`등록됨: ${empId}`); inviteModal.hide(); loadList(); }
 }
 
-// 4. 직원 상세
-// [수정] 직원 상세 조회
+// 4. 직원 상세 (로직 수정됨: base_salary, get_emp_birthdate 적용)
 async function openDetail(u) {
-    currentEmpId = u.emp_id; 
-    currentEmpName = u.emp_name; 
+    currentEmpId = u.emp_id; currentEmpName = u.emp_name; 
+    
+    // [수정] DB 컬럼명 base_salary 사용
     currentAnnualSalary = u.base_salary || 0;
 
-    document.getElementById("detailName").innerText = u.emp_name;
-    document.getElementById("detailId").innerText = u.emp_id;
+    document.getElementById("detailName").innerText = u.emp_name; document.getElementById("detailId").innerText = u.emp_id;
 
-    // 기본 정보 세팅
+    // 조회 모드 값 세팅
     document.getElementById("viewName").innerText = u.emp_name;
     document.getElementById("viewPhone").innerText = u.phone || "-";
     document.getElementById("viewEmail").innerText = u.email || "-";
     document.getElementById("viewAddress").innerText = u.address || "-";
     document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     
+    // 수정 모드 값 세팅
     document.getElementById("editName").value = u.emp_name;
     document.getElementById("editPhone").value = u.phone || "";
     document.getElementById("editEmail").value = u.email || "";
     document.getElementById("editAddress").value = u.address || "";
     document.getElementById("editHireDate").value = u.hire_date || "";
 
-    // [연봉] 블러 처리
+    // 연봉/급여 세팅 (base_salary)
     document.getElementById("viewSalary").innerText = "******";
-    document.getElementById("viewSalary").dataset.real = (u.base_salary || 0).toLocaleString() + " 원";
+    document.getElementById("viewSalary").dataset.real = (u.base_salary||0).toLocaleString() + " 원";
+    
+    // [수정] salary_apply_date 사용
     document.getElementById("viewSalaryDate").innerText = u.salary_apply_date || "-";
     document.getElementById("editSalary").value = u.base_salary || 0;
     document.getElementById("salaryApplyDate").value = u.salary_apply_date || "";
 
-    // [수정됨] 생년월일 표시 (DB의 birth_date 컬럼 활용)
-    // 기존 데이터가 없으면 '미등록' 표시, 있으면 앞 6자리 표시
-    document.getElementById("viewBirth").innerText = u.birth_date ? u.birth_date : "미등록";
+    // [수정] 생년월일 가져오기 (RPC 함수 호출)
+    const { data: birthDate, error: rpcError } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: u.emp_id });
+    if(birthDate) document.getElementById("viewBirth").innerText = birthDate;
+    else document.getElementById("viewBirth").innerText = "미등록";
     
-    // 초기화
+    // 초기화 및 모드 설정
     toggleEditMode(false);
-    document.getElementById("rrnFront").value = ""; 
-    document.getElementById("rrnBack").value = "";
+    document.getElementById("rrnFront").value = ""; document.getElementById("rrnBack").value = "";
     
-    // 계약서 로드
-    const viewDiv = document.getElementById("contractView"); 
-    viewDiv.innerHTML = '로딩...'; 
-    document.getElementById("hiddenContractUrl").value = u.contract_url || "";
+    // 계약서
+    const viewDiv = document.getElementById("contractView"); viewDiv.innerHTML = '로딩...'; document.getElementById("hiddenContractUrl").value = u.contract_url || "";
     if(u.contract_url) {
-        try { 
-            const { data } = await _supabase.storage.from('contracts').createSignedUrl(u.contract_url, 3600); 
-            viewDiv.innerHTML = data ? `<a href="${data.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>` : `<span class="text-danger small">실패</span>`; 
-        } catch(e) { viewDiv.innerHTML = "-"; }
-    } else {
-        viewDiv.innerHTML = `<span class="text-muted small">미등록</span>`;
-    }
+        try { const { data } = await _supabase.storage.from('contracts').createSignedUrl(u.contract_url, 3600); viewDiv.innerHTML = data ? `<a href="${data.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>` : `<span class="text-danger small">실패</span>`; } catch(e) { viewDiv.innerHTML = "-"; }
+    } else viewDiv.innerHTML = `<span class="text-muted small">미등록</span>`;
 
-    // 퇴사 버튼 처리
+    // 퇴사 버튼 영역
     const area = document.getElementById("btnResignArea");
-    if(u.resign_date) {
-        area.innerHTML = `<button class="btn btn-sm btn-outline-primary" onclick="openAdminCertModal()">📄 증명서</button><button class="btn btn-sm btn-warning" onclick="cancelResign()">↩️ 퇴사 취소</button><button class="btn btn-sm btn-danger ms-2" onclick="reqDeletePermanent()">🗑️ 삭제</button>`;
-    } else { 
-        area.innerHTML = `<button class="btn btn-sm btn-outline-danger" onclick="doResign()">⛔ 퇴사 처리</button>`; 
-        loadSalaryData(); 
-        loadLeave(); 
-    }
+    if(u.resign_date) area.innerHTML = `<button class="btn btn-sm btn-outline-primary" onclick="openAdminCertModal()">📄 증명서</button><button class="btn btn-sm btn-warning" onclick="cancelResign()">↩️ 퇴사 취소</button><button class="btn btn-sm btn-danger ms-2" onclick="reqDeletePermanent()">🗑️ 삭제</button>`;
+    else { area.innerHTML = `<button class="btn btn-sm btn-outline-danger" onclick="doResign()">⛔ 퇴사 처리</button>`; loadSalaryData(); loadLeave(); }
     detailModal.show();
 }
 
@@ -478,17 +467,8 @@ function toggleSalaryVisibility() {
     const el = document.getElementById("viewSalary");
     el.innerText = el.innerText === "******" ? el.dataset.real : "******";
 }
-// [수정] 주민번호 앞자리 보기 토글 (알럿 -> 모달 변경)
-function toggleRRNVisibility() {
-    const el = document.getElementById("viewRRN");
-    // DB에 앞자리가 없거나 마스킹된 상태일 때 안내
-    if(el.innerText.includes("******")) {
-        // [수정] alert() 삭제 -> showAlert() 사용
-        showAlert("보안상 전체 주민번호는<br><strong>[정보 수정]</strong> 모드에서 재입력만 가능합니다.<br><span class='text-muted small'>(DB 암호화로 인해 복호화 불가)</span>");
-    }
-}
 
-// [수정] saveBasicInfo (완벽 복원 + 새 항목 추가)
+// [수정] saveBasicInfo (base_salary, salary_apply_date 완벽 매칭)
 async function saveBasicInfo() {
     const name = document.getElementById("editName").value;
     const phone = document.getElementById("editPhone").value;
@@ -498,12 +478,22 @@ async function saveBasicInfo() {
     const sal = Number(document.getElementById("editSalary").value); 
     const date = document.getElementById("salaryApplyDate").value;
     
-    // DB 업데이트 (기본정보 + 연봉정보 통합 저장)
-    await _supabase.from('ref_employees').update({ 
-        emp_name: name, phone: phone, email: email, address: address, hire_date: hireDate,
-        base_salary: sal, salary_apply_date: date 
-    }).eq('emp_id', currentEmpId);
+    // DB 업데이트
+    // 중요: 국장님 DB 컬럼명에 맞춰 base_salary, salary_apply_date 사용
+    const updates = { 
+        emp_name: name, 
+        phone: phone, 
+        email: email, 
+        address: address, 
+        hire_date: hireDate,
+        base_salary: sal, 
+        salary_apply_date: date 
+    };
+
+    const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', currentEmpId);
     
+    if(error) return showAlert("저장 실패: " + error.message);
+
     // 연봉 변경 시 히스토리 저장
     if (sal !== currentAnnualSalary) {
         await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date });
@@ -522,84 +512,49 @@ async function saveBasicInfo() {
     document.getElementById("viewSalaryDate").innerText = date;
     
     toggleEditMode(false);
-    showAlert("정보가 저장되었습니다.");
+    showAlert("정보와 연봉 계약이 저장되었습니다.");
 }
 
-// [복원] 주민번호 저장 함수
-// [수정] 주민번호 저장 (앞자리는 birth_date에 별도 저장)
-// [수정] 주민번호 저장 로직 (유효성 검사 실패 시 모달 띄움)
 async function saveRRN() {
-    const f = document.getElementById("rrnFront").value; 
-    const b = document.getElementById("rrnBack").value;
+    const f = document.getElementById("rrnFront").value; const b = document.getElementById("rrnBack").value;
+    if((f+b).length !== 13) return showAlert("13자리를 입력하세요.");
+    // 주민번호 저장 (암호화)
+    const { error } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f+"-"+b });
     
-    // 유효성 검사
-    if((f + b).length !== 13) {
-        return showAlert("주민번호 13자리를 모두 입력해주세요.");
-    }
-    
-    // 1. 전체 주민번호 암호화 저장
-    const { error: rpcError } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f + "-" + b });
-    
-    if(rpcError) {
-        return showAlert("저장 실패: " + rpcError.message);
-    }
-
-    // 2. 앞자리(생년월일) 평문 저장
-    const { error: updateError } = await _supabase.from('ref_employees').update({ birth_date: f }).eq('emp_id', currentEmpId);
-
-    if(updateError) {
-        console.error(updateError);
-        // [수정] 안내 메시지 개선
-        showAlert("주민번호는 저장되었으나<br>생년월일(앞자리) 갱신에 실패했습니다.");
-    } else {
-        // 성공 시 모달
-        showAlert("주민번호가 안전하게 암호화되어 저장되었습니다.<br>(생년월일 정보가 갱신되었습니다)"); 
-        
-        // 화면 갱신
-        document.getElementById("viewBirth").innerText = f; 
-        document.getElementById("rrnFront").value = ""; 
-        document.getElementById("rrnBack").value = ""; 
+    if(error) showAlert("실패: "+error.message); 
+    else { 
+        showAlert("주민번호가 암호화되어 저장되었습니다."); 
+        // 화면 즉시 갱신 (저장했으니 앞자리는 바로 보여줌)
+        document.getElementById("viewBirth").innerText = f;
+        document.getElementById("rrnFront").value=""; document.getElementById("rrnBack").value=""; 
         toggleEditMode(false); 
     }
 }
 
-// [복원] 계약서 업로드 함수
-async function uploadContract() {
-    const fileInput = document.getElementById("contractFile");
-    if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요.");
-    const file = fileInput.files[0]; const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`;
+async function uploadContract() { 
+    const fileInput = document.getElementById("contractFile"); 
+    if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요."); 
+    const file = fileInput.files[0]; 
+    const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`; 
     showLoading(); 
-    try {
-        const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single();
-        if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]);
-        const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true });
-        if (error) throw error;
-        await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId);
-        hideLoading();
-        setTimeout(async () => {
+    try { 
+        const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single(); 
+        if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]); 
+        const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true }); 
+        if (error) throw error; 
+        await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId); 
+        hideLoading(); 
+        setTimeout(async () => { 
             showAlert("계약서가 등록되었습니다."); 
-            const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600);
-            document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기 (보안)</a>`;
-            document.getElementById("hiddenContractUrl").value = data.path; fileInput.value = ""; 
-        }, 500);
-    } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); }
+            const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600); 
+            document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>`; 
+            document.getElementById("hiddenContractUrl").value = data.path; 
+            fileInput.value = ""; 
+        }, 500); 
+    } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); } 
 }
 
-// [복원] 영구 삭제 함수
-async function reqDeletePermanent() { 
-    showConfirm("⚠️ 영구 삭제 경고", `<strong>${currentEmpName}</strong> 님의 데이터와 계약서 파일을<br>모두 삭제하시겠습니까? (복구 불가)`, async function() { 
-        showLoading(); detailModal.hide(); 
-        const filePath = document.getElementById("hiddenContractUrl").value; 
-        if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); 
-        await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); 
-        await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); 
-        await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); 
-        await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); 
-        await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); 
-        hideLoading(); showAlert("완전히 삭제되었습니다."); loadList(); 
-    }); 
-}
-
+async function reqDeletePermanent() { showConfirm("⚠️ 영구 삭제 경고", `<strong>${currentEmpName}</strong> 님의 데이터와 계약서 파일을<br>모두 삭제하시겠습니까? (복구 불가)`, async function() { showLoading(); detailModal.hide(); const filePath = document.getElementById("hiddenContractUrl").value; if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); hideLoading(); showAlert("완전히 삭제되었습니다."); loadList(); }); }
 async function doResign() { showConfirm(`${currentEmpName}님을 퇴사 처리하시겠습니까?`, async () => { await _supabase.from('ref_employees').update({ resign_date: new Date().toISOString().slice(0, 10) }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
 async function cancelResign() { showConfirm(`퇴사 처리를 취소하시겠습니까?`, async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
 
