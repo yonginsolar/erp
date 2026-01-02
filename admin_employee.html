@@ -102,23 +102,55 @@
                 </div>
             </div>
           </div>
-          <div class="tab-pane fade" id="tabSalary">
-            <div class="alert alert-info d-flex justify-content-between align-items-center py-2 mb-3"><span class="small">📢 연봉 기준 <strong>자동 계산</strong> (귀속월 기준)</span><span class="badge bg-secondary" id="salaryStatusBadge">조회 중...</span></div>
-            <div class="d-flex align-items-center mb-3">
-                <label class="me-2 fw-bold small">귀속월</label>
-                <input type="month" id="salaryMonth" class="form-control form-control-sm w-auto me-2" onchange="loadSalaryData()">
-                <button class="btn btn-sm btn-outline-dark" onclick="printSalaryAdmin()">🖨️ 명세서 인쇄</button>
-            </div>
-            <div class="info-card border mb-3"><div class="row g-2 align-items-end"><div class="col-12"><label class="small fw-bold text-primary">💰 월 지급 총액 (연봉 ÷ 12)</label><input type="number" id="payTotalFixed" class="form-control fw-bold fs-5 bg-white" oninput="recalcSalaryComponents()"><div class="form-text x-small">이 금액을 기준으로 기본급과 수당을 나눕니다.</div></div></div></div>
-            <div class="row g-2">
-                <div class="col-4"><label class="small text-muted">식대 (비과세)</label><input type="number" id="payMeal" class="form-control" value="0" oninput="recalcSalaryComponents()"></div>
-                <div class="col-4"><label class="small text-muted">차량유지비</label><input type="number" id="payCar" class="form-control" value="0" oninput="recalcSalaryComponents()"></div>
-                <div class="col-4"><label class="small text-muted">육아수당</label><input type="number" id="payChild" class="form-control" value="0" oninput="recalcSalaryComponents()"></div>
-                <div class="col-6"><label class="small text-muted">기본급 (자동계산)</label><input type="number" id="payBasic" class="form-control bg-light" readonly></div>
-                <div class="col-6"><label class="small text-muted">상여/성과급 (별도)</label><input type="number" id="payBonus" class="form-control" value="0"></div>
-            </div>
-            <button id="btnSaveSalary" class="btn btn-success w-100 mt-3 btn-rounded" onclick="saveSalary()">💾 급여 확정 및 저장</button>
-          </div>
+       <div class="tab-pane fade" id="tabSalary">
+  <div id="salaryAlertBox" class="mb-3 hidden"></div>
+
+  <div class="alert alert-info d-flex justify-content-between align-items-center py-2 mb-3">
+    <span class="small">📢 연봉 기준 <strong>자동 계산</strong> (귀속월 기준)</span>
+    <span class="badge bg-secondary" id="salaryStatusBadge">조회 중...</span>
+  </div>
+
+  <div class="d-flex align-items-center mb-3">
+    <label class="me-2 fw-bold small">귀속월</label>
+    <input type="month" id="salaryMonth" class="form-control form-control-sm w-auto me-2" onchange="loadSalaryData()">
+    <button class="btn btn-sm btn-outline-dark" onclick="printSalaryAdmin()">🖨️ 명세서 인쇄</button>
+  </div>
+
+  <div class="info-card border mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-12">
+        <label class="small fw-bold text-primary">💰 월 지급 총액 (연봉 ÷ 12)</label>
+        <input type="number" id="payTotalFixed" class="form-control fw-bold fs-5 bg-white" oninput="recalcSalaryComponents()">
+        <div class="form-text x-small">이 금액을 기준으로 기본급과 수당을 나눕니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-2">
+    <div class="col-4">
+      <label class="small text-muted">식대 (비과세)</label>
+      <input type="number" id="payMeal" class="form-control" value="0" oninput="recalcSalaryComponents()">
+    </div>
+    <div class="col-4">
+      <label class="small text-muted">차량유지비</label>
+      <input type="number" id="payCar" class="form-control" value="0" oninput="recalcSalaryComponents()">
+    </div>
+    <div class="col-4">
+      <label class="small text-muted">육아수당</label>
+      <input type="number" id="payChild" class="form-control" value="0" oninput="recalcSalaryComponents()">
+    </div>
+    <div class="col-6">
+      <label class="small text-muted">기본급 (자동계산)</label>
+      <input type="number" id="payBasic" class="form-control bg-light" readonly>
+    </div>
+    <div class="col-6">
+      <label class="small text-muted">상여/성과급 (별도)</label>
+      <input type="number" id="payBonus" class="form-control" value="0" oninput="recalcSalaryComponents()">
+    </div>
+  </div>
+
+  <button id="btnSaveSalary" class="btn btn-success w-100 mt-3 btn-rounded" onclick="saveSalary()">💾 급여 확정 및 저장</button>
+</div>
           <div class="tab-pane fade" id="tabLog">
             <div class="card bg-light border-0 p-3 mb-3 text-center"><small class="text-muted">현재 잔여 연차</small><h3 class="fw-bold text-primary m-0" id="displayLeaveRemain">0일</h3></div>
             <div class="mb-2"><label class="small text-muted">구분</label><select id="logType" class="form-select"><option value="지급">🎁 지급 (포상 등)</option><option value="차감">⚠️ 차감 (징계 등)</option></select></div>
@@ -266,20 +298,91 @@ async function confirmResign() { const rDate = document.getElementById("inputRes
 async function cancelResign() { showConfirm("퇴사 취소하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
 
 async function loadSalaryData() {
-    const month = document.getElementById("salaryMonth").value; const badge = document.getElementById("salaryStatusBadge"); badge.innerText = "조회 중...";
-    const { data: saved } = await _supabase.from('hr_salary').select('*').eq('emp_id', currentEmpId).eq('year_month', month).single();
-    if(saved) {
+    const month = document.getElementById("salaryMonth").value;
+    const badge = document.getElementById("salaryStatusBadge");
+    const alertBox = document.getElementById("salaryAlertBox"); // 알림 박스
+    
+    // UI 초기화
+    badge.innerText = "조회 중...";
+    badge.className = "badge bg-secondary";
+    alertBox.classList.add("hidden");
+    alertBox.innerHTML = "";
+
+    // ---------------------------------------------------------
+    // [추가 로직] 무급휴가 자동 감지 (반자동 알림)
+    // ---------------------------------------------------------
+    if (month && currentEmpId) {
+        // 해당 월의 1일 ~ 말일 범위 설정 (간편하게 문자열 비교)
+        const startDate = `${month}-01`;
+        const endDate = `${month}-31`;
+
+        // DB 조회: 해당 직원의 '완료'된 문서 중 '무급' 키워드가 포함된 것
+        const { data: unpaidDocs } = await _supabase.from('ref_approval')
+            .select('amount, title, created_at')
+            .eq('drafter_id', currentEmpId)
+            .eq('status', '완료')
+            .like('doc_type', '%무급%') // "휴가(무급휴가)" 감지
+            .gte('created_at', startDate)
+            .lte('created_at', endDate);
+
+        if (unpaidDocs && unpaidDocs.length > 0) {
+            // 무급휴가 일수 합계 계산
+            let totalUnpaidDays = 0;
+            unpaidDocs.forEach(d => totalUnpaidDays += Number(d.amount));
+
+            // 경고창 표시
+            alertBox.innerHTML = `
+                <div class="alert alert-danger d-flex align-items-center mb-0" role="alert">
+                    <div class="me-2 fs-4">⚠️</div>
+                    <div>
+                        <strong>[주의] 무급휴가 발생 확인</strong><br>
+                        이번 달 승인된 무급휴가가 총 <strong>${totalUnpaidDays}일</strong> 있습니다.<br>
+                        <span style="font-size:0.85rem;">(급여에서 해당 일수만큼 수동으로 차감해 주세요)</span>
+                    </div>
+                </div>
+            `;
+            alertBox.classList.remove("hidden");
+        }
+    }
+    // ---------------------------------------------------------
+
+    // 기존 급여 데이터 조회
+    const { data: saved } = await _supabase.from('hr_salary')
+        .select('*')
+        .eq('emp_id', currentEmpId)
+        .eq('year_month', month)
+        .single();
+
+    if (saved) {
+        // 저장된 데이터가 있으면 불러옴
         document.getElementById("payTotalFixed").value = saved.pay_total || 0;
-        document.getElementById("payMeal").value = saved.pay_meal; document.getElementById("payCar").value = saved.pay_car; document.getElementById("payChild").value = saved.pay_child; document.getElementById("payBonus").value = saved.pay_bonus;
-        badge.innerText = "저장된 데이터"; badge.className = "badge bg-success";
-        currentSalaryDataForPrint = saved; currentSalaryDataForPrint.year_month = month;
+        document.getElementById("payMeal").value = saved.pay_meal;
+        document.getElementById("payCar").value = saved.pay_car;
+        document.getElementById("payChild").value = saved.pay_child;
+        document.getElementById("payBonus").value = saved.pay_bonus;
+        
+        badge.innerText = "저장된 데이터";
+        badge.className = "badge bg-success";
+        
+        // 인쇄용 데이터 캐싱
+        currentSalaryDataForPrint = saved;
+        currentSalaryDataForPrint.year_month = month;
     } else {
+        // 저장된 게 없으면 연봉 기준 자동 계산
         const monthlyTotal = Math.floor(currentAnnualSalary / 12); 
         document.getElementById("payTotalFixed").value = monthlyTotal; 
-        document.getElementById("payMeal").value = 0; document.getElementById("payCar").value = 0; document.getElementById("payChild").value = 0; document.getElementById("payBonus").value = 0;
-        badge.innerText = "자동 계산 (미저장)"; badge.className = "badge bg-secondary";
+        document.getElementById("payMeal").value = 0;
+        document.getElementById("payCar").value = 0;
+        document.getElementById("payChild").value = 0;
+        document.getElementById("payBonus").value = 0;
+        
+        badge.innerText = "자동 계산 (미저장)";
+        badge.className = "badge bg-secondary";
+        
         currentSalaryDataForPrint = null;
     }
+
+    // 기본급 및 공제액 재계산
     recalcSalaryComponents();
 }
 
