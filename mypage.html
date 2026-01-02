@@ -546,11 +546,19 @@ async function renderCalendar() {
         }
     });
     
-    // [4] 창립기념일 (자동 매년 반복)
-    if(companyInfo.estDate) {
-        years.forEach(y => {
-            events.push({ title: "🎉 창립기념일", start: `${y}-${companyInfo.estDate.slice(5,10)}`, color: '#ff4081', allDay: true });
-        });
+// [수정] 창립기념일: 현재 연도 기준 앞뒤 50년 치 자동 생성 (영구 반복 효과)
+    if (companyInfo.estDate) {
+        const thisYear = new Date().getFullYear();
+        // 앞뒤 50년 (총 100년) 동안의 기념일 생성
+        for (let y = thisYear - 50; y <= thisYear + 50; y++) {
+            // estDate가 '2021-12-17'이라면 slice(5,10)은 '12-17'
+            events.push({ 
+                title: "🎉 창립기념일", 
+                start: `${y}-${companyInfo.estDate.slice(5, 10)}`, 
+                color: '#ff4081', 
+                allDay: true 
+            });
+        }
     }
 
     const el = document.getElementById('calendar');
