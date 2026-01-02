@@ -304,7 +304,18 @@ async function saveSalary() {
     if (error) showAlert("실패: "+error.message); else { showAlert("급여가 확정되었습니다."); loadSalaryData(); }
 }
 
-async function loadLeave() { let generated = 0; const { data: emp } = await _supabase.from('ref_employees').select('hire_date').eq('emp_id', currentEmpId).single(); if(emp?.hire_date) { const join = new Date(emp.hire_date); const now = new Date(); const diffY = now.getFullYear() - join.getFullYear(); generated = diffY < 1 ? (now.getMonth() - join.getMonth()) : 15; } let adjusted = 0; const { data: adjs } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', currentEmpId); if(adjs) adjs.forEach(a => { if(a.adj_type==='지급') adjusted+=Number(a.days); else adjusted-=Number(a.days); }); let used = 0; const { data: apps } = await _supabase.from('ref_approval').select('amount').eq('drafter_id', currentEmpId).eq('doc_type', '휴가').eq('status', '완료'); if(apps) apps.forEach(a => used+=Number(a.amount)); document.getElementById("displayLeaveRemain").innerText = (Math.max(0, generated + adjusted - used)) + "일"; }
+// [수정] 관리자용 연차 조회 (특정 직원)
+async function loadLeave() { 
+    // 전역변수 currentEmpId 사용
+    const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: currentEmpId });
+    
+    if (error) {
+        alert("연차 조회 실패: " + error.message);
+        return;
+    }
+    
+    document.getElementById("displayLeaveRemain").innerText = remainDays + "일"; 
+}
 async function saveLog() { const type = document.getElementById("logType").value; const val = Number(document.getElementById("logValue").value); const reason = document.getElementById("logReason").value; if(!val || !reason) return showAlert("입력 필요"); await _supabase.from('hr_leave_adj').insert({ emp_id: currentEmpId, adj_type: type, days: val, reason: reason }); showAlert("반영됨"); document.getElementById("logValue").value = ""; document.getElementById("logReason").value = ""; loadLeave(); }
 
 function openAdminCertModal() { document.getElementById("adminCertPurpose").value = "관공서 제출용"; toggleAdminEtc(); adminCertModal.show(); }
