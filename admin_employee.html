@@ -364,8 +364,11 @@ function printSalaryAdmin() {
     const payDateObj = new Date(y, Number(m), 10); 
     const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth()+1}월 ${payDateObj.getDate()}일`;
 
-    const fmt = (n) => (!n || Number(n)===0) ? "" : Number(n).toLocaleString();
-    const fmtFix = (n) => Number(n).toLocaleString();
+// [수정] 값이 없거나 0이어도 무조건 "0"으로 출력되도록 변경
+    const fmt = (n) => Number(n || 0).toLocaleString(); 
+    
+    // (참고: fmtFix는 이미 0을 출력하고 있었으므로 fmt와 똑같이 써도 무방합니다)
+    const fmtFix = (n) => Number(n || 0).toLocaleString();
     
     // [중요] 회사명/이사장 undefined 방지
     const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
