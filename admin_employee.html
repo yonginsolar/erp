@@ -388,148 +388,175 @@ function printDocument(data) {
     const win = window.open('', '', 'width=1100,height=900');
     let contentHtml = "";
     
-    // [수정] 스타일 분리 (급여대장용 vs 명세서용)
-    const commonCss = ` * { box-sizing: border-box; } body { font-family: "Malgun Gothic", serif; margin: 0; padding: 0; background: #555; } .print-fab { position: fixed; bottom: 30px; right: 30px; background: #fff; padding: 10px 15px; border-radius: 30px; z-index: 9999; display: flex; gap: 10px; border:1px solid #ccc; } @media print { .no-print { display: none !important; } html, body { margin: 0; background: #fff; } .page-wrap { width: 100%; height: auto; margin: 0; padding: 0; box-shadow: none; } } `;
-    
-    // [수정] 급여대장 전용 스타일 (가로)
-    const landscapeCss = ` @page { size: A4 landscape; margin: 10mm; } .page-wrap { width: 297mm; min-height: 210mm; padding: 15mm; background: white; margin: 20px auto; } table { width: 100%; border-collapse: collapse; font-size: 11px; } th, td { border: 1px solid #999; padding: 4px 6px; } th { background-color: #f5f5f5; text-align: center; font-weight: bold; white-space: nowrap; } .text-center { text-align: center; } .text-end { text-align: right; } .fw-bold { font-weight: bold; } .bg-light { background-color: #f9f9f9; } `;
-    
-    // [수정] 명세서 전용 스타일 (세로)
-    const portraitCss = ` @page { size: A4 portrait; margin: 0; } .page-wrap { width: 210mm; min-height: 297mm; padding: 15mm; background: white; margin: 20px auto; position: relative; } table { width: 100%; border-collapse: collapse; font-size: 14px; } th, td { border: 1px solid #000 !important; } .print-salary .print-content { zoom: 0.86; } .print-cert .print-content { zoom: 0.98; } img { max-width: 100%; height: auto; } .text-end { text-align: right; } .fw-bold { font-weight: bold; } `;
+    // [핵심] 공통 CSS: 브라우저 기본 여백 제거 및 박스 모델 설정
+    const commonCss = `
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+        body { font-family: "Malgun Gothic", serif; background: #555; }
+        .print-fab { position: fixed; bottom: 30px; right: 30px; background: #fff; padding: 10px 15px; border-radius: 30px; z-index: 9999; display: flex; gap: 10px; border:1px solid #ccc; }
+        
+        @media print {
+            .no-print { display: none !important; }
+            html, body { margin: 0 !important; padding: 0 !important; height: 100%; background: #fff !important; }
+            /* 중요: 페이지 넘김 방지 */
+            .page-wrap { box-shadow: none !important; margin: 0 !important; page-break-after: avoid !important; page-break-inside: avoid !important; }
+        }
+    `;
 
+    // 1. [가로] 급여대장 스타일 (A4 Landscape)
+    const landscapeCss = `
+        @page { size: A4 landscape; margin: 5mm; } /* 여백을 5mm로 최소화 */
+        .page-wrap { width: 287mm; min-height: 190mm; padding: 10mm; background: white; margin: 0 auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { border: 1px solid #999; padding: 4px 6px; }
+        th { background-color: #f5f5f5; text-align: center; font-weight: bold; white-space: nowrap; }
+        .text-center { text-align: center; } .text-end { text-align: right; } .fw-bold { font-weight: bold; } .bg-light { background-color: #f9f9f9; }
+    `;
+
+    // 2. [세로] 명세서/증명서 스타일 (A4 Portrait) -> 강제 1장 고정
+    const portraitCss = `
+        @page { size: A4 portrait; margin: 0; } /* 여백 0 */
+        .page-wrap { 
+            width: 210mm; 
+            height: 297mm; /* 높이 고정 */
+            padding: 15mm; 
+            background: white; 
+            margin: 0 auto; 
+            overflow: hidden; /* 넘치면 자름 (다음장 방지) */
+            position: relative;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #000 !important; padding: 6px; }
+        img { max-width: 100%; height: auto; }
+        
+        /* 내용 축소 (zoom)으로 한 장에 쏙 들어오게 처리 */
+        .print-salary { transform: scale(0.95); transform-origin: top center; } 
+        .print-cert { transform: scale(1.0); }
+        
+        .text-end { text-align: right; } .fw-bold { font-weight: bold; }
+    `;
+
+    // --- HTML 생성 로직 (기존과 동일하지만 디자인 디테일 유지) ---
     if (data.type === 'ledger') {
         contentHtml = `
-        <div style="padding: 10px;">
-            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 20px;">
-                ${data.logo ? `<img src="${data.logo}" style="height:40px;">` : '<div></div>'}
+        <div style="padding: 5px;">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 15px;">
+                ${data.logo ? `<img src="${data.logo}" style="height:35px;">` : '<div></div>'}
                 <div style="text-align:center;">
-                    <h1 style="margin:0; font-size: 24px; text-decoration: underline;">${data.title}</h1>
-                    <div style="font-size:12px; margin-top:5px;">출력일: ${new Date().toLocaleDateString()}</div>
+                    <h1 style="margin:0; font-size: 22px; text-decoration: underline;">${data.title}</h1>
+                    <div style="font-size:11px; margin-top:5px;">출력일: ${new Date().toLocaleDateString()}</div>
                 </div>
-                <table style="width: 200px; border-collapse: collapse; text-align: center; float: right; margin-bottom: 10px;">
-                  <tr>
-                    <td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px;">담당</td>
-                    <td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px;">국장</td>
-                    <td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px;">이사장</td>
-                  </tr>
-                  <tr>
-                    <td style="border: 1px solid #000; height: 50px;"></td>
-                    <td style="border: 1px solid #000; height: 50px;"></td>
-                    <td style="border: 1px solid #000; height: 50px;"></td>
-                  </tr>
+                <table style="width: 180px; border-collapse: collapse; text-align: center; margin-bottom: 0;">
+                  <tr><td style="background: #f0f0f0; padding: 2px;">담당</td><td style="background: #f0f0f0; padding: 2px;">국장</td><td style="background: #f0f0f0; padding: 2px;">이사장</td></tr>
+                  <tr><td style="height: 40px;"></td><td style="height: 40px;"></td><td style="height: 40px;"></td></tr>
                 </table>
             </div>
-            
-            <div style="clear:both;"></div>
-
             <table>
                 <thead>
                     <tr style="background:#e0e0e0;">
-                        <th rowspan="2" style="width:30px;">No</th>
-                        <th rowspan="2" style="width:70px;">성명</th>
-                        <th colspan="6">지 급 내 역</th>
-                        <th colspan="7">공 제 내 역</th>
-                        <th rowspan="2" style="width:80px; background:#e3f2fd;">실수령액</th>
+                        <th rowspan="2" style="width:30px;">No</th><th rowspan="2" style="width:60px;">성명</th>
+                        <th colspan="6">지 급 내 역</th><th colspan="7">공 제 내 역</th>
+                        <th rowspan="2" style="width:70px; background:#e3f2fd;">실수령액</th>
                     </tr>
                     <tr style="background:#f0f0f0;">
                         <th>기본급</th><th>식대</th><th>차량</th><th>기타수당</th><th>상여</th><th style="background:#fff3e0;">지급계</th>
                         <th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>소득세</th><th>지방세</th><th>기타공제</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${data.tableBody}
-                </tbody>
+                <tbody>${data.tableBody}</tbody>
             </table>
         </div>`;
     } 
-    // [롤백 완료] 개별 명세서 - Box 스타일 (마이페이지 v1.9.5 원본 복구)
     else if(data.type === 'salary') {
         contentHtml = `
-        <div style="padding: 10px; position: relative; height: 100%;">
-            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:0px; top:-10px; height:45px;">` : ''}
-            <h1 style="text-align:center; margin-bottom: 30px; font-size: 28px; margin-top: 50px;">${data.titleDate} 급여명세서</h1>
+        <div class="print-salary" style="padding: 10px; height: 100%;">
+            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:0; top:-10px; height:40px;">` : ''}
+            <h1 style="text-align:center; margin-bottom: 30px; font-size: 26px; margin-top: 40px;">${data.titleDate} 급여명세서</h1>
             <table style="width:100%; margin-bottom:20px;">
-                <tr><th style="background:#f5f5f5; padding:8px; width:18%;">귀속연월</th><td style="padding:8px; width:32%;">${data.attrDate}</td><th style="background:#f5f5f5; padding:8px; width:18%;">사원번호/명</th><td style="padding:8px;">${data.empInfo}</td></tr>
-                <tr><th style="background:#f5f5f5; padding:8px;">지급일자</th><td style="padding:8px;">${data.payDate}</td><th style="background:#f5f5f5; padding:8px;">소속/직급</th><td style="padding:8px;">${data.dept} / ${data.pos}</td></tr>
+                <tr><th style="background:#f5f5f5; width:18%;">귀속연월</th><td style="width:32%;">${data.attrDate}</td><th style="background:#f5f5f5; width:18%;">사원번호/명</th><td>${data.empInfo}</td></tr>
+                <tr><th style="background:#f5f5f5;">지급일자</th><td>${data.payDate}</td><th style="background:#f5f5f5;">소속/직급</th><td>${data.dept} / ${data.pos}</td></tr>
             </table>
-            <div style="display:flex; gap:20px; border-top:2px solid #888; padding-top:10px;">
+            <div style="display:flex; gap:15px; border-top:2px solid #888; padding-top:15px;">
                 <div style="flex:1;">
                     <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #0d47a1; color:#0d47a1; margin-bottom:5px;">지급내역</div>
                     <table style="width:100%;">
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">기본급</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_basic}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">식 대</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_meal}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">차량유지비</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_car}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">직책수당</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_pos}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">근속수당</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_svc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">연장수당</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_ot}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">육아수당</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_child}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">상여금</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_bonus}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">기본급</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_basic}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">식 대</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_meal}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">차량유지비</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_car}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">직책수당</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_pos}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">근속수당</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_svc}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">연장수당</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_ot}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">육아수당</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_child}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">상여금</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.p_bonus}</td></tr>
                     </table>
                 </div>
                 <div style="flex:1;">
                     <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #b71c1c; color:#b71c1c; margin-bottom:5px;">공제내역</div>
                     <table style="width:100%;">
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">국민연금</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_pen}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">건강보험</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_hlt}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">장기요양</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_care}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">고용보험</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_emp}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">소득세</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_inc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">지방소득세</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_loc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">가불금</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_adv}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">출자금</td><td style="text-align:right; padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_cap}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">국민연금</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_pen}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">건강보험</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_hlt}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">장기요양</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_care}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">고용보험</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_emp}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">소득세</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_inc}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">지방소득세</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_loc}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">가불금</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_adv}</td></tr>
+                        <tr><td style="border-bottom:1px solid #eee; border:none !important;">출자금</td><td class="text-end" style="border-bottom:1px solid #eee; border:none !important;">${data.d_cap}</td></tr>
                     </table>
                 </div>
             </div>
-            <div style="display:flex; margin-top:40px; border-top:2px solid #888; padding-top:20px; align-items:center;">
-                <div style="flex:1; font-size:14px; color:#555; padding-left:20px;">귀하의 노고에 진심으로 감사드립니다.</div>
-                <div style="width:300px;">
+            <div style="display:flex; margin-top:30px; border-top:2px solid #888; padding-top:20px; align-items:center;">
+                <div style="flex:1; font-size:14px; color:#555; padding-left:10px;">귀하의 노고에 진심으로 감사드립니다.</div>
+                <div style="width:280px;">
                     <table style="width:100%;">
-                        <tr><th style="background:#f9f9f9; padding:8px;">지급합계</th><td style="text-align:right; padding:8px; font-weight:bold;">${data.p_total}</td></tr>
-                        <tr><th style="background:#f9f9f9; padding:8px;">공제합계</th><td style="text-align:right; padding:8px; font-weight:bold;">${data.d_total}</td></tr>
-                        <tr><th style="background:#f0f0f0; padding:8px; border-bottom:2px solid #555;">실지급액</th><td style="text-align:right; padding:8px; border-bottom:2px solid #555; font-weight:bold; background:#fff;">${data.net}</td></tr>
+                        <tr><th style="background:#f9f9f9; padding:6px;">지급합계</th><td class="text-end" style="padding:6px; font-weight:bold;">${data.p_total}</td></tr>
+                        <tr><th style="background:#f9f9f9; padding:6px;">공제합계</th><td class="text-end" style="padding:6px; font-weight:bold;">${data.d_total}</td></tr>
+                        <tr><th style="background:#f0f0f0; padding:6px; border-bottom:2px solid #555;">실지급액</th><td class="text-end" style="padding:6px; border-bottom:2px solid #555; font-weight:bold; background:#fff;">${data.net}</td></tr>
                     </table>
                 </div>
             </div>
-            <div style="margin-top:50px; text-align:center; position:relative;">
+            <div style="margin-top:40px; text-align:center; position:relative;">
                 <span style="font-size:18px; font-weight:bold; position:relative; z-index:1;">${data.compName} 대표자 ${data.chairman}</span>
                 ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
         </div>`;
     } 
     else if(data.type === 'cert') {
-        // ... (기존 재직증명서 코드 동일) ...
         contentHtml = `
-        <div class="cert-container" style="border: 2px solid #333; padding: 30px; height: 100%; position: relative; box-sizing: border-box;">
+        <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box;">
             ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
-            <div style="text-align:right; font-size:12px; margin-top:30px; margin-bottom:5px;">www.yonginsolar.kr</div>
-            <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 60px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
+            <div style="text-align:right; font-size:12px; margin-top:20px; margin-bottom:5px;">www.yonginsolar.kr</div>
+            <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
             <div style="text-align:right; font-size: 13px; margin-bottom: 20px;">문서번호: ${data.docNum}</div>
+            
             <div style="text-align:left; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 5px;">1. 인적사항</div>
             <table style="width:100%;">
-                <tr><th style="background:#f9f9f9; padding:6px 10px; width:120px;">성 명</th><td style="padding:6px 10px;">${data.name}</td><th style="background:#f9f9f9; padding:6px 10px; width:120px;">생년월일</th><td style="padding:6px 10px;">${data.birth}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">소 속</th><td style="padding:6px 10px;">${data.dept}</td><th style="background:#f9f9f9; padding:6px 10px;">직 위</th><td style="padding:6px 10px;">${data.pos}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">주 소</th><td colspan="3" style="padding:6px 10px;">${data.address}</td></tr>
+                <tr><th style="background:#f9f9f9; width:100px;">성 명</th><td>${data.name}</td><th style="background:#f9f9f9; width:100px;">생년월일</th><td>${data.birth}</td></tr>
+                <tr><th style="background:#f9f9f9;">소 속</th><td>${data.dept}</td><th style="background:#f9f9f9;">직 위</th><td>${data.pos}</td></tr>
+                <tr><th style="background:#f9f9f9;">주 소</th><td colspan="3">${data.address}</td></tr>
             </table>
+
             <div style="text-align:left; font-weight: bold; font-size: 16px; margin-top: 20px; margin-bottom: 5px;">2. 재직사항</div>
             <table style="width:100%;">
-                <tr><th style="background:#f9f9f9; padding:6px 10px; width:120px;">재직기간</th><td colspan="3" style="padding:6px 10px;">${data.tenure}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">용 도</th><td colspan="3" style="padding:6px 10px;">${data.purpose}</td></tr>
+                <tr><th style="background:#f9f9f9; width:100px;">재직기간</th><td colspan="3">${data.tenure}</td></tr>
+                <tr><th style="background:#f9f9f9;">용 도</th><td colspan="3">${data.purpose}</td></tr>
             </table>
-            <div style="text-align:center; margin-top: 50px; font-size: 18px;">위와 같이 재직하고 있음을 증명합니다.</div>
+
+            <div style="text-align:center; margin-top: 60px; font-size: 18px;">위와 같이 재직하고 있음을 증명합니다.</div>
             <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
-            <div style="text-align:center; margin-top:50px; position:relative;">
+            
+            <div style="text-align:center; margin-top:60px; position:relative;">
                 <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 대표자 ${data.chairman}</span>
                 ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
-            <div style="text-align:center; margin-top: 60px; font-size: 12px; line-height: 1.6; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
+            <div style="text-align:center; margin-top: 70px; font-size: 12px; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
         </div>`;
     }
 
-    // [수정] 타입에 따라 CSS 스타일 분기 적용
     const finalCss = data.type === 'ledger' ? landscapeCss : portraitCss;
     const pageClass = data.type === 'ledger' ? 'print-ledger' : (data.type === 'salary' ? 'print-salary' : 'print-cert');
 
-    const html = `<html><head><title>인쇄 미리보기</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>${commonCss} ${finalCss}</style></head><body><div class="print-fab no-print"><span class="small fw-bold">인쇄 미리보기</span><button class="btn btn-primary btn-sm rounded-pill" onclick="window.print()">🖨️ 인쇄하기</button><button class="btn btn-secondary btn-sm rounded-pill" onclick="window.close()">닫기</button></div><div class="page-wrap ${pageClass}"><div class="print-content">${contentHtml}</div></div></body></html>`;
+    const html = `<html><head><title>인쇄 미리보기</title><style>${commonCss} ${finalCss}</style></head><body><div class="print-fab no-print"><span class="small fw-bold">인쇄 미리보기</span><button onclick="window.print()" style="padding:5px 10px; cursor:pointer;">🖨️ 인쇄하기</button><button onclick="window.close()" style="padding:5px 10px; cursor:pointer;">닫기</button></div><div class="page-wrap ${pageClass}">${contentHtml}</div></body></html>`;
+    
     win.document.write(html);
     win.document.close();
 }
