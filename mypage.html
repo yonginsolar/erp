@@ -200,23 +200,34 @@
 <div class="modal fade" id="eventModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 추가</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 관리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <label class="small text-muted">일정명</label>
-        <input type="text" id="evtTitle" class="form-control mb-2">
-        <label class="small text-muted">날짜</label>
-        <div class="input-group">
-            <input type="date" id="evtStart" class="form-control">
-            <span class="input-group-text">~</span>
-            <input type="date" id="evtEnd" class="form-control">
-        </div>
-        <div class="form-check mt-2">
+        <input type="hidden" id="evtId"> <label class="small text-muted mb-1">일정명</label>
+        <input type="text" id="evtTitle" class="form-control mb-2" placeholder="예: 회의, 창립기념일">
+        
+        <label class="small text-muted mb-1">일시</label>
+        <div class="d-flex gap-2 mb-2">
+            <input type="date" id="evtDate" class="form-control">
+            <input type="time" id="evtTime" class="form-control"> </div>
+
+        <label class="small text-muted mb-1">반복 설정</label>
+        <select id="evtRecure" class="form-select mb-3">
+            <option value="none">반복 없음</option>
+            <option value="yearly">매년 반복 (생일, 기념일)</option>
+            <option value="monthly">매월 반복 (회의, 급여일)</option>
+        </select>
+
+        <div class="form-check">
             <input class="form-check-input" type="checkbox" id="evtIsHoliday">
-            <label class="form-check-label small" for="evtIsHoliday">공휴일(빨간날)</label>
+            <label class="form-check-label small" for="evtIsHoliday">공휴일 (빨간날 표시)</label>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary btn-sm w-100" onclick="saveEvent()">저장</button>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-danger btn-sm hidden" id="btnDelEvent" onclick="deleteEvent()">삭제</button>
+        <div>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveEvent()">저장</button>
+        </div>
       </div>
     </div>
   </div>
@@ -466,14 +477,16 @@ function removeTempEm(idx) {
 }
 
 // --- 캘린더 렌더링 ---
+// --- 캘린더 렌더링 (반복 일정 & 연도 버그 수정) ---
 async function renderCalendar() {
-    // 데이터를 가져와서 이벤트 배열로 변환
+    // 데이터 가져오기
     const { data: leaves } = await _supabase.from('ref_approval').select('*').eq('doc_type', '휴가').eq('status', '완료');
     const { data: emps } = await _supabase.from('ref_employees').select('emp_name, birth_date, hire_date');
     const { data: comps } = await _supabase.from('ref_calendar').select('*');
 
-    const events = [];
-    // 1. 휴가
+    let events = [];
+    
+    // [1] 휴가 (기존 동일)
     if(leaves) leaves.forEach(l => events.push({ 
         title: `${l.drafter_name} 휴가`, 
         start: l.start_date, 
@@ -481,29 +494,64 @@ async function renderCalendar() {
         color: (l.drafter_id === myInfo.emp_id ? '#0d6efd' : '#198754'), 
         allDay: true 
     }));
-    
-    // 2. 생일 및 입사일
+
+    // [중요] 반복 일정을 위한 연도 범위 설정 (올해 기준 앞뒤 2년, 총 5년치 생성)
+    // 이렇게 해야 2025년으로 이동해도 기념일이 보입니다.
+    const baseYear = new Date().getFullYear();
+    const years = [baseYear - 2, baseYear - 1, baseYear, baseYear + 1, baseYear + 2];
+
+    // [2] 직원 생일/입사일 (매년 반복 확장)
     if(emps) emps.forEach(e => {
-        if(e.birth_date) events.push({ title: `${e.emp_name} 생일`, start: getYearDate(e.birth_date), color: '#ffc107', textColor: '#000', allDay: true });
-        if(e.hire_date) events.push({ title: `${e.emp_name} 입사`, start: getYearDate(e.hire_date), color: '#0dcaf0', textColor: '#000', allDay: true });
+        years.forEach(y => {
+            if(e.birth_date) events.push({ title: `${e.emp_name} 생일`, start: `${y}-${e.birth_date.slice(5,10)}`, color: '#ffc107', textColor: '#000', allDay: true });
+            if(e.hire_date) events.push({ title: `${e.emp_name} 입사`, start: `${y}-${e.hire_date.slice(5,10)}`, color: '#0dcaf0', textColor: '#000', allDay: true });
+        });
+    });
+
+    // [3] 회사 일정 (단일, 매년, 매월 처리)
+    if(comps) comps.forEach(c => {
+        const bg = c.type === 'holiday' ? '#dc3545' : '#6c757d';
+        
+        if (c.recurrence === 'yearly') {
+            // 매년 반복
+            years.forEach(y => {
+                events.push({ 
+                    id: c.id, title: c.title, 
+                    start: `${y}-${c.start_date.slice(5,10)}${c.start_date.length > 10 ? 'T'+c.start_date.slice(11,16) : ''}`,
+                    color: bg, extendedProps: { origin: c } 
+                });
+            });
+        } else if (c.recurrence === 'monthly') {
+            // 매월 반복
+            years.forEach(y => {
+                for(let m=1; m<=12; m++) {
+                    const mm = String(m).padStart(2,'0');
+                    const dd = c.start_date.slice(8,10); // 일자
+                    // 해당 월에 그 날짜가 존재하는지 체크 (예: 2월 30일 방지)
+                    if(new Date(`${y}-${mm}-${dd}`).getDate() == dd) {
+                        events.push({ 
+                            id: c.id, title: c.title, 
+                            start: `${y}-${mm}-${dd}${c.start_date.length > 10 ? 'T'+c.start_date.slice(11,16) : ''}`,
+                            color: bg, extendedProps: { origin: c }
+                        });
+                    }
+                }
+            });
+        } else {
+            // 반복 없음 (단일)
+            events.push({ 
+                id: c.id, title: c.title, start: c.start_date, end: c.end_date, 
+                color: bg, extendedProps: { origin: c } 
+            });
+        }
     });
     
-    // 3. 회사 일정 (수동)
-    if(comps) comps.forEach(c => events.push({ 
-        title: c.title, 
-        start: c.start_date, 
-        end: c.end_date, 
-        color: (c.type === 'holiday' ? '#dc3545' : '#6c757d'), 
-        allDay: true 
-    }));
-    
-    // 4. 창립기념일 (자동)
-    if(companyInfo.estDate) events.push({ 
-        title: "🎉 창립기념일", 
-        start: getYearDate(companyInfo.estDate), 
-        color: '#ff4081', 
-        allDay: true 
-    });
+    // [4] 창립기념일 (자동 매년 반복)
+    if(companyInfo.estDate) {
+        years.forEach(y => {
+            events.push({ title: "🎉 창립기념일", start: `${y}-${companyInfo.estDate.slice(5,10)}`, color: '#ff4081', allDay: true });
+        });
+    }
 
     const el = document.getElementById('calendar');
     const calendar = new FullCalendar.Calendar(el, { 
@@ -512,14 +560,14 @@ async function renderCalendar() {
         height: 600, 
         headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }, 
         events: events,
-        selectable: true, // 드래그 선택 가능
-        // 날짜 클릭 시 이벤트
-        dateClick: function(info) { 
-            if(myInfo.role === 'admin') openEventModal(info.dateStr, info.dateStr); 
-        },
-        // 기간 선택 시 이벤트
-        select: function(info) { 
-            if(myInfo.role === 'admin') openEventModal(info.startStr, info.endStr); 
+        selectable: true,
+        // 날짜 클릭 시 (새 일정)
+        dateClick: function(info) { if(myInfo.role === 'admin') openEventModal(null, info.dateStr); },
+        // 이벤트 클릭 시 (수정)
+        eventClick: function(info) { 
+            if(myInfo.role === 'admin' && info.event.extendedProps.origin) {
+                openEventModal(info.event.extendedProps.origin, null);
+            }
         }
     });
     calendar.render();
@@ -531,41 +579,62 @@ function getYearDate(dateStr) {
 }
 
 // 일정 추가 모달 열기
-function openEventModal(start, end) {
-    document.getElementById("evtTitle").value = "";
-    document.getElementById("evtStart").value = start;
+// [모달 열기] 신규 등록 or 수정
+function openEventModal(existingEvent, dateStr) {
+    const delBtn = document.getElementById("btnDelEvent");
     
-    // 종료일 보정 (FullCalendar는 종료일이 exclusive하므로 하루 빼서 표시)
-    let endDateDisp = end;
-    if(end && start !== end) { 
-        let d = new Date(end); d.setDate(d.getDate()-1); 
-        endDateDisp = d.toISOString().slice(0,10); 
+    if (existingEvent) {
+        // 수정 모드
+        document.getElementById("evtId").value = existingEvent.id;
+        document.getElementById("evtTitle").value = existingEvent.title;
+        // 날짜와 시간 분리 (YYYY-MM-DD THH:mm)
+        const dt = existingEvent.start_date.split('T');
+        document.getElementById("evtDate").value = dt[0];
+        document.getElementById("evtTime").value = dt[1] ? dt[1].slice(0,5) : ""; 
+        
+        document.getElementById("evtRecure").value = existingEvent.recurrence || 'none';
+        document.getElementById("evtIsHoliday").checked = (existingEvent.type === 'holiday');
+        delBtn.classList.remove("hidden"); // 삭제 버튼 보이기
+    } else {
+        // 신규 등록 모드
+        document.getElementById("evtId").value = "";
+        document.getElementById("evtTitle").value = "";
+        document.getElementById("evtDate").value = dateStr;
+        document.getElementById("evtTime").value = "";
+        document.getElementById("evtRecure").value = "none";
+        document.getElementById("evtIsHoliday").checked = false;
+        delBtn.classList.add("hidden"); // 삭제 버튼 숨기기
     }
-    document.getElementById("evtEnd").value = endDateDisp || start;
-    document.getElementById("evtIsHoliday").checked = false;
-    
     eventModal.show();
 }
 
 // 일정 저장
+// [저장] 신규 및 수정 처리
 async function saveEvent() {
+    const id = document.getElementById("evtId").value;
     const title = document.getElementById("evtTitle").value;
-    const start = document.getElementById("evtStart").value;
-    const end = document.getElementById("evtEnd").value;
+    const date = document.getElementById("evtDate").value;
+    const time = document.getElementById("evtTime").value;
+    const recur = document.getElementById("evtRecure").value;
     const type = document.getElementById("evtIsHoliday").checked ? 'holiday' : 'company';
     
-    if(!title || !start) { showAlert("일정명과 날짜를 입력하세요."); return; }
+    if(!title || !date) { showAlert("일정명과 날짜를 입력하세요."); return; }
     
-    // 저장 시 종료일 하루 더하기 (FullCalendar 포맷 맞춤)
-    let endSave = end;
-    if(end) { 
-        let d = new Date(end); d.setDate(d.getDate()+1); 
-        endSave = d.toISOString().slice(0,10); 
-    }
+    // 날짜+시간 합치기 (시간 없으면 날짜만)
+    const fullDate = time ? `${date}T${time}:00` : date;
 
-    await _supabase.from('ref_calendar').insert({ title: title, start_date: start, end_date: endSave, type: type });
+    const payload = { title: title, start_date: fullDate, type: type, recurrence: recur };
+
+    if (id) {
+        // 수정
+        await _supabase.from('ref_calendar').update(payload).eq('id', id);
+    } else {
+        // 신규
+        await _supabase.from('ref_calendar').insert(payload);
+    }
+    
     eventModal.hide();
-    renderCalendar(); // 캘린더 새로고침
+    renderCalendar(); // 새로고침
 }
 
 // --- 연차 계산 로직 ---
@@ -776,6 +845,16 @@ function viewNotice(i) {
     noticeDetailModal.show();
 }
 function runCertIssue() { /* 증명서 발급 로직 */ }
+  // [삭제]
+async function deleteEvent() {
+    const id = document.getElementById("evtId").value;
+    if(!id) return;
+    if(!confirm("이 일정을 삭제하시겠습니까?")) return;
+    
+    await _supabase.from('ref_calendar').delete().eq('id', id);
+    eventModal.hide();
+    renderCalendar();
+}
 </script>
 </body>
 </html>
