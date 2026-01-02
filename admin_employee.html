@@ -243,9 +243,34 @@ async function loadList() {
 }
 
 // 2. 설정 (ref_settings 연동 및 스마트 입력)
+// [수정] 부동소수점 오차를 해결하여 화면에 표시하는 로직
 async function loadSettings() {
     const { data } = await _supabase.from('ref_settings').select('item_key, item_value');
-    if(data) { settings = {}; data.forEach(r => { settings[r.item_key] = r.item_value; }); }
+    if(data) {
+        settings = {};
+        data.forEach(r => { settings[r.item_key] = r.item_value; });
+    }
+
+    // 설정창 열 때 값 세팅 부분 (기존 openSettings 함수 내부)
+    // 퍼센트 변환 시 발생하는 오차를 .toFixed(2) 또는 Math.round를 사용해 해결합니다.
+    
+    // 고용보험 (예: 0.009 -> 0.9)
+    const empRate = (settings['employ_rate_emp'] || 0.009) * 100;
+    document.getElementById("set_employ_emp").value = parseFloat(empRate.toPrecision(12)); 
+
+    // 산재보험 (예: 0.007 -> 0.7)
+    const workerComp = (settings['worker_comp_rate'] || 0.007) * 100;
+    document.getElementById("set_worker_comp").value = parseFloat(workerComp.toPrecision(12));
+
+    // 국민연금/건강보험 총합 계산 시에도 동일 적용
+    const penTotal = (settings['pension_rate_emp'] || 0.045) * 100 * 2;
+    document.getElementById("set_pension_total").value = parseFloat(penTotal.toPrecision(12));
+
+    const hltTotal = (settings['health_rate_emp'] || 0.03545) * 100 * 2;
+    document.getElementById("set_health_total").value = parseFloat(hltTotal.toPrecision(12));
+    
+    calcHalf('pension'); 
+    calcHalf('health');
 }
 
 async function loadCompanyInfo() {
