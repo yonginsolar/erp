@@ -691,12 +691,13 @@ async function searchSalary() {
 
 // [수정] 마이페이지용 급여명세서 인쇄 (스마트 기간 적용)
 // [수정] 마이페이지 급여명세서 인쇄 (지급일 자동 계산 + 근로기간)
+// [수정] 마이페이지 급여명세서 인쇄 (undefined 방지 + 지급일 10일 후 적용)
 function printSalaryPopup() {
     if(!currentSalaryData) return showAlert("먼저 급여 내역을 조회해주세요.");
     const d = currentSalaryData;
     const [y, m] = d.year_month.split('-');
     
-    // 1. 근로기간 (Smart Attribution)
+    // 근로기간 (스마트 산정)
     const getSmartAttribution = (ymStr) => {
         const [yy, mm] = ymStr.split('-').map(Number);
         let startDay = 1;
@@ -713,20 +714,22 @@ function printSalaryPopup() {
         return `${yy}년 ${mm}월<br>(${yy}.${String(mm).padStart(2,'0')}.${String(startDay).padStart(2,'0')} ~ ${yy}.${String(mm).padStart(2,'0')}.${lastDay})`;
     };
 
-    // 2. 지급일 (익월 10일)
-    const payDateObj = new Date(y, Number(m), 10); // m은 1~12. Date생성자 month는 0~11이지만 10일로 설정 시 다음달로 넘어감 (e.g. 11월 데이터 -> 12월 10일)
-    // *주의: new Date(2025, 11, 10)은 12월 10일임. (월 인덱스 11 = 12월). 
-    // 입력값 m이 '11'이면 Number(m)은 11. new Date(y, 11, 10) -> 12월 10일. 정확함.
+    // 지급일: 익월 10일
+    const payDateObj = new Date(y, Number(m), 10);
     const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth()+1}월 ${payDateObj.getDate()}일`;
 
     const fmt = (n) => (!n || Number(n)===0) ? "" : Number(n).toLocaleString();
     const fmtFix = (n) => Number(n).toLocaleString();
 
+    // [중요] 회사명/대표자 undefined 방지 (Fallback)
+    const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
+    const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
+
     const salaryData = {
         type: 'salary',
         titleDate: `${y}년 ${Number(m)}월`, 
         attrDate: getSmartAttribution(d.year_month), 
-        payDate: payDateStr, // [수정됨]
+        payDate: payDateStr,
         empInfo: `${myInfo.emp_id} / ${myInfo.emp_name}`, dept: myInfo.department, pos: myInfo.position,
         p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car),
         p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime),
@@ -734,7 +737,8 @@ function printSalaryPopup() {
         d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), d_emp: fmt(d.ded_employ),
         d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital),
         d_total: fmtFix(d.ded_total), net: fmtFix(d.net_pay),
-        logo: companyInfo.logo_horizontal_url || "", seal: companyInfo.seal_url, chairman: companyInfo.chairman_name
+        logo: companyInfo.logo_horizontal_url || "", seal: companyInfo.seal_url, 
+        chairman: ceoName, compName: compName // 수정된 변수 사용
     };
     printDocument(salaryData);
 }
