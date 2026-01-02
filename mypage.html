@@ -821,7 +821,7 @@ function printDocument(data) {
             <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
             
             <div style="text-align:center; margin-top:50px; position:relative;">
-                <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 대표자 ${data.chairman}</span>
+                <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 이사장 ${data.chairman}</span>
                 ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
             <div style="text-align:center; margin-top: 60px; font-size: 12px; line-height: 1.6; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
@@ -881,7 +881,7 @@ function printDocument(data) {
                 </div>
             </div>
             <div style="margin-top:50px; text-align:center; position:relative;">
-                <span style="font-size:18px; font-weight:bold; position:relative; z-index:1;">${data.compName} 대표자 ${data.chairman}</span>
+                <span style="font-size:18px; font-weight:bold; position:relative; z-index:1;">${data.companyName} 이사장 ${data.chairman}</span>
                 ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
         </div>`;
