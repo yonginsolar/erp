@@ -455,29 +455,31 @@ async function calculateLeave() {
         }
     }
 
-    // 2. 관리자 조정 내역 가져오기 (hr_leave_adj 테이블)
+    // 2. 관리자 조정 내역 (수정된 부분)
     let adjusted = 0;
-    let adjHistory = []; // 상세 내역 보여주기용
+    let adjHistory = []; 
+    const { data: adjData } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', myInfo.emp_id);
     
-    const { data: adjData } = await _supabase
-        .from('hr_leave_adj')
-        .select('*')
-        .eq('emp_id', myInfo.emp_id); // 내 사번으로 조회
-
     if (adjData) {
         adjData.forEach(adj => {
             const d = Number(adj.days);
-            // '지급' 또는 '포상'이면 더하고, 나머지는 뺌
-            if (adj.adj_type === '지급' || adj.adj_type === '포상') { 
+            // [핵심 수정] '지급', '포상' 뿐만 아니라 '특별', '오픈' 같은 긍정 단어가 들어가면 무조건 플러스(+)
+            const reason = adj.reason || "";
+            const type = adj.adj_type || "";
+            
+            if (type === '지급' || type === '포상' || 
+                type.includes('특별') || type.includes('오픈') || // '특별', '오픈' 키워드 추가
+                reason.includes('특별') || reason.includes('오픈')) { 
+                
                 adjusted += d; 
-                adjHistory.push({ t: '지급/포상', d: d, r: adj.reason });
+                adjHistory.push({ t: '지급', d: d, r: adj.reason }); // 화면엔 '지급'으로 표시되거나 원래 타입 표시 가능
             } else { 
+                // 그 외(차감, 징계 등)는 마이너스(-)
                 adjusted -= d; 
-                adjHistory.push({ t: '차감/징계', d: d, r: adj.reason });
+                adjHistory.push({ t: '차감', d: d, r: adj.reason });
             }
         });
     }
-
     // 3. 사용 내역 가져오기 (ref_approval 테이블 - 결재 완료된 휴가)
     let used = 0;
     let usedHistory = [];
