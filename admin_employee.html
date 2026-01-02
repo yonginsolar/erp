@@ -463,7 +463,6 @@ function printDocument(data) {
     else if(data.type === 'salary') {
         contentHtml = `
         <div class="print-salary" style="padding: 10px; height: 100%;">
-            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:0px; top:-10px; height:45px;">` : ''}
             <h1 style="text-align:center; margin-bottom: 30px; font-size: 28px; margin-top: 50px;">${data.titleDate} 급여명세서</h1>
             <table style="width:100%; margin-bottom:20px;">
                 <tr><th style="background:#f5f5f5; padding:8px; width:18%;">귀속연월</th><td style="padding:8px; width:32%;">${data.attrDate}</td><th style="background:#f5f5f5; padding:8px; width:18%;">사원번호/명</th><td style="padding:8px;">${data.empInfo}</td></tr>
