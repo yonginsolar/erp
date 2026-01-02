@@ -646,44 +646,22 @@ async function saveEvent() {
 }
 
 // --- 연차 계산 로직 ---
+// [수정] DB 함수를 통한 연차 조회 (로직 중앙화)
 async function calculateLeave() {
-    // 1. 자동 발생분 계산
-    let gen = 0, genDesc = "0일 (입사일 기준)";
-    if (myInfo.hire_date) {
-        const join = new Date(myInfo.hire_date); const now = new Date();
-        const diffYears = now.getFullYear() - join.getFullYear();
-        if (diffYears < 1) { 
-            gen = (now.getMonth() - join.getMonth()) + (now.getDate() < join.getDate() ? -1 : 0); 
-            gen = Math.max(0, gen); 
-            genDesc = `${gen}일 (1년 미만)`; 
-        } else { 
-            gen = 15; genDesc = "15일 (1년 이상 기본)"; 
-        }
-    }
-    
-    // 2. 조정 내역 합산
-    let adj = 0, adjList = [];
-    const { data: aData } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', myInfo.emp_id);
-    if(aData) aData.forEach(a => { 
-        const d = Number(a.days);
-        const isPlus = ['지급','포상'].includes(a.adj_type) || (a.reason||'').includes('특별') || (a.adj_type||'').includes('특별');
-        if(isPlus) { adj += d; adjList.push({t:'+', d:d, r:a.reason}); } 
-        else { adj -= d; adjList.push({t:'-', d:d, r:a.reason}); }
-    });
-    
-    // 3. 사용 내역 합산
-    let used = 0, usedList = [];
-    const { data: uData } = await _supabase.from('ref_approval').select('*').eq('drafter_id', myInfo.emp_id).eq('doc_type','휴가').eq('status','완료');
-    if(uData) uData.forEach(u => { 
-        used += Number(u.amount); 
-        usedList.push({d:u.amount, date:u.created_at}); 
-    });
+    // DB 함수 호출 (내 사번 전달)
+    const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: myInfo.emp_id });
 
-    // 결과 표시
-    document.getElementById("lvTotal").innerText = gen + adj;
-    document.getElementById("lvUsed").innerText = used;
-    document.getElementById("lvRemain").innerText = (gen + adj) - used;
-    myInfo.leaveData = { genDesc, adjList, usedList };
+    if (error) {
+        console.error("연차 계산 오류:", error);
+        document.getElementById("lvRemain").innerText = "-";
+        return;
+    }
+
+    // 결과 표시 (마이너스도 그대로 표시)
+    document.getElementById("lvRemain").innerText = remainDays + "일";
+    
+    // (참고) 상세 내역용 리스트 로딩은 별도로 유지하거나, 필요 시 API 추가 호출
+    // 여기서는 '잔여 개수' 표시가 핵심이므로 이것만 교체하면 됨.
 }
 
 // 연차 상세 모달 (디자인 복구됨)
