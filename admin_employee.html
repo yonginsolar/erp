@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>임직원 관리 v2.2</title>
+  <title>임직원 관리 v2.3</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,25 +16,17 @@
     .btn-rounded { border-radius: 50px; }
     .table-hover tbody tr { cursor: pointer; transition: background 0.2s; }
     .table-hover tbody tr:hover { background-color: #f8f9fa; transform: scale(1.002); }
-    
     .nav-tabs .nav-link { color: #666; cursor: pointer; border:none; padding: 12px 20px; font-weight: 600; }
     .nav-tabs .nav-link.active { font-weight: bold; color: #0d6efd; border-bottom: 3px solid #0d6efd; background: transparent; }
-    
     .modal-content { border-radius: 16px; border: none; box-shadow: 0 15px 50px rgba(0,0,0,0.1); }
     .form-control, .form-select { border-radius: 8px; padding: 10px; font-size: 0.95rem; }
     .d-none { display: none !important; }
-
     .section-title { font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 12px; border-left: 4px solid #0d6efd; padding-left: 10px; }
     .info-card { background: #f8f9fa; padding: 20px; border-radius: 12px; height: 100%; position: relative; }
-    
-    .view-mode { display: block; }
-    .edit-mode { display: none; }
-    .is-editing .view-mode { display: none; }
-    .is-editing .edit-mode { display: block; }
-
+    .view-mode { display: block; } .edit-mode { display: none; }
+    .is-editing .view-mode { display: none; } .is-editing .edit-mode { display: block; }
     .masked-text { font-family: monospace; letter-spacing: 2px; }
-    .adv-table { font-size: 0.85rem; }
-    .adv-table input { border: none; background: #fff; padding: 2px 5px; width: 100%; border-bottom: 1px solid #eee; }
+    .adv-table { font-size: 0.85rem; } .adv-table input { border: none; background: #fff; padding: 2px 5px; width: 100%; border-bottom: 1px solid #eee; }
   </style>
 </head>
 <body>
@@ -56,67 +48,14 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle" style="font-size: 0.95rem;">
       <thead class="table-light text-secondary small">
-        <tr>
-          <th>사번</th><th>이름 / 부서</th><th>직급</th><th>상태</th><th>시스템 권한</th>
-        </tr>
+        <tr><th>사번</th><th>이름 / 부서</th><th>직급</th><th>상태</th><th>시스템 권한</th></tr>
       </thead>
-      <tbody id="empListBody">
-        <tr><td colspan="5" class="text-center p-4 text-muted">로딩 중... ⏳</td></tr>
-      </tbody>
+      <tbody id="empListBody"><tr><td colspan="5" class="text-center p-4 text-muted">로딩 중... ⏳</td></tr></tbody>
     </table>
   </div>
 </div>
 
-<div class="modal fade" id="settingsModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold">⚙️ 시스템 통합 설정</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <ul class="nav nav-tabs mb-3" id="settingTab" role="tablist">
-          <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
-          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li>
-          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li>
-        </ul>
-        <div class="tab-content">
-          <div class="tab-pane fade show active" id="setTax">
-            <h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6>
-            <div class="row g-2 mb-3">
-              <div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div>
-              <div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div>
-            </div>
-            <h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6>
-            <div class="row g-2 mb-3">
-              <div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div>
-              <div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div>
-              <div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div>
-            </div>
-          </div>
-          <div class="tab-pane fade" id="setCompany">
-            <div class="row g-2">
-              <div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div>
-              <div class="col-12"><label class="small text-muted">대표자명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div>
-              <div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div>
-              <div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div>
-            </div>
-          </div>
-          <div class="tab-pane fade" id="setAdvanced">
-            <div class="table-responsive" style="max-height: 300px;">
-              <table class="table table-sm adv-table align-middle">
-                <thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead>
-                <tbody id="advSettingsBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div>
-    </div>
-  </div>
-</div>
-
+<div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold">⚙️ 시스템 통합 설정</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" id="settingTab" role="tablist"><li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">대표자명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
 <div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"><option>사원</option><option>대리</option><option>과장</option><option>차장</option><option>부장</option><option>이사</option><option>국장</option><option>이사장</option></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="staff">일반 (Staff)</option><option value="admin">관리자 (Admin)</option></select></div></div><div class="mb-3"><label class="small text-muted ms-1">부서</label><input type="text" id="newDept" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
@@ -124,10 +63,7 @@
     <div class="modal-content">
       <div class="modal-header border-0 pb-0 d-flex justify-content-between align-items-start">
         <div><h5 class="modal-title fw-bold" id="detailName"></h5><span class="text-muted small" id="detailId"></span></div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-dark" onclick="openAdminCertModal()">📄 증명서 발급</button>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body"> 
         <div class="px-2 pt-2">
@@ -157,13 +93,34 @@
                     </div></div></div>
                     <div class="col-md-6"><div class="info-card"><div class="section-title">🎂 생년월일</div>
                         <div class="view-mode"><div class="d-flex align-items-center gap-2"><span class="fs-4 fw-bold text-dark" id="viewBirth">미등록</span></div><div class="small text-muted mt-2">* 주민번호 뒷자리 숨김</div></div>
-                        <div class="edit-mode"><label class="small text-muted mb-1">주민번호 (전체 입력)</label><div class="d-flex align-items-center gap-2 mb-2"><input type="text" id="rrnFront" class="form-control text-center" maxlength="6" placeholder="생년월일"><span class="fw-bold text-muted">-</span><input type="password" id="rrnBack" class="form-control text-center" maxlength="7" placeholder="뒤 7자리"></div><button class="btn btn-outline-dark btn-sm w-100" onclick="saveRRN()">🔒 암호화 저장</button></div>
+                        <div class="edit-mode"><label class="small text-muted mb-1">주민번호 (변경 시 전체 입력)</label><div class="d-flex align-items-center gap-2 mb-2"><input type="text" id="rrnFront" class="form-control text-center" maxlength="6" placeholder="생년월일"><span class="fw-bold text-muted">-</span><input type="password" id="rrnBack" class="form-control text-center" maxlength="7" placeholder="뒤 7자리"></div><button class="btn btn-outline-dark btn-sm w-100" onclick="saveRRN()">🔒 암호화 저장</button></div>
                     </div></div>
                     <div class="col-md-6"><div class="info-card"><div class="section-title">💰 연봉 계약</div>
                         <div class="view-mode"><label class="small text-muted">현재 연봉</label><div class="d-flex align-items-center gap-2"><span class="fs-5 fw-bold" id="viewSalary">******</span><i class="bi bi-eye text-primary cursor-pointer" onclick="toggleSalaryVisibility()"></i></div><div class="mt-2"><label class="small text-muted">적용 시작일: </label><span class="fw-bold" id="viewSalaryDate">-</span></div></div>
                         <div class="edit-mode"><div class="mb-2"><label class="small text-muted">연봉 총액 (원)</label><input type="number" id="editSalary" class="form-control fw-bold"></div><div class="mb-2"><label class="small text-muted">적용 시작일</label><input type="date" id="salaryApplyDate" class="form-control"></div></div>
                     </div></div>
-                    <div class="col-12"><div class="info-card" style="background: white; border: 1px solid #dee2e6;"><div class="section-title mb-2">📄 근로계약서</div><div id="contractView" class="mb-2"></div><div class="edit-mode border-top pt-2"><label class="small text-muted">파일 업데이트</label><div class="d-flex gap-2"><input type="file" id="contractFile" class="form-control form-control-sm" accept=".pdf,.jpg,.png,.jpeg"><button class="btn btn-dark btn-sm text-nowrap" style="min-width: 80px;" onclick="uploadContract()">업로드</button></div></div></div></div>
+                    
+                    <div class="col-12">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <div class="info-card" style="background: white; border: 1px solid #dee2e6;">
+                                    <div class="section-title mb-2">📄 근로계약서</div>
+                                    <div id="contractView" class="mb-2"></div>
+                                    <div class="edit-mode border-top pt-2"><label class="small text-muted">파일 업데이트</label><div class="d-flex gap-2"><input type="file" id="contractFile" class="form-control form-control-sm" accept=".pdf,.jpg,.png,.jpeg"><button class="btn btn-dark btn-sm text-nowrap" style="min-width: 80px;" onclick="uploadContract()">업로드</button></div></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card" style="background: white; border: 1px solid #dee2e6;">
+                                    <div class="section-title mb-2">🖨️ 문서 발급</div>
+                                    <div class="d-flex flex-column gap-2">
+                                        <button class="btn btn-outline-dark w-100" onclick="openAdminCertModal()">📄 재직증명서 발급</button>
+                                        <div class="small text-muted text-center">* 퇴사자는 경력증명서로 출력됨</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-end gap-2" id="btnResignArea"></div>
                 </div>
             </div>
@@ -201,7 +158,10 @@
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4"><p class="mb-0 fw-bold" id="alertBody"></p></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold">확인</h6></div><div class="modal-body text-center py-3" id="confirmBody"></div><div class="modal-footer justify-content-center border-0 pt-0"><button type="button" class="btn btn-secondary btn-sm me-2" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="btnConfirmYes">확인</button></div></div></div></div>
 <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content text-center p-4"><div class="spinner-border text-primary mb-3"></div><h6 class="mb-0">처리 중...</h6></div></div></div>
-<div class="modal fade" id="adminCertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📄 증명서 발급</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">발급 용도</label><input type="text" id="adminCertPurpose" class="form-control form-control-sm" placeholder="예: 금융기관 제출용"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="reqIssueCert()">발급 및 인쇄</button></div></div></div></div>
+
+<div class="modal fade" id="resignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 퇴사 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">퇴사일자 (마지막 근무일)</label><input type="date" id="inputResignDate" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-danger btn-sm w-100" onclick="confirmResign()">퇴사 확정</button></div></div></div></div>
+
+<div class="modal fade" id="adminCertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📄 재직증명서 발급</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">발급 용도</label><select id="adminCertPurpose" class="form-select form-select-sm" onchange="toggleAdminEtc()"><option value="관공서 제출용">관공서 제출용</option><option value="금융기관 제출용">금융기관 제출용</option><option value="기타">기타 (직접 입력)</option></select><input type="text" id="adminCertEtc" class="form-control form-control-sm mt-2" placeholder="직접 입력" style="display:none;"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="reqIssueCert()">발급 및 인쇄</button></div></div></div></div>
 
 <div class="modal fade" id="ledgerModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📊 급여대장 출력</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">대상 연월</label><input type="month" id="ledgerMonth" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="printLedger()">대장 출력 (A4 가로)</button></div></div></div></div>
 
@@ -212,8 +172,9 @@ const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let settings = {}; let companyInfo = {}; let advancedSettingsRaw = [];
 let currentEmpId = null, currentEmpName = null, currentAnnualSalary = 0; 
+let currentEmpHireDate = null, currentEmpResignDate = null; // [추가] 기간 계산용
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
-let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal;
+let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal, resignModal;
 let hasCheckedExpired = false;
 
 window.onload = async function() {
@@ -225,6 +186,7 @@ window.onload = async function() {
     adminCertModal = new bootstrap.Modal(document.getElementById('adminCertModal'));
     loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
     ledgerModal = new bootstrap.Modal(document.getElementById('ledgerModal'));
+    resignModal = new bootstrap.Modal(document.getElementById('resignModal'));
 
     document.getElementById("btnConfirmYes").onclick = function() { if(confirmCallback) confirmCallback(); confirmModal.hide(); };
     document.getElementById("salaryMonth").value = new Date().toISOString().slice(0, 7);
@@ -253,6 +215,9 @@ async function runInvite() { const name = document.getElementById("newName").val
 async function openDetail(u) {
     currentEmpId = u.emp_id; currentEmpName = u.emp_name; 
     currentAnnualSalary = u.base_salary || 0;
+    // [추가] 기간 계산을 위해 전역 변수에 저장
+    currentEmpHireDate = u.hire_date;
+    currentEmpResignDate = u.resign_date;
 
     document.getElementById("detailName").innerText = u.emp_name; document.getElementById("detailId").innerText = u.emp_id;
     document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
@@ -282,15 +247,14 @@ function toggleSalaryVisibility() { const el = document.getElementById("viewSala
 
 async function saveBasicInfo() { 
     const name = document.getElementById("editName").value; const phone = document.getElementById("editPhone").value; const email = document.getElementById("editEmail").value; 
-    let fullAddress = document.getElementById("editAddress").value;
-    const detail = document.getElementById("editAddressDetail").value;
-    if(detail) fullAddress += " " + detail;
+    let fullAddress = document.getElementById("editAddress").value; const detail = document.getElementById("editAddressDetail").value; if(detail) fullAddress += " " + detail;
     const hireDate = document.getElementById("editHireDate").value; const sal = Number(document.getElementById("editSalary").value); const date = document.getElementById("salaryApplyDate").value; 
     const updates = { emp_name: name, phone: phone, email: email, address: fullAddress, hire_date: hireDate, base_salary: sal, salary_apply_date: date }; 
     const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', currentEmpId); 
     if(error) return showAlert("저장 실패: " + error.message); 
     if (sal !== currentAnnualSalary) { await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); } 
     currentAnnualSalary = sal; 
+    currentEmpHireDate = hireDate; // 갱신
     document.getElementById("viewName").innerText = name; document.getElementById("viewPhone").innerText = phone; document.getElementById("viewEmail").innerText = email; document.getElementById("viewAddress").innerText = fullAddress; document.getElementById("viewHireDate").innerText = hireDate; document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; document.getElementById("viewSalaryDate").innerText = date; 
     toggleEditMode(false); showAlert("저장되었습니다."); 
 }
@@ -299,7 +263,21 @@ async function saveRRN() { const f = document.getElementById("rrnFront").value; 
 async function uploadContract() { const fileInput = document.getElementById("contractFile"); if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요."); const file = fileInput.files[0]; const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`; showLoading(); try { const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single(); if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]); const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true }); if (error) throw error; await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId); hideLoading(); setTimeout(async () => { showAlert("계약서가 등록되었습니다."); const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600); document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>`; document.getElementById("hiddenContractUrl").value = data.path; fileInput.value = ""; }, 500); } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); } }
 
 async function reqDeletePermanent() { showConfirm("⚠️ 영구 삭제 경고", `<strong>${currentEmpName}</strong> 데이터를 모두 삭제하시겠습니까?`, async function() { showLoading(); detailModal.hide(); const filePath = document.getElementById("hiddenContractUrl").value; if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); hideLoading(); showAlert("삭제되었습니다."); loadList(); }); }
-async function doResign() { showConfirm("퇴사 처리하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: new Date().toISOString().slice(0, 10) }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
+
+// [수정] 퇴사 모달 띄우기
+function doResign() { 
+    document.getElementById("inputResignDate").value = new Date().toISOString().slice(0, 10);
+    resignModal.show(); 
+}
+// [추가] 퇴사 확정 로직
+async function confirmResign() {
+    const rDate = document.getElementById("inputResignDate").value;
+    if(!rDate) return showAlert("퇴사일을 입력해주세요.");
+    resignModal.hide();
+    
+    await _supabase.from('ref_employees').update({ resign_date: rDate }).eq('emp_id', currentEmpId);
+    detailModal.hide(); loadList(); showAlert("퇴사 처리되었습니다.");
+}
 async function cancelResign() { showConfirm("퇴사 취소하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
 
 async function loadSalaryData() {
@@ -344,26 +322,52 @@ async function saveSalary() {
 async function loadLeave() { let generated = 0; const { data: emp } = await _supabase.from('ref_employees').select('hire_date').eq('emp_id', currentEmpId).single(); if(emp?.hire_date) { const join = new Date(emp.hire_date); const now = new Date(); const diffY = now.getFullYear() - join.getFullYear(); generated = diffY < 1 ? (now.getMonth() - join.getMonth()) : 15; } let adjusted = 0; const { data: adjs } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', currentEmpId); if(adjs) adjs.forEach(a => { if(a.adj_type==='지급') adjusted+=Number(a.days); else adjusted-=Number(a.days); }); let used = 0; const { data: apps } = await _supabase.from('ref_approval').select('amount').eq('drafter_id', currentEmpId).eq('doc_type', '휴가').eq('status', '완료'); if(apps) apps.forEach(a => used+=Number(a.amount)); document.getElementById("displayLeaveRemain").innerText = (Math.max(0, generated + adjusted - used)) + "일"; }
 async function saveLog() { const type = document.getElementById("logType").value; const val = Number(document.getElementById("logValue").value); const reason = document.getElementById("logReason").value; if(!val || !reason) return showAlert("입력 필요"); await _supabase.from('hr_leave_adj').insert({ emp_id: currentEmpId, adj_type: type, days: val, reason: reason }); showAlert("반영됨"); document.getElementById("logValue").value = ""; document.getElementById("logReason").value = ""; loadLeave(); }
 
-function openAdminCertModal() { document.getElementById("adminCertPurpose").value = ""; adminCertModal.show(); }
+function openAdminCertModal() { document.getElementById("adminCertPurpose").value = "관공서 제출용"; toggleAdminEtc(); adminCertModal.show(); }
+function toggleAdminEtc() { const v = document.getElementById("adminCertPurpose").value; const e = document.getElementById("adminCertEtc"); if(v==='기타') { e.style.display='block'; e.focus(); } else e.style.display='none'; }
+
+// [수정] 증명서 발급 (용도 드롭다운 + 재직증명서 명칭)
 async function reqIssueCert() {
-    const purpose = document.getElementById("adminCertPurpose").value;
+    let purpose = document.getElementById("adminCertPurpose").value;
+    if(purpose === '기타') purpose = document.getElementById("adminCertEtc").value;
     if(!purpose) return showAlert("용도를 입력해주세요.");
     adminCertModal.hide();
+
     const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId });
     const birthStr = birthDate || "미등록";
     const thisYear = new Date().getFullYear();
     const { count } = await _supabase.from('log_cert').select('*', { count: 'exact', head: true }).gte('issued_at', `${thisYear}-01-01T00:00:00`);
     const docNum = `인사-${thisYear}-${String((count||0) + 1).padStart(3, '0')}`; 
+    
+    // DB 업데이트
     await _supabase.from('log_cert').insert({ emp_id: currentEmpId, emp_name: currentEmpName, cert_type: '재직증명서', purpose: purpose, cert_num: docNum });
+
     const hireDate = document.getElementById("viewHireDate").innerText;
     let tenureStr = "-";
     if(hireDate && hireDate !== '-') {
-        const join = new Date(hireDate); const now = new Date(); const diff = now - join; const y = Math.floor(diff / (1000*60*60*24*365)); const m = Math.floor((diff % (1000*60*60*24*365)) / (1000*60*60*24*30)); tenureStr = `${hireDate}~현재 (${y}년 ${m}개월)`;
+        const join = new Date(hireDate); const now = new Date();
+        const diff = now - join;
+        const y = Math.floor(diff / (1000*60*60*24*365));
+        const m = Math.floor((diff % (1000*60*60*24*365)) / (1000*60*60*24*30));
+        tenureStr = `${hireDate}~현재 (${y}년 ${m}개월)`;
     }
+    
     let cleanAddr = (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim();
-    const certData = { type: 'cert', docNum: docNum, logo: companyInfo.logo_horizontal_url || "", name: currentEmpName, birth: birthStr, dept: "", pos: "", address: document.getElementById("viewAddress").innerText, tenure: tenureStr, purpose: purpose, today: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }), chairman: companyInfo.chairman_name || "이사장", compName: companyInfo.company_name, compAddr: cleanAddr, contact: companyInfo.company_contact, seal: companyInfo.seal_url };
-    const { data: empData } = await _supabase.from('ref_employees').select('*').eq('emp_id', currentEmpId).single();
-    if(empData) { certData.dept = empData.department; certData.pos = empData.position; }
+    
+    // [중요] 부서 직급 조회
+    let dept="", pos="";
+    const { data: empData } = await _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single();
+    if(empData) { dept = empData.department; pos = empData.position; }
+
+    const certData = {
+        type: 'cert', docNum: docNum, 
+        logo: companyInfo.logo_horizontal_url || "", 
+        name: currentEmpName, birth: birthStr, 
+        dept: dept, pos: pos, 
+        address: document.getElementById("viewAddress").innerText,
+        tenure: tenureStr, purpose: purpose,
+        today: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }),
+        chairman: companyInfo.chairman_name || "이사장", compName: companyInfo.company_name, compAddr: cleanAddr, contact: companyInfo.company_contact, seal: companyInfo.seal_url
+    };
     printDocument(certData);
 }
 
@@ -371,70 +375,54 @@ function printSalaryAdmin() {
     if(!currentSalaryDataForPrint) return showAlert("저장된 급여 내역이 없습니다.");
     const d = currentSalaryDataForPrint;
     const [y, m] = d.year_month.split('-');
-    const getAttributionString = (ymStr) => { const [yy, mm] = ymStr.split('-').map(Number); let ay = yy; let am = mm - 1; if (am === 0) { ay = yy - 1; am = 12; } const ld = new Date(ay, am, 0).getDate(); return `${ay}년 ${am}월<br>(${ay}.${String(am).padStart(2,'0')}.01 ~ ${ay}.${String(am).padStart(2,'0')}.${ld})`; };
+    
+    // [추가] 똑똑한 기간 산정 로직 (Smart Attribution)
+    // 입사일/퇴사일과 귀속월을 비교하여 1일~말일이 아닌 실제 기간 표시
+    const getSmartAttribution = (ymStr) => {
+        const [yy, mm] = ymStr.split('-').map(Number);
+        let sy = yy, sm = mm - 1; if (sm === 0) { sy = yy - 1; sm = 12; }
+        
+        let startDay = 1;
+        let lastDay = new Date(sy, sm, 0).getDate(); // 말일 계산
+
+        // 입사일 보정 (hire_date가 전역변수에 있음)
+        if(currentEmpHireDate) {
+            const hDate = new Date(currentEmpHireDate);
+            if(hDate.getFullYear() === sy && (hDate.getMonth()+1) === sm) {
+                startDay = hDate.getDate();
+            }
+        }
+        // 퇴사일 보정
+        if(currentEmpResignDate) {
+            const rDate = new Date(currentEmpResignDate);
+            if(rDate.getFullYear() === sy && (rDate.getMonth()+1) === sm) {
+                lastDay = rDate.getDate();
+            }
+        }
+
+        return `${sy}년 ${sm}월<br>(${sy}.${String(sm).padStart(2,'0')}.${String(startDay).padStart(2,'0')} ~ ${sy}.${String(sm).padStart(2,'0')}.${lastDay})`;
+    };
+
     const fmt = (n) => (!n || Number(n)===0) ? "" : Number(n).toLocaleString();
     const fmtFix = (n) => Number(n).toLocaleString();
-    const salaryData = { type: 'salary', titleDate: `${y}년 ${Number(m)}월`, attrDate: getAttributionString(d.year_month), payDate: "매월 10일", empInfo: `${currentEmpId} / ${currentEmpName}`, dept: "", pos: "", p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car), p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime), p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmtFix(d.pay_total), d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmtFix(d.ded_total), net: fmtFix(d.net_pay), logo: companyInfo.logo_horizontal_url || "", seal: companyInfo.seal_url, chairman: companyInfo.chairman_name };
+    const salaryData = { type: 'salary', titleDate: `${y}년 ${Number(m)}월`, attrDate: getSmartAttribution(d.year_month), payDate: "매월 10일", empInfo: `${currentEmpId} / ${currentEmpName}`, dept: "", pos: "", p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car), p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime), p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmtFix(d.pay_total), d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmtFix(d.ded_total), net: fmtFix(d.net_pay), logo: companyInfo.logo_horizontal_url || "", seal: companyInfo.seal_url, chairman: companyInfo.chairman_name };
     _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single().then(({data}) => { if(data) { salaryData.dept = data.department; salaryData.pos = data.position; } printDocument(salaryData); });
 }
 
-// [추가] 급여대장 모달 및 출력
 function openLedgerModal() { ledgerModal.show(); }
 async function printLedger() {
-    const ym = document.getElementById("ledgerMonth").value;
-    if(!ym) return showAlert("연월을 선택하세요.");
-    ledgerModal.hide();
-    showLoading();
-    // 해당 월의 모든 급여 내역 조회
-    const { data: list, error } = await _supabase.from('hr_salary').select('*').eq('year_month', ym);
-    hideLoading();
+    const ym = document.getElementById("ledgerMonth").value; if(!ym) return showAlert("연월을 선택하세요."); ledgerModal.hide(); showLoading();
+    const { data: list, error } = await _supabase.from('hr_salary').select('*').eq('year_month', ym); hideLoading();
     if(error || !list || list.length === 0) return showAlert("해당 월의 급여 데이터가 없습니다.");
-    
-    // 데이터 가공
-    const [y, m] = ym.split('-');
-    const title = `${y}년 ${Number(m)}월 급여대장`;
-    const rows = list.map(d => ({
-        name: d.emp_name,
-        basic: d.pay_basic,
-        allowance: (d.pay_meal + d.pay_car + d.pay_child + d.pay_bonus + (d.pay_position||0) + (d.pay_service||0) + (d.pay_overtime||0)),
-        totalPay: d.pay_total,
-        deduction: d.ded_total,
-        net: d.net_pay
-    }));
-    
-    const ledgerData = {
-        type: 'ledger',
-        title: title,
-        rows: rows,
-        logo: companyInfo.logo_horizontal_url || "",
-        chairman: companyInfo.chairman_name
-    };
-    printDocument(ledgerData);
+    const [y, m] = ym.split('-'); const title = `${y}년 ${Number(m)}월 급여대장`;
+    const rows = list.map(d => ({ name: d.emp_name, basic: d.pay_basic, allowance: (d.pay_meal + d.pay_car + d.pay_child + d.pay_bonus + (d.pay_position||0) + (d.pay_service||0) + (d.pay_overtime||0)), totalPay: d.pay_total, deduction: d.ded_total, net: d.net_pay }));
+    const ledgerData = { type: 'ledger', title: title, rows: rows, logo: companyInfo.logo_horizontal_url || "", chairman: companyInfo.chairman_name }; printDocument(ledgerData);
 }
 
 function printDocument(data) {
     const win = window.open('', '', 'width=900,height=1100');
     let contentHtml = "";
-    
-    const commonCss = `
-        @page { size: A4 portrait; margin: 0; }
-        * { box-sizing: border-box; } img { max-width: 100%; height: auto; }
-        body { font-family: "Malgun Gothic", serif; margin: 0; padding: 0; background: #555; }
-        .page-wrap { width: 210mm; min-height: 297mm; padding: 15mm; background: white; margin: 20px auto; position: relative; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { border: 1px solid #000 !important; }
-        .print-fab { position: fixed; bottom: 30px; right: 30px; background: #fff; border: 1px solid #ccc; padding: 10px 15px; border-radius: 30px; z-index: 9999; display: flex; gap: 10px; align-items: center; }
-        @media print { 
-            .no-print { display: none !important; } 
-            html, body { margin: 0 !important; background: #fff !important; } 
-            .page-wrap { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 15mm !important; overflow: hidden !important; box-shadow: none !important; border: none !important; } 
-            .print-salary .print-content { zoom: 0.86; } 
-            .print-cert .print-content { zoom: 0.98; } 
-            /* 급여대장은 가로 방향 */
-            .print-ledger { width: 297mm !important; height: 210mm !important; padding: 10mm !important; }
-            @page { size: A4 landscape; margin: 0; }
-        }
-    `;
+    const commonCss = ` @page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } img { max-width: 100%; height: auto; } body { font-family: "Malgun Gothic", serif; margin: 0; padding: 0; background: #555; } .page-wrap { width: 210mm; min-height: 297mm; padding: 15mm; background: white; margin: 20px auto; position: relative; } table { width: 100%; border-collapse: collapse; font-size: 14px; } th, td { border: 1px solid #000 !important; } .print-fab { position: fixed; bottom: 30px; right: 30px; background: #fff; border: 1px solid #ccc; padding: 10px 15px; border-radius: 30px; z-index: 9999; display: flex; gap: 10px; align-items: center; } @media print { .no-print { display: none !important; } html, body { margin: 0 !important; background: #fff !important; } .page-wrap { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 15mm !important; overflow: hidden !important; box-shadow: none !important; border: none !important; } .print-salary .print-content { zoom: 0.86; } .print-cert .print-content { zoom: 0.98; } .print-ledger { width: 297mm !important; height: 210mm !important; padding: 10mm !important; } @page { size: A4 landscape; margin: 0; } } `;
 
     if(data.type === 'cert') {
         contentHtml = `
@@ -515,37 +503,8 @@ function printDocument(data) {
             </div>
         </div>`;
     } else if (data.type === 'ledger') {
-        const rowsHtml = data.rows.map(r => `
-            <tr>
-                <td style="padding:5px;">${r.name}</td>
-                <td style="text-align:right; padding:5px;">${Number(r.basic).toLocaleString()}</td>
-                <td style="text-align:right; padding:5px;">${Number(r.allowance).toLocaleString()}</td>
-                <td style="text-align:right; padding:5px; background:#f0f8ff;">${Number(r.totalPay).toLocaleString()}</td>
-                <td style="text-align:right; padding:5px;">${Number(r.deduction).toLocaleString()}</td>
-                <td style="text-align:right; padding:5px; font-weight:bold; background:#fff3e0;">${Number(r.net).toLocaleString()}</td>
-            </tr>
-        `).join("");
-        
-        // 급여대장 템플릿
-        contentHtml = `
-        <div style="padding: 20px;">
-            <h1 style="text-align:center; margin-bottom: 20px;">${data.title}</h1>
-            <div style="text-align:right; font-size:12px; margin-bottom:10px;">출력일: ${new Date().toLocaleDateString()}</div>
-            <table style="width:100%; font-size:12px;">
-                <thead>
-                    <tr style="background:#eee;">
-                        <th style="padding:5px;">성명</th>
-                        <th style="padding:5px;">기본급</th>
-                        <th style="padding:5px;">수당계</th>
-                        <th style="padding:5px;">지급총액</th>
-                        <th style="padding:5px;">공제총액</th>
-                        <th style="padding:5px;">실수령액</th>
-                    </tr>
-                </thead>
-                <tbody>${rowsHtml}</tbody>
-            </table>
-            <div style="margin-top:20px; text-align:center; font-weight:bold;">${data.chairman ? data.chairman : "대표자"} (인)</div>
-        </div>`;
+        const rowsHtml = data.rows.map(r => `<tr><td style="padding:5px;">${r.name}</td><td style="text-align:right; padding:5px;">${Number(r.basic).toLocaleString()}</td><td style="text-align:right; padding:5px;">${Number(r.allowance).toLocaleString()}</td><td style="text-align:right; padding:5px; background:#f0f8ff;">${Number(r.totalPay).toLocaleString()}</td><td style="text-align:right; padding:5px;">${Number(r.deduction).toLocaleString()}</td><td style="text-align:right; padding:5px; font-weight:bold; background:#fff3e0;">${Number(r.net).toLocaleString()}</td></tr>`).join("");
+        contentHtml = `<div style="padding: 20px;"><h1 style="text-align:center; margin-bottom: 20px;">${data.title}</h1><div style="text-align:right; font-size:12px; margin-bottom:10px;">출력일: ${new Date().toLocaleDateString()}</div><table style="width:100%; font-size:12px;"><thead><tr style="background:#eee;"><th style="padding:5px;">성명</th><th style="padding:5px;">기본급</th><th style="padding:5px;">수당계</th><th style="padding:5px;">지급총액</th><th style="padding:5px;">공제총액</th><th style="padding:5px;">실수령액</th></tr></thead><tbody>${rowsHtml}</tbody></table><div style="margin-top:20px; text-align:center; font-weight:bold;">${data.chairman ? data.chairman : "대표자"} (인)</div></div>`;
     }
 
     const pageClass = data.type === 'ledger' ? 'print-ledger' : (data.type === 'salary' ? 'print-salary' : 'print-cert');
