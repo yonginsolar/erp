@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>임직원 관리 v2.0</title>
+  <title>임직원 관리 v2.1</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -24,11 +24,9 @@
     .form-control, .form-select { border-radius: 8px; padding: 10px; font-size: 0.95rem; }
     .d-none { display: none !important; }
 
-    /* 상세정보 디자인 개선 */
     .section-title { font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 12px; border-left: 4px solid #0d6efd; padding-left: 10px; }
     .info-card { background: #f8f9fa; padding: 20px; border-radius: 12px; height: 100%; position: relative; }
     
-    /* 조회/수정 모드 전환 */
     .view-mode { display: block; }
     .edit-mode { display: none; }
     .is-editing .view-mode { display: none; }
@@ -123,9 +121,15 @@
 <div class="modal fade" id="detailModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <div><h5 class="modal-title fw-bold" id="detailName"></h5><span class="text-muted small" id="detailId"></span></div>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      <div class="modal-header border-0 pb-0 d-flex justify-content-between align-items-start">
+        <div>
+            <h5 class="modal-title fw-bold" id="detailName"></h5>
+            <span class="text-muted small" id="detailId"></span>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-dark" onclick="openAdminCertModal()">📄 증명서 발급</button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
       </div>
       <div class="modal-body"> 
         <div class="px-2 pt-2">
@@ -166,14 +170,20 @@
                                     <div class="view-mode fw-bold" id="viewEmail">-</div>
                                     <input type="email" id="editEmail" class="form-control edit-mode">
                                 </div>
+                                
                                 <div class="col-12">
                                     <label class="small text-muted">주소</label>
                                     <div class="view-mode fw-bold" id="viewAddress">-</div>
-                                    <div class="input-group edit-mode">
-                                        <input type="text" id="editAddress" class="form-control" placeholder="주소를 입력하세요" onclick="openAddressSearch()" readonly>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 검색</button>
+                                    
+                                    <div class="edit-mode">
+                                        <div class="input-group mb-1">
+                                            <input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly>
+                                            <button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button>
+                                        </div>
+                                        <input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소 (예: 101동 202호)">
                                     </div>
                                 </div>
+
                                 <div class="col-md-6">
                                     <label class="small text-muted">입사일</label>
                                     <div class="view-mode fw-bold" id="viewHireDate">-</div>
@@ -252,7 +262,7 @@
             <div class="d-flex align-items-center mb-3">
                 <label class="me-2 fw-bold small">귀속월</label>
                 <input type="month" id="salaryMonth" class="form-control form-control-sm w-auto me-2" onchange="loadSalaryData()">
-                <button class="btn btn-sm btn-outline-dark" id="btnAdminPrintSalary" onclick="printSalaryAdmin()" style="display:none;">🖨️ 명세서 인쇄</button>
+                <button class="btn btn-sm btn-outline-dark" onclick="printSalaryAdmin()">🖨️ 명세서 인쇄</button>
             </div>
             <div class="info-card border mb-3">
                 <div class="row g-2 align-items-end">
@@ -303,7 +313,7 @@ let advancedSettingsRaw = [];
 let currentEmpId = null, currentEmpName = null;
 let currentAnnualSalary = 0; 
 let confirmCallback = null;
-let currentSalaryDataForPrint = null; // 인쇄용 데이터
+let currentSalaryDataForPrint = null; 
 let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal;
 let hasCheckedExpired = false;
 
@@ -329,27 +339,28 @@ function showConfirm(msg, cb) { document.getElementById("confirmBody").innerHTML
 function showLoading() { loadingModal.show(); }
 function hideLoading() { loadingModal.hide(); }
 
-// [추가] 전화번호 자동 하이픈
+// [유지] 전화번호 자동 하이픈
 function autoHyphen(target) {
     target.value = target.value
         .replace(/[^0-9]/g, '')
         .replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g, "$1-$2-$3").replace(/(\-{1,2})$/g, "");
 }
 
-// [추가] 카카오 주소 찾기
+// [유지] 카카오 주소 찾기
 function openAddressSearch() {
     new daum.Postcode({
         oncomplete: function(data) {
             let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
             if(data.buildingName) addr += ' (' + data.buildingName + ')';
             document.getElementById("editAddress").value = addr;
+            document.getElementById("editAddressDetail").focus(); // 상세주소로 포커스 이동
         }
     }).open();
 }
 
 async function loadList() { /* 기존 동일 */ const tbody = document.getElementById("empListBody"); tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">로딩 중...</td></tr>'; const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id'); if(error || !list) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>'; return; } tbody.innerHTML = ""; const threeYearsAgo = new Date(); threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3); let expiredCount = 0; list.forEach(u => { let isResigned = !!u.resign_date; let isExpired = false; if (isResigned && new Date(u.resign_date) <= threeYearsAgo) { isExpired = true; expiredCount++; } let statusBadge = isResigned ? (isExpired ? `<span class="badge bg-danger">3년 경과</span>` : `<span class="badge bg-secondary">퇴사</span>`) : `<span class="badge bg-success">재직</span>`; let roleBadge = u.role === 'admin' ? '<span class="badge bg-danger">관리자</span>' : '<span class="badge bg-light text-dark">일반</span>'; const tr = document.createElement("tr"); if(isResigned) tr.style.opacity = "0.7"; if(isExpired) tr.style.backgroundColor = "#fff5f5"; tr.onclick = () => openDetail(u); tr.innerHTML = `<td class="fw-bold text-secondary">${u.emp_id}</td><td><div class="fw-bold">${u.emp_name}</div><div class="small text-muted">${u.department || '-'}</div></td><td>${u.position}</td><td>${statusBadge}</td><td>${roleBadge}</td>`; tbody.appendChild(tr); }); if (expiredCount > 0 && !hasCheckedExpired) { showConfirm(`⚠️ <strong>개인정보 파기 알림</strong><br>퇴사 후 3년 경과자 ${expiredCount}명 발견. 삭제하시겠습니까?`, () => showAlert("목록에서 붉은색 직원을 삭제하세요.")); hasCheckedExpired = true; } }
 async function loadSettings() { /* 기존 동일 */ const { data } = await _supabase.from('ref_settings').select('item_key, item_value'); if(data) { settings = {}; data.forEach(r => { settings[r.item_key] = r.item_value; }); } document.getElementById("set_pension_total").value = ((settings['pension_rate_emp']||0.045)*200).toFixed(2); document.getElementById("set_health_total").value = ((settings['health_rate_emp']||0.03545)*200).toFixed(2); calcHalf('pension'); calcHalf('health'); }
-// [수정] 회사 정보 로드 (직인/로고 처리 추가)
+// [유지] 회사 정보 로드
 async function loadCompanyInfo() { 
     const { data } = await _supabase.from('ref_company_info').select('*'); 
     if(data) data.forEach(r => { companyInfo[r.key] = r.value; });
@@ -377,7 +388,13 @@ async function openDetail(u) {
 
     document.getElementById("detailName").innerText = u.emp_name; document.getElementById("detailId").innerText = u.emp_id;
     document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
-    document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; document.getElementById("editAddress").value = u.address || ""; document.getElementById("editHireDate").value = u.hire_date || "";
+    document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
+    
+    // [수정] 주소 불러오기: 상세주소 분리는 불가능하므로 전체 주소를 기본 주소창에 넣음
+    document.getElementById("editAddress").value = u.address || ""; 
+    document.getElementById("editAddressDetail").value = ""; // 상세주소 칸은 비워둠 (새로 입력용)
+    
+    document.getElementById("editHireDate").value = u.hire_date || "";
     document.getElementById("viewSalary").innerText = "******"; document.getElementById("viewSalary").dataset.real = (u.base_salary||0).toLocaleString() + " 원";
     document.getElementById("viewSalaryDate").innerText = u.salary_apply_date || "-"; document.getElementById("editSalary").value = u.base_salary || 0; document.getElementById("salaryApplyDate").value = u.salary_apply_date || "";
 
@@ -399,7 +416,37 @@ async function openDetail(u) {
 function toggleEditMode(isEdit) { const c = document.getElementById("infoContainer"); if(isEdit) c.classList.add("is-editing"); else c.classList.remove("is-editing"); }
 function toggleSalaryVisibility() { const el = document.getElementById("viewSalary"); el.innerText = el.innerText === "******" ? el.dataset.real : "******"; }
 
-async function saveBasicInfo() { /* 기존 동일 */ const name = document.getElementById("editName").value; const phone = document.getElementById("editPhone").value; const email = document.getElementById("editEmail").value; const address = document.getElementById("editAddress").value; const hireDate = document.getElementById("editHireDate").value; const sal = Number(document.getElementById("editSalary").value); const date = document.getElementById("salaryApplyDate").value; const updates = { emp_name: name, phone: phone, email: email, address: address, hire_date: hireDate, base_salary: sal, salary_apply_date: date }; const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', currentEmpId); if(error) return showAlert("저장 실패: " + error.message); if (sal !== currentAnnualSalary) { await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); } currentAnnualSalary = sal; document.getElementById("viewName").innerText = name; document.getElementById("viewPhone").innerText = phone; document.getElementById("viewEmail").innerText = email; document.getElementById("viewAddress").innerText = address; document.getElementById("viewHireDate").innerText = hireDate; document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; document.getElementById("viewSalaryDate").innerText = date; toggleEditMode(false); showAlert("저장되었습니다."); }
+// [수정] 기본정보 저장 (주소 합치기 로직 포함)
+async function saveBasicInfo() { 
+    const name = document.getElementById("editName").value; 
+    const phone = document.getElementById("editPhone").value; 
+    const email = document.getElementById("editEmail").value; 
+    
+    // [중요] 주소 + 상세주소 합쳐서 저장
+    let fullAddress = document.getElementById("editAddress").value;
+    const detail = document.getElementById("editAddressDetail").value;
+    if(detail) fullAddress += " " + detail;
+
+    const hireDate = document.getElementById("editHireDate").value; 
+    const sal = Number(document.getElementById("editSalary").value); 
+    const date = document.getElementById("salaryApplyDate").value; 
+    const updates = { emp_name: name, phone: phone, email: email, address: fullAddress, hire_date: hireDate, base_salary: sal, salary_apply_date: date }; 
+    const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', currentEmpId); 
+    if(error) return showAlert("저장 실패: " + error.message); 
+    if (sal !== currentAnnualSalary) { await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); } 
+    currentAnnualSalary = sal; 
+    
+    document.getElementById("viewName").innerText = name; 
+    document.getElementById("viewPhone").innerText = phone; 
+    document.getElementById("viewEmail").innerText = email; 
+    document.getElementById("viewAddress").innerText = fullAddress; 
+    document.getElementById("viewHireDate").innerText = hireDate; 
+    document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; 
+    document.getElementById("viewSalaryDate").innerText = date; 
+    toggleEditMode(false); 
+    showAlert("저장되었습니다."); 
+}
+
 async function saveRRN() { /* 기존 동일 */ const f = document.getElementById("rrnFront").value; const b = document.getElementById("rrnBack").value; if((f+b).length !== 13) return showAlert("13자리를 입력하세요."); const { error } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f+"-"+b }); if(error) showAlert("실패: "+error.message); else { showAlert("암호화되어 저장되었습니다."); const { data: bd } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId }); document.getElementById("viewBirth").innerText = bd || f; document.getElementById("rrnFront").value=""; document.getElementById("rrnBack").value=""; toggleEditMode(false); } }
 async function uploadContract() { /* 기존 동일 */ const fileInput = document.getElementById("contractFile"); if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요."); const file = fileInput.files[0]; const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`; showLoading(); try { const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single(); if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]); const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true }); if (error) throw error; await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId); hideLoading(); setTimeout(async () => { showAlert("계약서가 등록되었습니다."); const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600); document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>`; document.getElementById("hiddenContractUrl").value = data.path; fileInput.value = ""; }, 500); } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); } }
 
@@ -411,9 +458,7 @@ async function loadSalaryData() {
     const month = document.getElementById("salaryMonth").value; const badge = document.getElementById("salaryStatusBadge"); badge.innerText = "조회 중...";
     const { data: saved } = await _supabase.from('hr_salary').select('*').eq('emp_id', currentEmpId).eq('year_month', month).single();
     
-    // [추가] 인쇄용 버튼 보이기/숨기기
-    const btnPrint = document.getElementById("btnAdminPrintSalary");
-    
+    // [수정] 인쇄용 데이터 및 버튼 처리
     if(saved) {
         document.getElementById("payTotalFixed").value = saved.pay_total || 0;
         document.getElementById("payMeal").value = saved.pay_meal; document.getElementById("payCar").value = saved.pay_car; document.getElementById("payChild").value = saved.pay_child; document.getElementById("payBonus").value = saved.pay_bonus;
@@ -421,7 +466,6 @@ async function loadSalaryData() {
         
         currentSalaryDataForPrint = saved;
         currentSalaryDataForPrint.year_month = month;
-        btnPrint.style.display = 'inline-block'; // 저장된 데이터가 있을 때만 인쇄 가능
     } else {
         const monthlyTotal = Math.floor(currentAnnualSalary / 12); 
         document.getElementById("payTotalFixed").value = monthlyTotal; 
@@ -429,7 +473,6 @@ async function loadSalaryData() {
         badge.innerText = "자동 계산 (미저장)"; badge.className = "badge bg-secondary";
         
         currentSalaryDataForPrint = null;
-        btnPrint.style.display = 'none'; // 저장 안 되면 인쇄 불가
     }
     recalcSalaryComponents();
 }
@@ -460,26 +503,21 @@ async function saveLog() { const type = document.getElementById("logType").value
 
 function openAdminCertModal() { document.getElementById("adminCertPurpose").value = ""; adminCertModal.show(); }
 
-// [추가] 관리자용 증명서 발급 (마이페이지 로직 이식)
+// [추가] 관리자용 증명서 발급
 async function reqIssueCert() {
     const purpose = document.getElementById("adminCertPurpose").value;
     if(!purpose) return showAlert("용도를 입력해주세요.");
-    
     adminCertModal.hide();
 
-    // 생년월일 가져오기 (RPC 결과 또는 DB 저장된 텍스트)
     const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId });
-    // 주민번호 복호화 (선택사항: 증명서에 주민번호가 필요하면 rpc를 따로 호출해야 함. 여기선 생년월일만 사용)
     const birthStr = birthDate || "미등록";
 
-    // 문서 번호 생성
     const thisYear = new Date().getFullYear();
     const { count } = await _supabase.from('log_cert').select('*', { count: 'exact', head: true }).gte('issued_at', `${thisYear}-01-01T00:00:00`);
     const docNum = `인사-${thisYear}-${String((count||0) + 1).padStart(3, '0')}`; 
 
     await _supabase.from('log_cert').insert({ emp_id: currentEmpId, emp_name: currentEmpName, cert_type: '재직증명서', purpose: purpose, cert_num: docNum });
 
-    // 입사일 계산
     const hireDate = document.getElementById("viewHireDate").innerText;
     let tenureStr = "-";
     if(hireDate && hireDate !== '-') {
@@ -497,31 +535,25 @@ async function reqIssueCert() {
         logo: companyInfo.logo_horizontal_url || "", 
         name: currentEmpName, 
         birth: birthStr, 
-        dept: document.getElementById("empListBody").innerText.includes(currentEmpId) ? "확인필요" : "", // 부서는 리스트에서 가져오거나 별도 저장 필요. 여기선 간단히 처리
-        pos: "", // 직급도 마찬가지
+        dept: "", pos: "", // DB조회 필요
         address: document.getElementById("viewAddress").innerText,
         tenure: tenureStr, purpose: purpose,
         today: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }),
         chairman: companyInfo.chairman_name || "이사장", compName: companyInfo.company_name, compAddr: cleanAddr, contact: companyInfo.company_contact, seal: companyInfo.seal_url
     };
     
-    // 부서/직급 정보가 detailModal에 없으므로 리스트나 DB에서 다시 가져오는게 좋음
     const { data: empData } = await _supabase.from('ref_employees').select('*').eq('emp_id', currentEmpId).single();
-    if(empData) {
-        certData.dept = empData.department;
-        certData.pos = empData.position;
-    }
+    if(empData) { certData.dept = empData.department; certData.pos = empData.position; }
 
     printDocument(certData);
 }
 
 // [추가] 관리자용 급여명세서 인쇄
 function printSalaryAdmin() {
-    if(!currentSalaryDataForPrint) return showAlert("데이터가 없습니다.");
+    if(!currentSalaryDataForPrint) return showAlert("저장된 급여 내역이 없습니다.");
     const d = currentSalaryDataForPrint;
     const [y, m] = d.year_month.split('-');
     
-    // 귀속연월 계산 함수 (마이페이지와 동일)
     const getAttributionString = (ymStr) => {
         const [yy, mm] = ymStr.split('-').map(Number);
         let ay = yy; let am = mm - 1;
@@ -533,14 +565,10 @@ function printSalaryAdmin() {
     const fmt = (n) => (!n || Number(n)===0) ? "" : Number(n).toLocaleString();
     const fmtFix = (n) => Number(n).toLocaleString();
 
-    // 부서/직급 정보 보강
-    // (현재 화면에는 이름만 있으므로 DB 조회 권장되나, 성능상 detailModal 열 때 가져온 정보를 쓸 수도 있음)
-    // 여기선 심플하게 전역변수 활용
-    
     const salaryData = {
         type: 'salary',
         titleDate: `${y}년 ${Number(m)}월`, attrDate: getAttributionString(d.year_month), payDate: "매월 10일",
-        empInfo: `${currentEmpId} / ${currentEmpName}`, dept: "", pos: "", // 아래에서 채움
+        empInfo: `${currentEmpId} / ${currentEmpName}`, dept: "", pos: "",
         p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car),
         p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime),
         p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmtFix(d.pay_total),
@@ -550,22 +578,17 @@ function printSalaryAdmin() {
         logo: companyInfo.logo_horizontal_url || "", seal: companyInfo.seal_url, chairman: companyInfo.chairman_name
     };
     
-    // 비동기로 부서/직급 가져오기 (화면에 없을 수 있어서)
     _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single().then(({data}) => {
-        if(data) {
-            salaryData.dept = data.department;
-            salaryData.pos = data.position;
-        }
+        if(data) { salaryData.dept = data.department; salaryData.pos = data.position; }
         printDocument(salaryData);
     });
 }
 
-// [추가] 공통 인쇄 함수 (마이페이지 로직 그대로 이식)
+// [추가] 공통 인쇄 함수
 function printDocument(data) {
     const win = window.open('', '', 'width=900,height=1100');
     let contentHtml = "";
     
-    // 스타일은 마이페이지와 100% 동일하게
     const commonCss = `
         @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; } img { max-width: 100%; height: auto; }
