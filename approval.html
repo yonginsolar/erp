@@ -210,45 +210,18 @@ function switchTab(tab) {
 }
 
 // [핵심] 마이페이지 로직 이식: 회계연도 기준 실시간 연차 계산
+// [수정] 기안 작성 시 본인 연차 조회
 async function calculateLeave() {
-    const { data: emp } = await _supabase.from('ref_employees').select('hire_date').eq('emp_id', myInfo.emp_id).single();
-    if(!emp || !emp.hire_date) {
-        document.getElementById("remainDaysBadge").innerText = "0"; return;
+    // DB 함수 호출
+    const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: myInfo.emp_id });
+
+    if (error) {
+        console.error("연차 조회 실패:", error);
+        document.getElementById("remainDaysBadge").innerText = "오류";
+        return;
     }
 
-    const joinDate = new Date(emp.hire_date);
-    const now = new Date();
-    
-    // 1. 입사 1년 미만 월 단위 발생분 (최대 11개)
-    const diffMonths = (now.getFullYear() - joinDate.getFullYear()) * 12 + (now.getMonth() - joinDate.getMonth());
-    const isDayPassed = now.getDate() >= joinDate.getDate();
-    const totalFullMonths = isDayPassed ? diffMonths : diffMonths - 1;
-    const firstYearLeave = Math.min(11, Math.max(0, totalFullMonths));
-    
-    // 2. 회계연도(1월 1일) 기준 발생분 (15개)
-    let fiscalLeave = 0;
-    if (now.getFullYear() > joinDate.getFullYear()) {
-        fiscalLeave = 15;
-    }
-    
-    let generated = firstYearLeave + fiscalLeave;
-
-    // 3. 조정 내역 (hr_leave_adj)
-    let adjusted = 0;
-    const { data: adjs } = await _supabase.from('hr_leave_adj').select('adj_type, days').eq('emp_id', myInfo.emp_id);
-    if(adjs) {
-        adjs.forEach(a => {
-            if(a.adj_type === '지급' || a.adj_type === '포상') adjusted += Number(a.days);
-            else adjusted -= Number(a.days);
-        });
-    }
-
-    // 4. 사용 내역 (ref_approval)
-    let used = 0;
-    const { data: apps } = await _supabase.from('ref_approval').select('amount').eq('drafter_id', myInfo.emp_id).eq('doc_type', '휴가').eq('status', '완료');
-    if(apps) apps.forEach(a => used += Number(a.amount));
-
-    document.getElementById("remainDaysBadge").innerText = generated + adjusted - used;
+    document.getElementById("remainDaysBadge").innerText = remainDays;
 }
 
 // [기능] 부양가족 등재 및 템플릿
