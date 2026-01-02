@@ -690,43 +690,43 @@ async function searchSalary() {
 }
 
 // [수정] 마이페이지용 급여명세서 인쇄 (스마트 기간 적용)
+// [수정] 마이페이지 급여명세서 인쇄 (지급일 자동 계산 + 근로기간)
 function printSalaryPopup() {
     if(!currentSalaryData) return showAlert("먼저 급여 내역을 조회해주세요.");
     const d = currentSalaryData;
     const [y, m] = d.year_month.split('-');
     
-    // 똑똑한 기간 산정 로직 (Smart Attribution) - 마이페이지 버전
+    // 1. 근로기간 (Smart Attribution)
     const getSmartAttribution = (ymStr) => {
         const [yy, mm] = ymStr.split('-').map(Number);
-        let sy = yy, sm = mm - 1; if (sm === 0) { sy = yy - 1; sm = 12; }
-        
         let startDay = 1;
-        let lastDay = new Date(sy, sm, 0).getDate();
+        let lastDay = new Date(yy, mm, 0).getDate();
 
-        // 내 정보(myInfo)에서 입사일 확인
         if(myInfo.hire_date) {
             const hDate = new Date(myInfo.hire_date);
-            if(hDate.getFullYear() === sy && (hDate.getMonth()+1) === sm) {
-                startDay = hDate.getDate();
-            }
+            if(hDate.getFullYear() === yy && (hDate.getMonth()+1) === mm) startDay = hDate.getDate();
         }
-        // 내 정보에서 퇴사일 확인 (퇴사자도 마이페이지 접속 가능 시)
         if(myInfo.resign_date) {
             const rDate = new Date(myInfo.resign_date);
-            if(rDate.getFullYear() === sy && (rDate.getMonth()+1) === sm) {
-                lastDay = rDate.getDate();
-            }
+            if(rDate.getFullYear() === yy && (rDate.getMonth()+1) === mm) lastDay = rDate.getDate();
         }
-
-        return `${sy}년 ${sm}월<br>(${sy}.${String(sm).padStart(2,'0')}.${String(startDay).padStart(2,'0')} ~ ${sy}.${String(sm).padStart(2,'0')}.${lastDay})`;
+        return `${yy}년 ${mm}월<br>(${yy}.${String(mm).padStart(2,'0')}.${String(startDay).padStart(2,'0')} ~ ${yy}.${String(mm).padStart(2,'0')}.${lastDay})`;
     };
+
+    // 2. 지급일 (익월 10일)
+    const payDateObj = new Date(y, Number(m), 10); // m은 1~12. Date생성자 month는 0~11이지만 10일로 설정 시 다음달로 넘어감 (e.g. 11월 데이터 -> 12월 10일)
+    // *주의: new Date(2025, 11, 10)은 12월 10일임. (월 인덱스 11 = 12월). 
+    // 입력값 m이 '11'이면 Number(m)은 11. new Date(y, 11, 10) -> 12월 10일. 정확함.
+    const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth()+1}월 ${payDateObj.getDate()}일`;
 
     const fmt = (n) => (!n || Number(n)===0) ? "" : Number(n).toLocaleString();
     const fmtFix = (n) => Number(n).toLocaleString();
 
     const salaryData = {
         type: 'salary',
-        titleDate: `${y}년 ${Number(m)}월`, attrDate: getSmartAttribution(d.year_month), payDate: "매월 10일",
+        titleDate: `${y}년 ${Number(m)}월`, 
+        attrDate: getSmartAttribution(d.year_month), 
+        payDate: payDateStr, // [수정됨]
         empInfo: `${myInfo.emp_id} / ${myInfo.emp_name}`, dept: myInfo.department, pos: myInfo.position,
         p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car),
         p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime),
