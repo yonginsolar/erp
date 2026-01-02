@@ -7,7 +7,6 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   
   <style>
     body { background-color: #f8f9fa; padding: 20px; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; }
@@ -19,13 +18,11 @@
     .line-arrow { margin-right: 5px; color: #999; font-weight: bold; }
     .ref-step { display: inline-block; background: #f1f3f5; color: #495057; padding: 5px 10px; border-radius: 5px; margin-right: 5px; margin-bottom: 5px; font-size: 0.85rem; border: 1px solid #dee2e6; }
     
-    /* 리스트 스타일 */
     .user-select-item { cursor: pointer; transition: 0.2s; }
     .user-select-item:hover { background-color: #f8f9fa; }
     .user-select-item.active { background-color: #e8f0fe; border-color: #4285f4; }
-    .large-textarea { min-height: 300px; resize: vertical; line-height: 1.6; }
+    .large-textarea { min-height: 500px; resize: vertical; line-height: 1.6; } /* 요청하신 대로 20줄 이상 확보 */
     
-    /* 파일 목록 */
     .file-item { font-size: 0.9rem; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; border: 1px solid #eee; }
     .file-size { font-size: 0.8rem; color: #888; float: right; }
   </style>
@@ -50,12 +47,40 @@
       <div class="row mb-3">
         <div class="col-12 mb-3">
           <label class="small text-muted fw-bold">결재 구분</label>
-          <select class="form-select" id="appTypeDisplay" onchange="handleCategoryChange(this)">
-            <option value="지출결의">💰 지출결의서</option>
-            <option value="일반품의">📄 일반품의서</option>
-            <option value="휴가">🏖️ 휴가(근태)</option>
-            <option value="부양가족">👨‍👩‍👧‍👦 부양가족 등재 신청</option>
+          <select class="form-select" id="appCategory" onchange="handleCategoryChange()">
+            <optgroup label="인사/근태">
+                <option value="휴가">🏖️ 휴가 신청</option>
+                <option value="부양가족">👨‍👩‍👧‍👦 부양가족 등재/해제 신청</option>
+            </optgroup>
+            <optgroup label="회계/지출">
+                <option value="지출결의">💰 지출결의서</option>
+                <option value="일반품의">📄 일반품의서</option>
+            </optgroup>
           </select>
+        </div>
+
+        <div class="col-12 hidden mb-3" id="divLeaveType">
+            <label class="small text-muted fw-bold">휴가 종류</label>
+            <select class="form-select" id="leaveTypeSelect">
+                <option value="연차">🟢 연차 (잔여 연차 차감)</option>
+                <option value="반차">🌗 반차 (0.5일 차감)</option>
+                <option value="경조사">💍 경조사 (차감 안 함)</option>
+                <option value="병가">🏥 병가 (차감 안 함)</option>
+                <option value="생리휴가">🌸 생리휴가 (보건, 차감 안 함)</option>
+                <option value="예비군">🪖 예비군/민방위 (공가, 차감 안 함)</option>
+                <option value="무급휴가">⚠️ 무급휴가 (급여 차감 대상)</option>
+            </select>
+        </div>
+
+        <div class="col-12 hidden mb-3" id="divDependentOption">
+            <label class="small text-muted fw-bold">신청 구분</label>
+            <div class="d-flex gap-2">
+                <input type="radio" class="btn-check" name="depOption" id="depAdd" value="add" checked onchange="updateDepTemplate()">
+                <label class="btn btn-outline-primary flex-fill" for="depAdd">➕ 등재 신청</label>
+                
+                <input type="radio" class="btn-check" name="depOption" id="depRemove" value="remove" onchange="updateDepTemplate()">
+                <label class="btn btn-outline-danger flex-fill" for="depRemove">➖ 해제 신청</label>
+            </div>
         </div>
 
         <div class="col-12" id="divAmount">
@@ -66,8 +91,8 @@
         <div class="col-12 hidden" id="divLeaveSection">
           <div class="p-3 bg-light border rounded">
             <div class="d-flex justify-content-between mb-2">
-              <span class="fw-bold">📅 휴가 기간 선택</span>
-              <span class="badge bg-primary">잔여 연차: <span id="remainDaysBadge">계산중...</span>일</span>
+              <span class="fw-bold">📅 기간 선택</span>
+              <span class="badge bg-primary">잔여 연차: <span id="remainDaysBadge">조회중...</span>일</span>
             </div>
             <div class="input-group mb-2">
               <input type="date" class="form-control" id="leaveStart" onchange="calcLeaveDays()">
@@ -107,7 +132,7 @@
 
       <div class="mb-3">
         <label class="small text-muted">내용</label>
-        <textarea class="form-control large-textarea" id="appDesc" placeholder="내용을 상세히 입력하세요." required></textarea>
+        <textarea class="form-control large-textarea" id="appDesc" placeholder="내용을 상세히 입력하세요." required rows="20"></textarea>
       </div>
 
       <div class="mb-4">
@@ -120,39 +145,14 @@
     </form>
   </div>
 
-  <div id="view-todo" class="hidden">
-    <div id="todoList" class="list-group"></div>
-  </div>
-
+  <div id="view-todo" class="hidden"><div id="todoList" class="list-group"></div></div>
   <div id="view-history" class="hidden">
-    <div class="input-group mb-3">
-        <input type="text" class="form-control" id="searchKeyword" placeholder="제목, 기안자 검색" onkeyup="filterHistory()">
-        <button class="btn btn-outline-secondary">🔍</button>
-    </div>
+    <div class="input-group mb-3"><input type="text" class="form-control" id="searchKeyword" placeholder="검색" onkeyup="filterHistory()"><button class="btn btn-outline-secondary">🔍</button></div>
     <div id="historyList" class="list-group"></div>
   </div>
 </div>
 
-<div class="modal fade" id="userModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-0">
-                <div class="list-group list-group-flush" id="userSelectList">
-                    <div class="text-center p-4 text-muted">로딩 중...</div>
-                </div>
-            </div>
-            <div class="modal-footer justify-content-between">
-                <span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span>
-                <button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button>
-            </div>
-        </div>
-    </div>
-</div>
-
+<div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 
 <script>
@@ -164,10 +164,7 @@ let myInfo = null;
 let allUsers = [];
 let modalInstance, alertModalInstance;
 let modalType = ''; 
-let tempSelection = [];
-let finalApprovers = [];
-let finalRefs = [];
-let historyCache = [];
+let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [];
 
 window.onload = async function() {
     modalInstance = new bootstrap.Modal(document.getElementById('userModal'));
@@ -177,85 +174,77 @@ window.onload = async function() {
     if (!stored) { location.href = 'index.html'; return; }
     myInfo = JSON.parse(stored);
 
-    // [수정] 1이 높은 직급이므로 '오름차순(ascending: true)'으로 정렬해야 1->9 순서로 나옴
-    const { data, error } = await _supabase
-        .from('ref_employees')
-        .select('emp_id, emp_name, position, department, auth_level')
-        .order('auth_level', {ascending: true}); // 1(이사장) -> 9(사원)
-
+    // [로직] 직원 목록 로드 (1급 이사장 -> 9급 사원)
+    const { data } = await _supabase.from('ref_employees').select('*').order('auth_level', {ascending: true});
     if(data) allUsers = data;
-    else console.error("Load Error:", error);
 
-    calculateLeave(); // 연차 계산 실행
+    // [로직] 연차 계산 (중앙화된 DB 함수 호출)
+    const { data: remain } = await _supabase.rpc('calculate_leave_days', { p_emp_id: myInfo.emp_id });
+    document.getElementById("remainDaysBadge").innerText = (remain !== null) ? remain : "0";
+
+    handleCategoryChange(); // UI 초기화
 };
 
 function showAlert(msg) { document.getElementById("alertBody").innerHTML = msg; alertModalInstance.show(); }
 
 function switchTab(tab) {
-    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
-
-    if (tab === 'draft') {
-        document.getElementById('tab1').classList.add('active');
-        document.getElementById('view-draft').classList.remove('hidden');
-    } else if (tab === 'todo') {
-        document.getElementById('tab2').classList.add('active');
-        document.getElementById('view-todo').classList.remove('hidden');
-        loadTodoList();
-    } else {
-        document.getElementById('tab3').classList.add('active');
-        document.getElementById('view-history').classList.remove('hidden');
-        loadHistoryList();
-    }
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    if(tab==='draft') { document.getElementById('view-draft').classList.remove('hidden'); document.getElementById('tab1').classList.add('active'); }
+    else if(tab==='todo') { document.getElementById('view-todo').classList.remove('hidden'); document.getElementById('tab2').classList.add('active'); loadTodoList(); }
+    else { document.getElementById('view-history').classList.remove('hidden'); document.getElementById('tab3').classList.add('active'); loadHistoryList(); }
 }
 
-// [핵심] 마이페이지 로직 이식: 회계연도 기준 실시간 연차 계산
-// [수정] 기안 작성 시 본인 연차 조회
-async function calculateLeave() {
-    // DB 함수 호출
-    const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: myInfo.emp_id });
-
-    if (error) {
-        console.error("연차 조회 실패:", error);
-        document.getElementById("remainDaysBadge").innerText = "오류";
-        return;
-    }
-
-    document.getElementById("remainDaysBadge").innerText = remainDays;
-}
-
-// [기능] 부양가족 등재 및 템플릿
-function handleCategoryChange(sel) {
-    const type = sel.value;
+// [기능] 카테고리 변경 핸들러
+function handleCategoryChange() {
+    const type = document.getElementById("appCategory").value;
     const desc = document.getElementById("appDesc");
     const amtLabel = document.getElementById("amountLabel");
     const amountInput = document.getElementById("appAmount");
     const fileHelp = document.getElementById("fileHelp");
-    
-    document.getElementById("divAmount").classList.remove("hidden");
-    document.getElementById("divLeaveSection").classList.add("hidden");
+    const divLeave = document.getElementById("divLeaveSection");
+    const divLeaveType = document.getElementById("divLeaveType");
+    const divDep = document.getElementById("divDependentOption");
+    const divAmt = document.getElementById("divAmount");
+
+    // 초기화
+    divLeave.classList.add("hidden");
+    divLeaveType.classList.add("hidden");
+    divDep.classList.add("hidden");
+    divAmt.classList.remove("hidden");
+    fileHelp.classList.add("hidden");
     amtLabel.innerText = "금액 (원)";
     amountInput.placeholder = "0";
-    fileHelp.classList.add("hidden");
 
     if (type === '휴가') {
-        document.getElementById("divAmount").classList.add("hidden");
-        document.getElementById("divLeaveSection").classList.remove("hidden");
+        divLeave.classList.remove("hidden");
+        divLeaveType.classList.remove("hidden");
+        divAmt.classList.add("hidden");
         desc.value = "위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.";
     } 
     else if (type === '부양가족') {
-        amtLabel.innerText = "추가 인원 (명)";
+        divDep.classList.remove("hidden");
+        amtLabel.innerText = "변동 인원 (명)";
         amountInput.placeholder = "예: 1";
         amountInput.value = "1";
         fileHelp.classList.remove("hidden");
-        desc.value = `[부양가족 등재 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : (예: 자녀 출생, 혼인 등)\n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자로 신청합니다.`;
+        updateDepTemplate();
     } 
     else {
+        // 일반, 지출결의
         if(desc.value.includes("휴가를 신청") || desc.value.includes("부양가족")) desc.value = "";
     }
 }
 
-// 주말 제외 휴가일수 계산
+// [기능] 부양가족 템플릿 업데이트
+function updateDepTemplate() {
+    const mode = document.querySelector('input[name="depOption"]:checked').value;
+    const desc = document.getElementById("appDesc");
+    const actionText = mode === 'add' ? "등재" : "해제";
+    desc.value = `[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`;
+}
+
+// [로직] 주말 제외 휴가일수 계산
 function calcLeaveDays() {
     const s = document.getElementById("leaveStart").value;
     const e = document.getElementById("leaveEnd").value;
@@ -264,22 +253,28 @@ function calcLeaveDays() {
     let count = 0;
     let cur = new Date(s);
     const end = new Date(e);
-
     while (cur <= end) {
         const day = cur.getDay();
         if (day !== 0 && day !== 6) count++;
         cur.setDate(cur.getDate() + 1);
     }
+    
+    // 반차면 0.5일
+    const lType = document.getElementById("leaveTypeSelect").value;
+    if(lType === '반차') count = 0.5;
 
     document.getElementById("leaveDaysBadge").innerText = count + "일";
     document.getElementById("leaveDaysCalc").value = count;
     
-    const remain = Number(document.getElementById("remainDaysBadge").innerText);
-    const msg = document.getElementById("leaveOverMsg");
-    if(count > remain) msg.classList.remove("hidden"); else msg.classList.add("hidden");
+    // 잔여 연차 비교 (연차, 반차일 때만)
+    if(lType === '연차' || lType === '반차') {
+        const remain = Number(document.getElementById("remainDaysBadge").innerText);
+        const msg = document.getElementById("leaveOverMsg");
+        if(count > remain) msg.classList.remove("hidden"); else msg.classList.add("hidden");
+    }
 }
 
-// 직원 선택 모달
+// [기능] 직원 선택 모달 (필터 적용)
 function openUserModal(type) {
     modalType = type;
     document.getElementById("modalTitle").innerText = (type === 'approver') ? "결재자 선택" : "참조자 선택";
@@ -291,16 +286,29 @@ function openUserModal(type) {
 function renderUserList() {
     const listEl = document.getElementById("userSelectList");
     listEl.innerHTML = "";
-    const targets = allUsers.filter(u => u.emp_id !== myInfo.emp_id);
     
-    if(targets.length === 0) { listEl.innerHTML = '<div class="p-3 text-center">직원 데이터 없음</div>'; return; }
+    // 나보다 직급 낮은 사람(숫자가 큰 사람)은 제외하고, 나 자신도 제외
+    // auth_level: 1(높음) ~ 9(낮음). 
+    // 결재자 선택 시: 나(예:5급)는 1~4급만 선택 가능. 즉 u.auth_level < myInfo.auth_level
+    const myLevel = myInfo.auth_level || 99;
+
+    let targets = allUsers.filter(u => u.emp_id !== myInfo.emp_id);
+    
+    if (modalType === 'approver') {
+        // [필터] 나보다 높은 사람만 보이기 (숫자가 작은 사람)
+        targets = targets.filter(u => u.auth_level < myLevel);
+    } else {
+        // [필터] 참조자는 이미 결재선에 있는 사람 제외
+        targets = targets.filter(u => !finalApprovers.some(a => a.emp_id === u.emp_id));
+    }
+
+    if(targets.length === 0) { listEl.innerHTML = '<div class="p-3 text-center text-muted">선택 가능한 대상이 없습니다.</div>'; return; }
 
     targets.forEach(u => {
         const isSelected = tempSelection.some(s => s.emp_id === u.emp_id);
         const a = document.createElement("a");
-        a.className = `list-group-item list-group-item-action user-select-item d-flex justify-content-between align-items-center ${isSelected ? 'active' : ''}`;
-        // [확인] auth_level이 낮은 숫자(1)가 위로 옴
-        a.innerHTML = `<div><span class="badge bg-secondary me-2">${u.position}</span> <span class="fw-bold">${u.emp_name}</span></div>${isSelected ? '✅' : ''}`;
+        a.className = `list-group-item list-group-item-action user-select-item d-flex justify-content-between ${isSelected ? 'active' : ''}`;
+        a.innerHTML = `<div><span class="badge bg-secondary me-2">${u.position}</span>${u.emp_name} <small class="text-muted">(${u.department||'-'})</small></div>${isSelected?'✅':''}`;
         a.onclick = () => toggleSelect(u);
         listEl.appendChild(a);
     });
@@ -309,14 +317,16 @@ function renderUserList() {
 
 function toggleSelect(user) {
     const idx = tempSelection.findIndex(s => s.emp_id === user.emp_id);
-    if (idx > -1) tempSelection.splice(idx, 1);
-    else tempSelection.push(user);
+    if (idx > -1) tempSelection.splice(idx, 1); else tempSelection.push(user);
     renderUserList();
 }
 
 function confirmSelection() {
-    if (modalType === 'approver') finalApprovers = [...tempSelection];
-    else finalRefs = [...tempSelection];
+    if (modalType === 'approver') {
+        finalApprovers = [...tempSelection];
+    } else {
+        finalRefs = [...tempSelection];
+    }
     modalType==='approver' ? renderLinePreview() : renderRefPreview();
     modalInstance.hide();
 }
@@ -324,6 +334,8 @@ function confirmSelection() {
 function renderLinePreview() {
     const el = document.getElementById("linePreview");
     if(finalApprovers.length === 0) { el.innerText = "결재자를 추가해주세요."; return; }
+    // 화면 표시용 정렬은 하지 않고 선택 순서 보여주거나, 아니면 여기서도 정렬해서 보여줄 수 있음.
+    // 여기서는 상신 시 자동 정렬하므로, 화면에선 직관적으로 보여줌.
     el.innerHTML = finalApprovers.map((u, i) => `<span class="line-step">${u.emp_name} ${u.position}</span>` + (i < finalApprovers.length-1 ? '<span class="line-arrow">➡</span>' : '')).join("");
 }
 
@@ -332,52 +344,76 @@ function renderRefPreview() {
     if(finalRefs.length === 0) { el.innerText = "참조자가 없습니다."; return; }
     el.innerHTML = finalRefs.map(u => `<span class="ref-step">📢 ${u.emp_name}</span>`).join("");
 }
+function resetLine(type) { if(type==='approver') { finalApprovers=[]; renderLinePreview(); } else { finalRefs=[]; renderRefPreview(); } }
 
-function resetLine(type) {
-    if(type==='approver') { finalApprovers=[]; renderLinePreview(); }
-    else { finalRefs=[]; renderRefPreview(); }
-}
-
-// 상신 (Submit)
+// [핵심] 상신 (자동 정렬 + 파일 첨부 + DB 저장)
 async function handleDraftSubmit(e) {
     e.preventDefault();
     if (finalApprovers.length === 0) return showAlert("결재선을 지정해주세요.");
-    
-    const appType = document.getElementById("appTypeDisplay").value;
+
+    const mainType = document.getElementById("appCategory").value;
+    let subType = mainType; 
     let finalAmt = document.getElementById("appAmount").value || 0;
-    
-    if (appType === '휴가') {
+    let title = "";
+
+    // 1. 문서 타입 및 값 정리
+    if (mainType === '휴가') {
+        const lType = document.getElementById("leaveTypeSelect").value; // 연차, 반차, 무급 등
+        subType = `휴가(${lType})`; // 예: "휴가(무급휴가)", "휴가(연차)"
+        
         const days = Number(document.getElementById("leaveDaysCalc").value);
-        if(days <= 0) return showAlert("휴가 기간을 선택하세요.");
-        const remain = Number(document.getElementById("remainDaysBadge").innerText);
-        if(days > remain) return showAlert("잔여 연차가 부족합니다.");
-        finalAmt = days; 
+        if(days <= 0) return showAlert("기간을 선택하세요.");
+        
+        // 연차/반차만 잔여량 체크
+        if (lType === '연차' || lType === '반차') {
+            const remain = Number(document.getElementById("remainDaysBadge").innerText);
+            if(days > remain) return showAlert("잔여 연차가 부족합니다.");
+        }
+        finalAmt = days;
+        title = `${lType} 신청 - ${myInfo.emp_name}`;
+    } 
+    else if (mainType === '부양가족') {
+        const mode = document.querySelector('input[name="depOption"]:checked').value; // add or remove
+        const modeTxt = mode === 'add' ? '등재' : '해제';
+        subType = `부양가족(${mode})`; // "부양가족(add)"
+        
+        if(document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류 필수입니다.");
+        
+        // 해제면 마이너스 처리
+        if (mode === 'remove') finalAmt = -Math.abs(finalAmt);
+        title = `부양가족 ${modeTxt} 신청 - ${myInfo.emp_name}`;
     }
-    if (appType === '부양가족') {
-        if(document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류(가족관계증명서) 필수입니다.");
+    else {
+        title = `${mainType} - ${myInfo.emp_name}`;
     }
+
+    // 2. [자동 정렬] 결재선: 직급 역순 (하급자 -> 상급자)
+    // auth_level 숫자가 큰 사람(낮은 직급) -> 작은 사람(높은 직급)
+    // 예: 과장(5) -> 이사(2) -> 이사장(1)
+    finalApprovers.sort((a, b) => b.auth_level - a.auth_level);
 
     const btn = document.getElementById("btnSubmit");
     btn.disabled = true; btn.innerText = "처리 중...";
 
-    // 파일 업로드
+    // 3. 파일 업로드
     const fileInput = document.getElementById("attachFile");
     const uploadedUrls = [];
     for (let i = 0; i < fileInput.files.length; i++) {
         const file = fileInput.files[i];
         const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
         const { data, error } = await _supabase.storage.from('attachments').upload(safeName, file);
-        if (error) { showAlert("업로드 실패: "+error.message); btn.disabled=false; return; }
+        if (error) { showAlert("파일 오류: "+error.message); btn.disabled=false; return; }
         const { data: { publicUrl } } = _supabase.storage.from('attachments').getPublicUrl(safeName);
         uploadedUrls.push(publicUrl);
     }
 
+    // 4. DB 저장
     const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
     const refData = finalRefs.map(u => ({ emp_id: u.emp_id, name: u.emp_name }));
 
-    const { error: insertError } = await _supabase.from('ref_approval').insert({
-        doc_type: appType,
-        title: (appType==='부양가족') ? `[부양가족] ${myInfo.emp_name} 등재 신청` : `${appType} 신청 - ${myInfo.emp_name}`,
+    const { error } = await _supabase.from('ref_approval').insert({
+        doc_type: subType, // "휴가(무급휴가)", "부양가족(add)" 등 상세 타입 저장
+        title: title,
         content: document.getElementById("appDesc").value,
         amount: Number(finalAmt),
         drafter_id: myInfo.emp_id,
@@ -385,16 +421,16 @@ async function handleDraftSubmit(e) {
         approval_line: approvalLineData,
         ref_line: refData, 
         file_links: uploadedUrls, 
-        current_approver: finalApprovers[0].emp_id,
+        current_approver: finalApprovers[0].emp_id, // 정렬된 첫 번째 사람
         status: '진행중',
         created_at: new Date()
     });
 
-    if (insertError) { showAlert("오류: " + insertError.message); btn.disabled = false; btn.innerText = "상신하기"; }
+    if (error) { showAlert("상신 실패: " + error.message); btn.disabled = false; }
     else { showAlert("상신되었습니다."); location.reload(); }
 }
 
-// 결재 처리 (부양가족 자동반영 포함)
+// [핵심] 결재 처리 (부양가족 반영)
 async function procDoc(docId, action) {
     const reason = prompt(`${action} 사유 (선택):`);
     if (reason === null) return;
@@ -405,8 +441,8 @@ async function procDoc(docId, action) {
     let newStatus = '진행중';
 
     const idx = line.findIndex(p => p.emp_id === myInfo.emp_id);
-    if (idx === -1) return showAlert("권한이 없습니다.");
-    if (idx > 0 && line[idx-1].status !== '승인') return showAlert("이전 결재자가 아직 처리하지 않았습니다.");
+    if (idx === -1) return showAlert("권한 없음");
+    if (idx > 0 && line[idx-1].status !== '승인') return showAlert("이전 결재자가 처리 안 함");
 
     line[idx].status = action;
     line[idx].comment = reason;
@@ -420,82 +456,51 @@ async function procDoc(docId, action) {
         else newStatus = '완료'; 
     }
 
-    // [핵심] 부양가족 등재 자동 반영 (최종 승인 시)
-    if (doc.doc_type === '부양가족' && newStatus === '완료') {
-        const addCount = Number(doc.amount);
+    // [부양가족 자동 반영]
+    if (doc.doc_type.startsWith('부양가족') && newStatus === '완료') {
+        const changeVal = Number(doc.amount); // 이미 +1 또는 -1로 저장되어 있음
         const drafterId = doc.drafter_id;
         const { data: empData } = await _supabase.from('ref_employees').select('dependents').eq('emp_id', drafterId).single();
         if(empData) {
-            const currentDep = empData.dependents || 0;
-            await _supabase.from('ref_employees').update({ dependents: currentDep + addCount }).eq('emp_id', drafterId);
+            const current = empData.dependents || 0;
+            // 0명 미만으로 내려가지 않게 방어
+            const newVal = Math.max(0, current + changeVal);
+            await _supabase.from('ref_employees').update({ dependents: newVal }).eq('emp_id', drafterId);
         }
     }
 
-    const { error } = await _supabase.from('ref_approval').update({ approval_line: line, current_approver: nextUser, status: newStatus }).eq('id', docId);
-    if (error) showAlert("실패: " + error.message);
-    else { showAlert("처리되었습니다."); loadTodoList(); }
+    await _supabase.from('ref_approval').update({ approval_line: line, current_approver: nextUser, status: newStatus }).eq('id', docId);
+    showAlert("처리되었습니다."); loadTodoList();
 }
 
-// 조회 함수들
 async function loadTodoList() {
     const el = document.getElementById("todoList");
-    el.innerHTML = '<div class="text-center p-3">로딩 중...</div>';
-    const { data, error } = await _supabase.from('ref_approval').select('*').eq('status', '진행중').eq('current_approver', myInfo.emp_id).order('created_at', {ascending: false});
-    if(error) return el.innerHTML = "오류";
+    el.innerHTML = 'loading...';
+    const { data } = await _supabase.from('ref_approval').select('*').eq('status', '진행중').eq('current_approver', myInfo.emp_id).order('created_at', {ascending: false});
     renderDocs(el, data, true);
 }
-
 async function loadHistoryList() {
     const el = document.getElementById("historyList");
-    el.innerHTML = '<div class="text-center p-3">로딩 중...</div>';
+    el.innerHTML = 'loading...';
     const { data } = await _supabase.from('ref_approval').select('*').eq('drafter_id', myInfo.emp_id).order('created_at', {ascending: false});
     historyCache = data || [];
     renderDocs(el, historyCache, false);
 }
-
 function filterHistory() {
     const key = document.getElementById("searchKeyword").value.toLowerCase();
-    const filtered = historyCache.filter(d => d.title.toLowerCase().includes(key) || d.content.toLowerCase().includes(key));
+    const filtered = historyCache.filter(d => d.title.toLowerCase().includes(key));
     renderDocs(document.getElementById("historyList"), filtered, false);
 }
-
 function renderDocs(target, list, isTodo) {
     target.innerHTML = "";
-    if(!list || list.length === 0) { target.innerHTML = '<div class="text-center p-3 text-muted">문서가 없습니다.</div>'; return; }
+    if(!list || list.length===0) { target.innerHTML = '<div class="p-3 text-center text-muted">없음</div>'; return; }
     list.forEach(doc => {
-        const lineHtml = doc.approval_line.map(s => {
-            let icon = s.status==='승인'?'✅':(s.status==='반려'?'⛔':'⬜');
-            let style = s.status==='승인'?'text-success':(s.status==='반려'?'text-danger':'text-muted');
-            return `<span class="small me-2 ${style}">${icon} ${s.name} ${s.position}</span>`;
-        }).join("");
-
-        let fileHtml = "";
-        if (doc.file_links && doc.file_links.length > 0) {
-            fileHtml = `<div class="mt-2 pt-2 border-top">` + doc.file_links.map((url, i) => `<a href="${url}" target="_blank" class="text-decoration-none me-2">📎 첨부파일 ${i+1}</a>`).join("") + `</div>`;
-        }
-
-        let btnHtml = "";
-        if (isTodo) {
-            btnHtml = `<div class="mt-3 text-end"><button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id}, '승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id}, '반려')">반려</button></div>`;
-        } else {
-            let badge = doc.status==='완료'?'bg-success':(doc.status==='반려'?'bg-danger':'bg-warning');
-            btnHtml = `<div class="mt-2 text-end"><span class="badge ${badge}">${doc.status}</span></div>`;
-        }
-        
-        const div = document.createElement("div");
-        div.className = "list-group-item shadow-sm mb-3 border-0 p-3";
-        div.innerHTML = `<div class="d-flex justify-content-between mb-2"><span class="badge bg-primary">${doc.doc_type}</span><small class="text-muted">${new Date(doc.created_at).toLocaleDateString()}</small></div><h6 class="fw-bold mb-1">${doc.title}</h6><div class="small text-muted mb-2">기안자: ${doc.drafter_name}</div><div class="bg-light p-2 rounded mb-2" style="white-space: pre-wrap; font-size: 0.9rem;">${doc.content}</div><div class="small mb-1">${lineHtml}</div>${fileHtml}${btnHtml}`;
-        target.appendChild(div);
+        const lineHtml = doc.approval_line.map(s => `<span class="small me-2 ${s.status==='승인'?'text-success':(s.status==='반려'?'text-danger':'text-muted')}">${s.status==='승인'?'✅':(s.status==='반려'?'⛔':'⬜')} ${s.name}</span>`).join("");
+        let btn = isTodo ? `<div class="mt-2 text-end"><button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>` : `<div class="mt-2 text-end"><span class="badge ${doc.status==='완료'?'bg-success':(doc.status==='반려'?'bg-danger':'bg-warning')}">${doc.status}</span></div>`;
+        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><span class="badge bg-primary">${doc.doc_type}</span><small class="text-muted">${doc.created_at.slice(0,10)}</small></div><h6 class="fw-bold">${doc.title}</h6><div class="small mb-2">${lineHtml}</div>${btn}</div>`;
     });
 }
-
-function updateFileList() {
-    const files = document.getElementById("attachFile").files;
-    const area = document.getElementById("fileListArea");
-    let html = "";
-    for(let i=0; i<files.length; i++) html += `<div class="file-item">📎 ${files[i].name} <span class="file-size">${(files[i].size/1024).toFixed(1)} KB</span></div>`;
-    area.innerHTML = html;
-}
+function updateFileList() { document.getElementById("fileListArea").innerHTML = Array.from(document.getElementById("attachFile").files).map(f => `<div class="file-item">📎 ${f.name}</div>`).join(""); }
 </script>
 </body>
 </html>
