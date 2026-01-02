@@ -366,22 +366,67 @@ function removeTempEm(idx) {
 }
 
 // --- 캘린더 ---
+// [수정] 캘린더 렌더링 함수 (창립기념일 자동 추가)
 async function renderCalendar() {
     if(calendarInit) return;
+    
+    // 1. 데이터 가져오기 (휴가, 사원정보, 회사일정)
     const { data: leaves } = await _supabase.from('ref_approval').select('*').eq('doc_type', '휴가').eq('status', '완료');
     const { data: emps } = await _supabase.from('ref_employees').select('emp_name, birth_date, hire_date');
-    const { data: comps } = await _supabase.from('ref_calendar').select('*'); // 회사일정
+    const { data: comps } = await _supabase.from('ref_calendar').select('*');
 
     const events = [];
-    if(leaves) leaves.forEach(l => events.push({ title: `${l.drafter_name} 휴가`, start: l.start_date, end: l.end_date, color: (l.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'), allDay: true }));
-    if(emps) emps.forEach(e => {
-        if(e.birth_date) events.push({ title: `${e.emp_name} 생일`, start: getYearDate(e.birth_date), color: '#ffc107', textColor: '#000', allDay: true });
-        if(e.hire_date) events.push({ title: `${e.emp_name} 입사일`, start: getYearDate(e.hire_date), color: '#0dcaf0', textColor: '#000', allDay: true });
-    });
-    if(comps) comps.forEach(c => events.push({ title: c.title, start: c.start_date, end: c.end_date, color: '#dc3545', allDay: true }));
+    
+    // 2. 휴가 (내 휴가는 파란색, 남은 초록색)
+    if(leaves) {
+        leaves.forEach(l => {
+            const isMe = l.drafter_id === myInfo.emp_id;
+            events.push({
+                title: `${l.drafter_name} 휴가`,
+                start: l.start_date,
+                end: l.end_date ? new Date(new Date(l.end_date).getTime() + 86400000).toISOString().slice(0,10) : l.start_date,
+                color: isMe ? '#0d6efd' : '#198754',
+                allDay: true
+            });
+        });
+    }
 
+    // 3. 직원 생일 및 입사일
+    if(emps) {
+        emps.forEach(e => {
+            if(e.birth_date) events.push({ title: `${e.emp_name} 생일`, start: getYearDate(e.birth_date), color: '#ffc107', textColor: '#000', allDay: true });
+            if(e.hire_date) events.push({ title: `${e.emp_name} 입사`, start: getYearDate(e.hire_date), color: '#0dcaf0', textColor: '#000', allDay: true });
+        });
+    }
+
+    // 4. 회사 일정 (수동 입력분)
+    if(comps) {
+        comps.forEach(c => events.push({ title: c.title, start: c.start_date, end: c.end_date, color: '#dc3545', allDay: true }));
+    }
+
+    // 5. [추가] 창립기념일 (자동) - ref_company_info의 estDate 활용
+    if(companyInfo.estDate) {
+        events.push({
+            title: "🎉 창립기념일",
+            start: getYearDate(companyInfo.estDate), // 매년 반복되도록 연도 변환
+            color: '#ff4081', // 눈에 띄는 핫핑크색
+            allDay: true
+        });
+    }
+
+    // 6. 달력 그리기
     const el = document.getElementById('calendar');
-    const calendar = new FullCalendar.Calendar(el, { initialView: 'dayGridMonth', locale: 'ko', height: 600, headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }, events: events });
+    const calendar = new FullCalendar.Calendar(el, {
+        initialView: 'dayGridMonth',
+        locale: 'ko',
+        height: 600,
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
+        events: events,
+        eventClick: function(info) {
+            // (선택) 이벤트 클릭 시 제목 보여주기 등 처리 가능
+            // alert(info.event.title); 
+        }
+    });
     calendar.render();
     calendarInit = true;
 }
