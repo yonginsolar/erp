@@ -70,9 +70,9 @@
       </div>
       <div class="modal-body">
         <ul class="nav nav-tabs mb-3" id="settingTab" role="tablist">
-          <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 요율/세금</a></li>
+          <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
           <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li>
-          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정</a></li>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li>
         </ul>
         <div class="tab-content">
           <div class="tab-pane fade show active" id="setTax">
@@ -89,15 +89,15 @@
                 <div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div>
               </div>
             </div>
-            <h6 class="fw-bold text-dark small border-bottom pb-1 mb-2">기타 요율 및 비과세</h6>
+            <h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6>
             <div class="row g-2 mb-3">
-              <div class="col-6"><label class="small text-muted">고용보험(근로자%)</label><input type="number" id="set_employ_emp" class="form-control form-control-sm" step="0.01"></div>
-              <div class="col-6"><label class="small text-muted">산재보험(회사%)</label><input type="number" id="set_worker_comp" class="form-control form-control-sm" step="0.01"></div>
               <div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div>
               <div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div>
               <div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div>
             </div>
-            <div class="form-text x-small text-muted">* 장기요양보험은 건강보험료의 설정된 비율(12.95% 등)로 자동 계산됩니다.</div>
+            <div class="alert alert-light border-0 small text-muted py-2" style="font-size: 0.75rem;">
+                * 고용보험, 산재보험, 법인세율 등은 오차 방지를 위해 <strong>[고급 설정]</strong> 탭에서 관리합니다.
+            </div>
           </div>
           <div class="tab-pane fade" id="setCompany">
             <div class="row g-2">
@@ -110,7 +110,7 @@
           <div class="tab-pane fade" id="setAdvanced">
             <div class="table-responsive" style="max-height: 300px;">
               <table class="table table-sm adv-table align-middle">
-                <thead class="table-light"><tr><th>항목 키</th><th>값</th><th>설명</th></tr></thead>
+                <thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead>
                 <tbody id="advSettingsBody"></tbody>
               </table>
             </div>
@@ -243,26 +243,14 @@ async function loadList() {
 }
 
 // 2. 설정 (ref_settings 연동 및 스마트 입력)
-// [수정] 부동소수점 오차를 해결하여 화면에 표시하는 로직
+// [수정] 오차가 있는 고용/산재는 일반 탭에서 제외하고 로드
 async function loadSettings() {
     const { data } = await _supabase.from('ref_settings').select('item_key, item_value');
     if(data) {
         settings = {};
         data.forEach(r => { settings[r.item_key] = r.item_value; });
     }
-
-    // 설정창 열 때 값 세팅 부분 (기존 openSettings 함수 내부)
-    // 퍼센트 변환 시 발생하는 오차를 .toFixed(2) 또는 Math.round를 사용해 해결합니다.
-    
-    // 고용보험 (예: 0.009 -> 0.9)
-    const empRate = (settings['employ_rate_emp'] || 0.009) * 100;
-    document.getElementById("set_employ_emp").value = parseFloat(empRate.toPrecision(12)); 
-
-    // 산재보험 (예: 0.007 -> 0.7)
-    const workerComp = (settings['worker_comp_rate'] || 0.007) * 100;
-    document.getElementById("set_worker_comp").value = parseFloat(workerComp.toPrecision(12));
-
-    // 국민연금/건강보험 총합 계산 시에도 동일 적용
+    // 국민연금/건강보험 총합 계산 (부동소수점 오차 해결)
     const penTotal = (settings['pension_rate_emp'] || 0.045) * 100 * 2;
     document.getElementById("set_pension_total").value = parseFloat(penTotal.toPrecision(12));
 
@@ -278,7 +266,7 @@ async function loadCompanyInfo() {
     if(data) { companyInfo = {}; data.forEach(r => { companyInfo[r.key] = r.value; }); }
 }
 
-// 고급 설정 탭 데이터 로드
+// 고급 설정 탭 데이터 로드 (모든 항목 표시)
 async function loadAdvancedSettings() {
     const tbody = document.getElementById("advSettingsBody");
     tbody.innerHTML = '<tr><td colspan="3" class="text-center">데이터 로드 중...</td></tr>';
@@ -296,18 +284,16 @@ async function loadAdvancedSettings() {
 }
 
 function openSettings() {
-    // 요율 탭 세팅 (근로자분 * 2 하여 총액으로 표시)
+    // 탭 1 세팅: 총액 계산 (고용/산재는 여기서 세팅하지 않음)
     document.getElementById("set_pension_total").value = ((settings['pension_rate_emp'] || 0.045) * 100 * 2).toFixed(2);
     document.getElementById("set_health_total").value = ((settings['health_rate_emp'] || 0.03545) * 100 * 2).toFixed(2);
     calcHalf('pension'); calcHalf('health');
 
-    document.getElementById("set_employ_emp").value = (settings['employ_rate_emp'] || 0.009) * 100;
-    document.getElementById("set_worker_comp").value = (settings['worker_comp_rate'] || 0.007) * 100;
     document.getElementById("set_meal").value = settings['limit_meal'] || 200000;
     document.getElementById("set_car").value = settings['limit_car'] || 200000;
     document.getElementById("set_child").value = settings['limit_child'] || 200000;
 
-    // 회사 정보 탭 세팅
+    // 탭 2 세팅: 회사 정보
     document.getElementById("set_orgName").value = companyInfo['orgName'] || "";
     document.getElementById("set_ceoName").value = companyInfo['ceoName'] || "";
     document.getElementById("set_bizNum").value = companyInfo['bizNum'] || "";
@@ -321,28 +307,30 @@ function calcHalf(type) {
     document.getElementById(`half_${type}`).innerText = (val / 2).toFixed(3);
 }
 
+// [수정] 일반 탭 저장 시 고용/산재는 기존 값 유지 (덮어쓰기 방지)
 async function saveSettings() {
     showLoading();
     try {
         const updates = [];
+        const isAdvancedTab = document.getElementById("setAdvanced").classList.contains("active");
         
-        // [1] 고급 설정 탭이 활성화된 상태라면 해당 값들을 우선함
-        if(document.getElementById("setAdvanced").classList.contains("active")) {
+        if(isAdvancedTab) {
+            // [A] 고급 설정 탭 저장: 테이블의 모든 행을 읽어서 전체 업데이트
             advancedSettingsRaw.forEach((r, idx) => {
                 const newVal = Number(document.getElementById(`adv_val_${idx}`).value);
                 updates.push({ item_key: r.item_key, item_value: newVal });
             });
         } else {
-            // [2] 일반 설정 탭 값 적용 (퍼센트를 소수점으로 변환)
+            // [B] 일반 설정 탭 저장: 화면에 있는 항목만 업데이트 (고용/산재는 목록에서 제외 -> 기존값 보존)
             const penHalf = Number(document.getElementById("set_pension_total").value) / 200;
             const hltHalf = Number(document.getElementById("set_health_total").value) / 200;
+            
             updates.push(
                 { item_key: 'pension_rate_emp', item_value: penHalf },
                 { item_key: 'pension_rate_biz', item_value: penHalf },
                 { item_key: 'health_rate_emp', item_value: hltHalf },
                 { item_key: 'health_rate_biz', item_value: hltHalf },
-                { item_key: 'employ_rate_emp', item_value: Number(document.getElementById("set_employ_emp").value) / 100 },
-                { item_key: 'worker_comp_rate', item_value: Number(document.getElementById("set_worker_comp").value) / 100 },
+                // 고용, 산재는 여기서 업데이트하지 않음 (기존 DB값 유지)
                 { item_key: 'limit_meal', item_value: Number(document.getElementById("set_meal").value) },
                 { item_key: 'limit_car', item_value: Number(document.getElementById("set_car").value) },
                 { item_key: 'limit_child', item_value: Number(document.getElementById("set_child").value) }
@@ -350,9 +338,11 @@ async function saveSettings() {
         }
 
         // ref_settings 일괄 업데이트
-        for(const item of updates) { await _supabase.from('ref_settings').upsert(item, { onConflict: 'item_key' }); }
+        for(const item of updates) { 
+            await _supabase.from('ref_settings').upsert(item, { onConflict: 'item_key' });
+        }
 
-        // ref_company_info 동기화 업데이트
+        // 회사 정보 동기화 (기존 로직 유지)
         const org = document.getElementById("set_orgName").value;
         const ceo = document.getElementById("set_ceoName").value;
         const compUpdates = [
@@ -364,9 +354,9 @@ async function saveSettings() {
         for(const item of compUpdates) { await _supabase.from('ref_company_info').upsert(item, { onConflict: 'key' }); }
 
         await loadSettings(); await loadCompanyInfo();
-        hideLoading(); settingsModal.hide(); showAlert("모든 설정이 안전하게 저장되었습니다.");
+        hideLoading(); settingsModal.hide(); showAlert("설정이 저장되었습니다.");
     } catch (e) {
-        hideLoading(); showAlert("저장 중 오류 발생: " + e.message);
+        hideLoading(); showAlert("오류 발생: " + e.message);
     }
 }
 
