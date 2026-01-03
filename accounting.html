@@ -95,24 +95,27 @@
   </ul>
 
   <div class="tab-content no-print">
+    
     <div class="tab-pane fade show active" id="tabForm">
       <form id="erpForm" onsubmit="handleFormSubmit(event)">
-<div class="row mb-3">
-  <div class="col-6"><label class="small text-muted">날짜</label><input type="date" class="form-control" id="dateField" required></div>
-  <div class="col-6">
-    <label class="small text-muted">프로젝트</label>
-    <select class="form-select" id="projectSelect" required></select>
-  </div>
-</div>
+        
+        <div class="row mb-3">
+          <div class="col-6">
+            <label class="small text-muted">날짜</label>
+            <input type="date" class="form-control" id="dateField" required>
+          </div>
+          <div class="col-6">
+            <label class="small text-muted">프로젝트</label>
+            <select class="form-select" id="projectSelect" required></select>
+          </div>
+        </div>
 
-
-
-        <div class="mb-3 p-2 border rounded bg-light">
+        <div class="mb-3 p-3 border rounded bg-light">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <label class="small text-muted fw-bold">거래 구분</label>
+            <label class="small text-muted fw-bold">1. 거래 구분</label>
             <span class="badge bg-secondary" id="modeBadge">일반</span>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 mb-2">
              <input type="radio" class="btn-check" name="settleMode" id="smNorm" value="" checked onchange="toggleSettleMode()">
              <label class="btn btn-sm btn-outline-secondary flex-fill" for="smNorm">일반거래</label>
              <input type="radio" class="btn-check" name="settleMode" id="smPre" value="pre_expense" onchange="toggleSettleMode()">
@@ -120,16 +123,16 @@
              <input type="radio" class="btn-check" name="settleMode" id="smReim" value="reimburse" onchange="toggleSettleMode()">
              <label class="btn btn-sm btn-outline-danger flex-fill" for="smReim">정산지급</label>
           </div>
-          <div id="payerInputDiv" class="mt-2 hidden">
+          <div id="payerInputDiv" class="hidden">
             <div class="input-group input-group-sm">
               <span class="input-group-text fw-bold" id="payerLabel">이름</span>
               <input type="text" class="form-control ime-kr" id="payerName" placeholder="지출자 또는 받는 분">
             </div>
           </div>
-        </div>
 
-        <div class="mb-3">
-          <label class="small text-muted">계정 유형</label>
+          <hr class="my-2" style="border-top: 1px dashed #ccc;">
+
+          <label class="small text-muted fw-bold mb-2">2. 계정 유형</label>
           <div class="btn-group w-100" role="group">
             <input type="radio" class="btn-check" name="inputType" id="t1" value="매출" onchange="resetAccountInput()"><label class="btn btn-outline-success" for="t1">매출</label>
             <input type="radio" class="btn-check" name="inputType" id="t2" value="비용" checked onchange="resetAccountInput()"><label class="btn btn-outline-danger" for="t2">비용</label>
@@ -138,22 +141,20 @@
         </div>
 
         <div class="mb-3">
-  <label class="small text-muted">계정과목</label>
-  <div class="input-group">
-    <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
-    <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
-    <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
-  </div>
-  <input type="hidden" id="hiddenItem">
-  <input type="hidden" id="hiddenStandard">
-  <input type="hidden" id="hiddenCode">
-  <input type="hidden" id="isTaxFree">
-  <input type="hidden" id="specialMode"> 
-</div>
+          <label class="small text-muted">계정과목</label>
+          <div class="input-group">
+            <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
+            <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
+            <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
+          </div>
+          
+          <input type="hidden" id="hiddenItem">
+          <input type="hidden" id="hiddenStandard">
+          <input type="hidden" id="hiddenCode"> <input type="hidden" id="isTaxFree">  <input type="hidden" id="specialMode"> </div>
 
-<div id="dynamicArea" class="mb-3"></div>
+        <div id="dynamicArea" class="mb-3"></div>
 
-<div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
+        <div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
         <div class="mb-2"><label class="small text-muted">금액 (합계)</label><input type="number" class="form-control form-control-lg" id="inputAmount" placeholder="0" required min="0"></div>
         
         <div class="d-flex justify-content-between align-items-center mt-3">
@@ -168,54 +169,49 @@
       </form>
     </div>
 
-<div class="tab-pane fade" id="tabSync">
-  <div class="d-grid gap-3">
-      <div class="card p-3 border-start border-5 border-info bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">💼 급여 대장 연동</h6><small class="text-muted">HR_Salary → 회계 전표</small></div>
-           <div class="d-flex align-items-center gap-2">
-               <input type="month" id="salaryMonth" class="form-control form-control-sm" style="width: 130px;">
-               <button class="btn btn-info btn-sm text-white" onclick="confirmSync('salary')">실행</button>
-           </div>
-         </div>
+    <div class="tab-pane fade" id="tabSync">
+      <div class="d-grid gap-3">
+          <div class="card p-3 border-start border-5 border-info bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">💼 급여 대장 연동</h6><small class="text-muted">HR_Salary → 회계 전표</small></div>
+               <div class="d-flex align-items-center gap-2">
+                   <input type="month" id="salaryMonth" class="form-control form-control-sm" style="width: 130px;">
+                   <button class="btn btn-info btn-sm text-white" onclick="confirmSync('salary')">실행</button>
+               </div>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 border-warning bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료된 지출결의서 불러오기</small></div>
+               <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 border-success bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">💰 출자금 연동</h6><small class="text-muted">신규 입금 내역 전표 처리</small></div>
+               <button class="btn btn-success btn-sm text-white" onclick="confirmSync('capital')">실행</button>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 border-primary bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">💸 배당금 연동</h6><small class="text-muted">배당금 지급 내역 처리</small></div>
+               <button class="btn btn-primary btn-sm text-white" onclick="confirmSync('dividend')">실행</button>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 border-secondary bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">📉 감가상각 실행</h6><small class="text-muted">고정자산 대장 기준 (연 1회)</small></div>
+               <button class="btn btn-secondary btn-sm text-white" onclick="confirmSync('depreciation')">실행</button>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 border-danger bg-light">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">📅 연말결산 (손익마감)</h6><small class="text-muted">수익/비용 마감 및 자본 대체</small></div>
+               <button class="btn btn-danger btn-sm text-white" onclick="confirmSync('closing')">실행</button>
+             </div>
+          </div>
       </div>
-
-      <div class="card p-3 border-start border-5 border-warning bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료된 지출결의서 불러오기</small></div>
-           <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
-         </div>
-      </div>
-
-      <div class="card p-3 border-start border-5 border-success bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">💰 출자금 연동</h6><small class="text-muted">신규 입금 내역 전표 처리</small></div>
-           <button class="btn btn-success btn-sm text-white" onclick="confirmSync('capital')">실행</button>
-         </div>
-      </div>
-
-      <div class="card p-3 border-start border-5 border-primary bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">💸 배당금 연동</h6><small class="text-muted">배당금 지급 내역 처리</small></div>
-           <button class="btn btn-primary btn-sm text-white" onclick="confirmSync('dividend')">실행</button>
-         </div>
-      </div>
-
-      <div class="card p-3 border-start border-5 border-secondary bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">📉 감가상각 실행</h6><small class="text-muted">고정자산 대장 기준 (연 1회)</small></div>
-           <button class="btn btn-secondary btn-sm text-white" onclick="confirmSync('depreciation')">실행</button>
-         </div>
-      </div>
-
-      <div class="card p-3 border-start border-5 border-danger bg-light">
-         <div class="d-flex justify-content-between align-items-center">
-           <div><h6 class="fw-bold mb-1">📅 연말결산 (손익마감)</h6><small class="text-muted">수익/비용 마감 및 자본 대체</small></div>
-           <button class="btn btn-danger btn-sm text-white" onclick="confirmSync('closing')">실행</button>
-         </div>
-      </div>
-  </div>
-</div>
+    </div>
 
     <div class="tab-pane fade" id="tabHistory">
       <div class="d-flex justify-content-between align-items-center mb-3">
