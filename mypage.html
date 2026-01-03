@@ -665,19 +665,135 @@ async function calculateLeave() {
 }
 
 // 연차 상세 모달 (디자인 복구됨)
-function showAvailableLeaveDetail() {
-    const d = myInfo.leaveData;
-    const body = document.getElementById("leaveDetailBody");
-    let html = `<div class="leave-modal-header">📌 자동 발생</div><div class="leave-modal-item"><span>${d.genDesc}</span></div><div class="leave-modal-header mt-2">📌 조정 내역 (관리자)</div>`;
+// [수정] 연차 상세 내역 조회 및 모달 표시
+// 기존에는 계산된 객체(leaveData)를 썼으나, 이제는 DB에서 직접 조회하여 내역을 구성함.
+async function showAvailableLeaveDetail() {
+    // 1. 모달 엘리먼트 확보 (ID는 기존 코드 기준 'leaveDetailModal'로 가정)
+    const modalEl = document.getElementById('leaveDetailModal');
+    const modalBody = document.querySelector('#leaveDetailModal .modal-body'); // 모달 본문 영역
     
-    if(d.adjList.length === 0) html += `<div class="leave-modal-item text-muted small">조정 내역 없음</div>`;
-    else d.adjList.forEach(a => {
-        const badge = a.t==='+' ? `<span class="badge bg-success">+${a.d}</span>` : `<span class="leave-badge-red">-${a.d}</span>`;
-        html += `<div class="leave-modal-item"><span>${a.r||'조정'}</span>${badge}</div>`;
-    });
-    
-    body.innerHTML = html;
-    leaveDetailModal.show();
+    if (!modalEl || !modalBody) {
+        console.error("모달 요소를 찾을 수 없습니다.");
+        return;
+    }
+
+    // 2. 로딩 표시 및 모달 띄우기
+    modalBody.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">상세 내역을 불러오는 중...</div></div>';
+    const modalInstance = new bootstrap.Modal(modalEl);
+    modalInstance.show();
+
+    try {
+        // 3. 데이터 조회 (입사일, 조정 내역, 사용 내역)
+        // (1) 내 정보(입사일)
+        const { data: emp } = await _supabase.from('ref_employees').select('hire_date').eq('emp_id', myInfo.emp_id).single();
+        // (2) 조정 내역
+        const { data: adjList } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', myInfo.emp_id).order('created_at', { ascending: false });
+        // (3) 사용 내역 (완료, 가승인, 증빙확인중 포함 / 연차, 반차만)
+        const { data: useList } = await _supabase.from('ref_approval')
+            .select('created_at, doc_type, amount, status')
+            .eq('drafter_id', myInfo.emp_id)
+            .in('status', ['완료', '가승인', '증빙확인중'])
+            .or('doc_type.ilike.%연차%,doc_type.ilike.%반차%') // 괄호 포함 검색은 ilike로 커버 가능하나, 확실하게 필터링
+            .order('created_at', { ascending: false });
+
+        // 4. [화면 표시용] 발생 내역 텍스트 생성 (DB 함수 로직과 동일하게 구성)
+        let genHtml = '<ul class="list-unstyled mb-0 small">';
+        if (emp && emp.hire_date) {
+            const hireDate = new Date(emp.hire_date);
+            const now = new Date();
+            
+            // A. 1년 미만 월 단위 발생분
+            let monthlyCount = 0;
+            const oneYearLater = new Date(hireDate);
+            oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+            
+            if (now < oneYearLater) {
+                // 입사 1년 미만인 경우에만 계산
+                const monthsWorked = (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth());
+                // 아직 1년 안 지났으니 유효함
+                monthlyCount = Math.min(11, Math.max(0, monthsWorked));
+                if(now.getDate() < hireDate.getDate()) monthlyCount = Math.max(0, monthlyCount - 1); // 이번 달 만근 전이면 차감
+                
+                genHtml += `<li class="text-primary">🟢 <strong>1년 미만 월 단위:</strong> ${monthlyCount}개 (입사 1년까지 유효)</li>`;
+            } else {
+                 genHtml += `<li class="text-muted">⚪ <strong>1년 미만 월 단위:</strong> 0개 (기간 만료 소멸)</li>`;
+            }
+
+            // B. 회계연도 기준 (1월 1일)
+            let fiscalCount = 0;
+            if (now.getFullYear() > hireDate.getFullYear()) {
+                fiscalCount = 15;
+                genHtml += `<li class="text-primary">🔵 <strong>회계연도(${now.getFullYear()}년):</strong> 15개 (1월 1일 발생)</li>`;
+            } else {
+                genHtml += `<li class="text-muted">⚪ <strong>회계연도:</strong> 0개 (해당 없음)</li>`;
+            }
+        } else {
+            genHtml += `<li>정보 없음</li>`;
+        }
+        genHtml += '</ul>';
+
+        // 5. [화면 표시용] 조정 내역 HTML
+        let adjHtml = '<ul class="list-unstyled mb-0 small">';
+        if (adjList && adjList.length > 0) {
+            adjList.forEach(item => {
+                const color = (item.adj_type === '지급' || item.adj_type === '포상') ? 'text-success' : 'text-danger';
+                const sign = (item.adj_type === '지급' || item.adj_type === '포상') ? '+' : '-';
+                adjHtml += `<li class="mb-1"><span class="${color} fw-bold">[${item.adj_type}]</span> ${item.reason || ''} (${sign}${item.days}일)</li>`;
+            });
+        } else {
+            adjHtml += '<li class="text-muted">- 조정 내역 없음 -</li>';
+        }
+        adjHtml += '</ul>';
+
+        // 6. [화면 표시용] 사용 내역 HTML
+        let useHtml = '<ul class="list-unstyled mb-0 small">';
+        if (useList && useList.length > 0) {
+            useList.forEach(item => {
+                // 생일반차 등은 쿼리에서 이미 걸러졌겠지만(ilike 조건), 한번 더 안전장치
+                if(item.doc_type.includes('생일')) return; 
+
+                const dateStr = item.created_at.slice(0, 10);
+                let badge = '';
+                if(item.status === '가승인') badge = '<span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">가승인</span>';
+                
+                useHtml += `<li class="mb-1 border-bottom pb-1">
+                    <div class="d-flex justify-content-between">
+                        <span>${item.doc_type} ${badge}</span>
+                        <span class="fw-bold text-danger">-${item.amount}일</span>
+                    </div>
+                    <div class="text-muted" style="font-size:0.75rem;">${dateStr}</div>
+                </li>`;
+            });
+        } else {
+            useHtml += '<li class="text-muted">- 사용 내역 없음 -</li>';
+        }
+        useHtml += '</ul>';
+
+        // 7. 최종 HTML 조립 및 주입
+        modalBody.innerHTML = `
+            <div class="d-flex flex-column gap-3">
+                <div class="p-3 bg-light rounded border">
+                    <h6 class="fw-bold border-bottom pb-2 mb-2">🎁 발생 내역 (예상)</h6>
+                    ${genHtml}
+                </div>
+                <div class="p-3 bg-light rounded border">
+                    <h6 class="fw-bold border-bottom pb-2 mb-2">⚖️ 조정(포상/차감) 내역</h6>
+                    ${adjHtml}
+                </div>
+                <div class="p-3 bg-light rounded border">
+                    <h6 class="fw-bold border-bottom pb-2 mb-2">🎫 사용 내역 (차감)</h6>
+                    ${useHtml}
+                </div>
+            </div>
+            <div class="text-center mt-2 small text-muted">
+                ※ 시스템 계산(DB) 결과와 실시간 연동됩니다.
+            </div>
+        `;
+
+    } catch (error) {
+        console.error(error);
+        modalBody.innerHTML = `<div class="alert alert-danger">상세 내역을 불러오지 못했습니다.<br>${error.message}</div>`;
+    }
 }
 
 function showUsedLeaveDetail() {
