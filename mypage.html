@@ -139,6 +139,9 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="mb-3"><label class="small text-muted mb-1">메모</label><textarea id="evtMemo" class="form-control" rows="4" placeholder="상세 내용 입력..."></textarea></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" id="evtIsHoliday"><label class="form-check-label small" for="evtIsHoliday">공휴일 (빨간날 표시)</label></div>
 </div><div class="modal-footer justify-content-between"><button type="button" class="btn btn-danger btn-sm hidden" id="btnDelEvent" onclick="deleteEvent()">삭제</button><div><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button><button type="button" class="btn btn-primary btn-sm" id="btnSaveEvent" onclick="saveEvent()">저장</button></div></div></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <div class="modal fade" id="confirmModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
@@ -155,15 +158,14 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
 <script>
 const SUPABASE_URL='https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
-let confirmModal; 
+let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
@@ -171,7 +173,7 @@ leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal')
 noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal'));
 alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
 eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
-  confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);
@@ -187,17 +189,12 @@ async function loadCompanyInfo(){const{data}=await _supabase.from('ref_company_i
 async function loadProfile(){const{data}=await _supabase.from('ref_employees').select('*').eq('emp_id',myInfo.emp_id).single();if(data){myInfo=data;localStorage.setItem('erp_user',JSON.stringify(data))}document.getElementById("dspName").innerText=myInfo.emp_name;document.getElementById("dspRank").innerText=myInfo.position;document.getElementById("dspDept").innerText=myInfo.department;document.getElementById("dspJoin").innerText=myInfo.hire_date||'-';document.getElementById("myName").value=myInfo.emp_name;document.getElementById("myDependents").value=myInfo.dependents||0;document.getElementById("myPhone").value=myInfo.phone||"";document.getElementById("myEmail").value=myInfo.email||"";document.getElementById("myAddress").value=myInfo.address||"";document.getElementById("myBank").value=myInfo.bank_name||"";document.getElementById("myAccount").value=myInfo.account_number||"";const btn=document.getElementById("btnContract");if(myInfo.contract_url){let u=myInfo.contract_url.startsWith('http')?myInfo.contract_url:null;if(!u){const{data:d}=await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url,3600);if(d)u=d.signedUrl}if(u){btn.disabled=false;btn.className="btn btn-outline-primary fw-bold";btn.innerText="📄 계약서 보기";btn.onclick=()=>window.open(u)}}}
 function toggleEditMode(e){const f=document.querySelectorAll('.readonly-field');f.forEach(x=>{if(e){x.classList.remove('readonly-field');x.classList.add('editable-field');x.readOnly=false}else{x.classList.add('readonly-field');x.classList.remove('editable-field');x.readOnly=true}});document.getElementById("btnEditInfo").classList.toggle('hidden',e);document.getElementById("btnCancelInfo").classList.toggle('hidden',!e);document.getElementById("btnSaveInfo").classList.toggle('hidden',!e);document.getElementById("btnAddrSearch").classList.toggle('hidden',!e);document.getElementById("btnAddEm").classList.toggle('hidden',!e);if(!e){loadProfile();loadEmergencyList()}}
 async function updateInfo(){
-    // [변경] 브라우저 confirm 제거 -> 커스텀 모달 사용
-    openConfirmModal("정보를 저장하시겠습니까?", async function() {
-        const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};
-        const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);
-        if(error){showAlert("저장 실패: "+error.message);return}
-        await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);
-        if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}
-        showAlert("저장되었습니다.");toggleEditMode(false);
-    });
+openConfirmModal("정보를 저장하시겠습니까?", async function(){const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};
+const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);if(error){showAlert("저장 실패: "+error.message);return}await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}
+showAlert("저장되었습니다.");toggleEditMode(false);
+});
 }
-  async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
+async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
 function renderEmergencyTable(){const b=document.getElementById("emergencyListBody");b.innerHTML="";const e=!document.getElementById("btnSaveInfo").classList.contains('hidden');tempEmergencyList.forEach((r,i)=>{b.innerHTML+=`<tr><td>${r.contact_name}</td><td>${r.relation}</td><td>${r.phone}</td><td>${e?`<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${i})">×</button>`:''}</td></tr>`})}
 function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
 function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
@@ -232,17 +229,9 @@ if(!t||!d){showAlert("입력 확인");return}const fd=tm?`${d}T${tm}:00`:d,p={ti
 const{error}=i?await _supabase.from('ref_calendar').update(p).eq('id',i):await _supabase.from('ref_calendar').insert(p);
 if(error)showAlert("저장 실패: "+error.message);else{showAlert("저장되었습니다.");eventModal.hide();renderCalendar()}
 }
-async function deleteEvent(){
-    const i=document.getElementById("evtId").value;
-    if(!i) return;
-    
-    // [변경] 브라우저 confirm 제거 -> 커스텀 모달 사용
-    openConfirmModal("정말 삭제하시겠습니까?\n(반복 일정은 전체 삭제됩니다)", async function() {
-        await _supabase.from('ref_calendar').delete().eq('id',i);
-        eventModal.hide();
-        renderCalendar();
-        showAlert("삭제되었습니다.");
-    });
+async function deleteEvent(){const i=document.getElementById("evtId").value;if(!i) return;openConfirmModal("정말 삭제하시겠습니까?\n(반복 일정은 전체 삭제됩니다)", async function() {await _supabase.from('ref_calendar').delete().eq('id',i);eventModal.hide();renderCalendar();
+showAlert("삭제되었습니다.");
+});
 }
   async function searchSalary(){const ym=document.getElementById("salaryMonth").value;const{data}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).single();if(!data){showAlert("내역 없음");return}currentSalaryData=data;currentSalaryData.year_month=ym;document.getElementById("salaryResult").classList.remove("hidden");document.getElementById("btnPrintSalary").classList.remove("hidden");const[y,m]=ym.split('-');document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;const f=n=>Number(n).toLocaleString(),p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']],d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','가불금'],['ded_capital','출자금']];let ph="";p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`;document.getElementById("tbl_pay_body").innerHTML=ph;let dh="";d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`;document.getElementById("tbl_ded_body").innerHTML=dh;document.getElementById("v_net").innerText=f(data.net_pay)}
 function printSalaryPopup(){if(!currentSalaryData)return showAlert("조회 필요");printDocument(currentSalaryData)}
