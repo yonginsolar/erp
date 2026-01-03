@@ -130,7 +130,23 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="modal fade" id="noticeDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold" id="noticeModalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="text-muted small mb-3"><span id="noticeModalDate"></span> | <span id="noticeModalWriter"></span></div><div id="noticeModalContent" style="white-space: pre-wrap;"></div><div id="noticeFileArea" class="mt-3 pt-2 border-top hidden"><a href="#" id="noticeFileLink" target="_blank">첨부파일 다운로드</a></div></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center fw-bold py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="eventModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 관리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
-<input type="hidden" id="evtId">
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white p-2">
+                <h6 class="modal-title fw-bold">⚠️ 확인</h6>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="mb-0 fw-bold" id="confirmMessage">진행하시겠습니까?</p>
+            </div>
+            <div class="modal-footer justify-content-center p-2 border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="executeConfirmAction()">확인</button>
+            </div>
+        </div>
+    </div>
+</div>
+  <input type="hidden" id="evtId">
 <div class="mb-2"><label class="small text-muted mb-1">일정명</label><input type="text" id="evtTitle" class="form-control" placeholder="일정 제목"></div>
 <div class="mb-2"><label class="small text-muted mb-1">공개 범위</label><select id="evtVisibility" class="form-select"><option value="company">🏢 전체 공개 (전직원)</option><option value="admin">🔒 관리자 전용 (세무/행정)</option><option value="private">👤 나만 보기 (개인 일정)</option></select></div>
 <div class="mb-2"><label class="small text-muted mb-1">일시</label><div class="d-flex gap-2"><input type="date" id="evtDate" class="form-control"><input type="time" id="evtTime" class="form-control"></div></div>
@@ -147,12 +163,15 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
+let confirmModal; 
+let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
 leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
 noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal'));
 alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
 eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
+  confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);
@@ -167,8 +186,18 @@ function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.u
 async function loadCompanyInfo(){const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
 async function loadProfile(){const{data}=await _supabase.from('ref_employees').select('*').eq('emp_id',myInfo.emp_id).single();if(data){myInfo=data;localStorage.setItem('erp_user',JSON.stringify(data))}document.getElementById("dspName").innerText=myInfo.emp_name;document.getElementById("dspRank").innerText=myInfo.position;document.getElementById("dspDept").innerText=myInfo.department;document.getElementById("dspJoin").innerText=myInfo.hire_date||'-';document.getElementById("myName").value=myInfo.emp_name;document.getElementById("myDependents").value=myInfo.dependents||0;document.getElementById("myPhone").value=myInfo.phone||"";document.getElementById("myEmail").value=myInfo.email||"";document.getElementById("myAddress").value=myInfo.address||"";document.getElementById("myBank").value=myInfo.bank_name||"";document.getElementById("myAccount").value=myInfo.account_number||"";const btn=document.getElementById("btnContract");if(myInfo.contract_url){let u=myInfo.contract_url.startsWith('http')?myInfo.contract_url:null;if(!u){const{data:d}=await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url,3600);if(d)u=d.signedUrl}if(u){btn.disabled=false;btn.className="btn btn-outline-primary fw-bold";btn.innerText="📄 계약서 보기";btn.onclick=()=>window.open(u)}}}
 function toggleEditMode(e){const f=document.querySelectorAll('.readonly-field');f.forEach(x=>{if(e){x.classList.remove('readonly-field');x.classList.add('editable-field');x.readOnly=false}else{x.classList.add('readonly-field');x.classList.remove('editable-field');x.readOnly=true}});document.getElementById("btnEditInfo").classList.toggle('hidden',e);document.getElementById("btnCancelInfo").classList.toggle('hidden',!e);document.getElementById("btnSaveInfo").classList.toggle('hidden',!e);document.getElementById("btnAddrSearch").classList.toggle('hidden',!e);document.getElementById("btnAddEm").classList.toggle('hidden',!e);if(!e){loadProfile();loadEmergencyList()}}
-async function updateInfo(){if(!confirm("정보를 저장하시겠습니까?"))return;const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);if(error){showAlert("저장 실패: "+error.message);return}await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}showAlert("저장되었습니다.");toggleEditMode(false)}
-async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
+async function updateInfo(){
+    // [변경] 브라우저 confirm 제거 -> 커스텀 모달 사용
+    openConfirmModal("정보를 저장하시겠습니까?", async function() {
+        const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};
+        const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);
+        if(error){showAlert("저장 실패: "+error.message);return}
+        await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);
+        if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}
+        showAlert("저장되었습니다.");toggleEditMode(false);
+    });
+}
+  async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
 function renderEmergencyTable(){const b=document.getElementById("emergencyListBody");b.innerHTML="";const e=!document.getElementById("btnSaveInfo").classList.contains('hidden');tempEmergencyList.forEach((r,i)=>{b.innerHTML+=`<tr><td>${r.contact_name}</td><td>${r.relation}</td><td>${r.phone}</td><td>${e?`<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${i})">×</button>`:''}</td></tr>`})}
 function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
 function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
@@ -203,15 +232,129 @@ if(!t||!d){showAlert("입력 확인");return}const fd=tm?`${d}T${tm}:00`:d,p={ti
 const{error}=i?await _supabase.from('ref_calendar').update(p).eq('id',i):await _supabase.from('ref_calendar').insert(p);
 if(error)showAlert("저장 실패: "+error.message);else{showAlert("저장되었습니다.");eventModal.hide();renderCalendar()}
 }
-async function deleteEvent(){const i=document.getElementById("evtId").value;if(!i||!confirm("삭제합니까?"))return;await _supabase.from('ref_calendar').delete().eq('id',i);eventModal.hide();renderCalendar()}
-async function searchSalary(){const ym=document.getElementById("salaryMonth").value;const{data}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).single();if(!data){showAlert("내역 없음");return}currentSalaryData=data;currentSalaryData.year_month=ym;document.getElementById("salaryResult").classList.remove("hidden");document.getElementById("btnPrintSalary").classList.remove("hidden");const[y,m]=ym.split('-');document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;const f=n=>Number(n).toLocaleString(),p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']],d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','가불금'],['ded_capital','출자금']];let ph="";p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`;document.getElementById("tbl_pay_body").innerHTML=ph;let dh="";d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`;document.getElementById("tbl_ded_body").innerHTML=dh;document.getElementById("v_net").innerText=f(data.net_pay)}
+async function deleteEvent(){
+    const i=document.getElementById("evtId").value;
+    if(!i) return;
+    
+    // [변경] 브라우저 confirm 제거 -> 커스텀 모달 사용
+    openConfirmModal("정말 삭제하시겠습니까?\n(반복 일정은 전체 삭제됩니다)", async function() {
+        await _supabase.from('ref_calendar').delete().eq('id',i);
+        eventModal.hide();
+        renderCalendar();
+        showAlert("삭제되었습니다.");
+    });
+}
+  async function searchSalary(){const ym=document.getElementById("salaryMonth").value;const{data}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).single();if(!data){showAlert("내역 없음");return}currentSalaryData=data;currentSalaryData.year_month=ym;document.getElementById("salaryResult").classList.remove("hidden");document.getElementById("btnPrintSalary").classList.remove("hidden");const[y,m]=ym.split('-');document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;const f=n=>Number(n).toLocaleString(),p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']],d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','가불금'],['ded_capital','출자금']];let ph="";p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`;document.getElementById("tbl_pay_body").innerHTML=ph;let dh="";d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`;document.getElementById("tbl_ded_body").innerHTML=dh;document.getElementById("v_net").innerText=f(data.net_pay)}
 function printSalaryPopup(){if(!currentSalaryData)return showAlert("조회 필요");printDocument(currentSalaryData)}
-function printDocument(d){const w=window.open('','','width=900,height=1100'),[y,m]=d.year_month.split('-'),[yy,mm]=d.year_month.split('-').map(Number);let sd=1,ld=new Date(yy,mm,0).getDate();if(myInfo.hire_date){const h=new Date(myInfo.hire_date);if(h.getFullYear()===yy&&h.getMonth()+1===mm)sd=h.getDate()}const ad=`${y}년 ${Number(m)}월<br><span style="font-size:11px;color:#555;">(${y}.${m}.${String(sd).padStart(2,'0')} ~ ${y}.${m}.${ld})</span>`,pd=new Date(y,Number(m),10),pds=`${pd.getFullYear()}년 ${pd.getMonth()+1}월 ${pd.getDate()}일`,f=n=>n?Number(n).toLocaleString():'0',c=`<div style="font-family:'Malgun Gothic',serif;color:#333;padding-top:20px;"><h1 style="text-align:center;font-size:32px;margin:0 0 30px;">${y}년 ${Number(m)}월 급여명세서</h1><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size:13px;"><tr><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">귀속연월</td><td style="width:35%;padding:8px;border:1px solid #000;">${ad}</td><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">사원</td><td style="width:35%;padding:8px;border:1px solid #000;">${myInfo.emp_id} / ${myInfo.emp_name}</td></tr><tr><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">지급일자</td><td style="padding:8px;border:1px solid #000;">${pds}</td><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">소속</td><td style="padding:8px;border:1px solid #000;">${myInfo.department}/${myInfo.position}</td></tr></table><div style="display:flex;gap:30px;margin-bottom:40px;border-top:2px solid #aaa;"><div style="flex:1;"><div style="text-align:center;color:#1e88e5;font-weight:bold;padding:8px;border-bottom:2px solid #1e88e5;">지급내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>기본급</td><td style="text-align:right;">${f(d.pay_basic)}</td></tr><tr><td>식대</td><td style="text-align:right;">${f(d.pay_meal)}</td></tr><tr><td>차량</td><td style="text-align:right;">${f(d.pay_car)}</td></tr><tr><td>직책</td><td style="text-align:right;">${f(d.pay_position)}</td></tr><tr><td>근속</td><td style="text-align:right;">${f(d.pay_service)}</td></tr><tr><td>연장</td><td style="text-align:right;">${f(d.pay_overtime)}</td></tr><tr><td>육아</td><td style="text-align:right;">${f(d.pay_child)}</td></tr><tr><td>상여</td><td style="text-align:right;">${f(d.pay_bonus)}</td></tr></table></div><div style="flex:1;"><div style="text-align:center;color:#e53935;font-weight:bold;padding:8px;border-bottom:2px solid #e53935;">공제내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>국민연금</td><td style="text-align:right;">${f(d.ded_pension)}</td></tr><tr><td>건강보험</td><td style="text-align:right;">${f(d.ded_health)}</td></tr><tr><td>장기요양</td><td style="text-align:right;">${f(d.ded_care)}</td></tr><tr><td>고용보험</td><td style="text-align:right;">${f(d.ded_employ)}</td></tr><tr><td>소득세</td><td style="text-align:right;">${f(d.ded_income)}</td></tr><tr><td>지방소득세</td><td style="text-align:right;">${f(d.ded_local)}</td></tr><tr><td>가불금</td><td style="text-align:right;">${f(d.ded_advance)}</td></tr><tr><td>출자금</td><td style="text-align:right;">${f(d.ded_capital)}</td></tr></table></div></div><div style="border-top:1px solid #999;margin-bottom:20px;"></div><div style="height:120px;position:relative;"><div style="position:absolute;top:30px;left:20px;color:#666;">노고에 감사드립니다.</div><table style="position:absolute;right:0;top:0;width:350px;font-size:13px;background:#fff;border-collapse:collapse;"><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">지급합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.pay_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">공제합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.ded_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">실지급액</td><td style="border:1px solid #000;padding:6px;text-align:right;font-weight:bold;">${f(d.net_pay)}</td></tr></table></div><div style="text-align:center;margin-top:40px;"><span style="font-size:20px;font-weight:600;">${companyInfo.company_name||"조합"} 이사장 ${companyInfo.chairman}</span>${companyInfo.seal_url?`<img src="${companyInfo.seal_url}" style="position:absolute;width:60px;margin-left:-30px;top:-15px;opacity:0.8;">`:''}</div></div>`;w.document.write(`<html><head><title>급여명세서</title><style>@page{size:A4;margin:0}body{margin:0;background:#555}.page-wrap{width:210mm;height:297mm;padding:20mm;background:#fff;margin:0 auto;box-sizing:border-box}.no-print{position:fixed;bottom:30px;right:30px;background:#fff;padding:10px;border-radius:50px;cursor:pointer}@media print{body{background:#fff}.no-print{display:none}}</style></head><body><div class="page-wrap">${c}</div><div class="no-print" onclick="window.print()">🖨️ 인쇄</div></body></html>`);w.document.close()}
-function toggleEtcInput(){const v=document.getElementById("certPurposeSelect").value,e=document.getElementById("certPurposeEtc");if(v==='기타'){e.classList.remove('hidden');e.focus()}else{e.classList.add('hidden')}}
+function printDocument(d){const w=window.open('','','width=900,height=1100'),[y,m]=d.year_month.split('-'),[yy,mm]=d.year_month.split('-').map(Number);let sd=1,ld=new Date(yy,mm,0).getDate();if(myInfo.hire_date){const h=new Date(myInfo.hire_date);if(h.getFullYear()===yy&&h.getMonth()+1===mm)sd=h.getDate()}const ad=`${y}년 ${Number(m)}월<br><span style="font-size:11px;color:#555;">(${y}.${m}.${String(sd).padStart(2,'0')} ~ ${y}.${m}.${ld})</span>`,pd=new Date(y,Number(m),10),pds=`${pd.getFullYear()}년 ${pd.getMonth()+1}월 ${pd.getDate()}일`,f=n=>n?Number(n).toLocaleString():'0';
+// [수정] 아래 div style에 'position:relative;' 추가함 (도장 위치 기준점)
+const c=`<div style="font-family:'Malgun Gothic',serif;color:#333;padding-top:20px;"><h1 style="text-align:center;font-size:32px;margin:0 0 30px;">${y}년 ${Number(m)}월 급여명세서</h1><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size:13px;"><tr><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">귀속연월</td><td style="width:35%;padding:8px;border:1px solid #000;">${ad}</td><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">사원</td><td style="width:35%;padding:8px;border:1px solid #000;">${myInfo.emp_id} / ${myInfo.emp_name}</td></tr><tr><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">지급일자</td><td style="padding:8px;border:1px solid #000;">${pds}</td><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">소속</td><td style="padding:8px;border:1px solid #000;">${myInfo.department}/${myInfo.position}</td></tr></table><div style="display:flex;gap:30px;margin-bottom:40px;border-top:2px solid #aaa;"><div style="flex:1;"><div style="text-align:center;color:#1e88e5;font-weight:bold;padding:8px;border-bottom:2px solid #1e88e5;">지급내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>기본급</td><td style="text-align:right;">${f(d.pay_basic)}</td></tr><tr><td>식대</td><td style="text-align:right;">${f(d.pay_meal)}</td></tr><tr><td>차량</td><td style="text-align:right;">${f(d.pay_car)}</td></tr><tr><td>직책</td><td style="text-align:right;">${f(d.pay_position)}</td></tr><tr><td>근속</td><td style="text-align:right;">${f(d.pay_service)}</td></tr><tr><td>연장</td><td style="text-align:right;">${f(d.pay_overtime)}</td></tr><tr><td>육아</td><td style="text-align:right;">${f(d.pay_child)}</td></tr><tr><td>상여</td><td style="text-align:right;">${f(d.pay_bonus)}</td></tr></table></div><div style="flex:1;"><div style="text-align:center;color:#e53935;font-weight:bold;padding:8px;border-bottom:2px solid #e53935;">공제내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>국민연금</td><td style="text-align:right;">${f(d.ded_pension)}</td></tr><tr><td>건강보험</td><td style="text-align:right;">${f(d.ded_health)}</td></tr><tr><td>장기요양</td><td style="text-align:right;">${f(d.ded_care)}</td></tr><tr><td>고용보험</td><td style="text-align:right;">${f(d.ded_employ)}</td></tr><tr><td>소득세</td><td style="text-align:right;">${f(d.ded_income)}</td></tr><tr><td>지방소득세</td><td style="text-align:right;">${f(d.ded_local)}</td></tr><tr><td>가불금</td><td style="text-align:right;">${f(d.ded_advance)}</td></tr><tr><td>출자금</td><td style="text-align:right;">${f(d.ded_capital)}</td></tr></table></div></div><div style="border-top:1px solid #999;margin-bottom:20px;"></div><div style="height:120px;position:relative;"><div style="position:absolute;top:30px;left:20px;color:#666;">노고에 감사드립니다.</div><table style="position:absolute;right:0;top:0;width:350px;font-size:13px;background:#fff;border-collapse:collapse;"><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">지급합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.pay_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">공제합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.ded_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">실지급액</td><td style="border:1px solid #000;padding:6px;text-align:right;font-weight:bold;">${f(d.net_pay)}</td></tr></table></div>
+<div style="text-align:center;margin-top:40px;position:relative;">
+<span style="font-size:20px;font-weight:600;">${companyInfo.company_name||"조합"} 이사장 ${companyInfo.chairman}</span>${companyInfo.seal_url?`<img src="${companyInfo.seal_url}" style="position:absolute;width:60px;margin-left:-30px;top:-15px;opacity:0.8;">`:''}</div></div>`;w.document.write(`<html><head><title>급여명세서</title><style>@page{size:A4;margin:0}body{margin:0;background:#555}.page-wrap{width:210mm;height:297mm;padding:20mm;background:#fff;margin:0 auto;box-sizing:border-box}.no-print{position:fixed;bottom:30px;right:30px;background:#fff;padding:10px;border-radius:50px;cursor:pointer}@media print{body{background:#fff}.no-print{display:none}}</style></head><body><div class="page-wrap">${c}</div><div class="no-print" onclick="window.print()">🖨️ 인쇄</div></body></html>`);w.document.close()}
+  function toggleEtcInput(){const v=document.getElementById("certPurposeSelect").value,e=document.getElementById("certPurposeEtc");if(v==='기타'){e.classList.remove('hidden');e.focus()}else{e.classList.add('hidden')}}
 function openCertModal(){purposeModal.show()}
 async function loadNotices(){const{data}=await _supabase.from('ref_notice').select('*').order('created_at',{ascending:false}).limit(5);document.getElementById("noticeList").innerHTML=data&&data.length?data.map((n,i)=>`<div class="list-group-item" onclick="viewNotice(${i})" style="cursor:pointer"><h6 class="fw-bold mb-1">${n.title}</h6><small class="text-muted">${n.created_at.slice(0,10)}</small></div>`).join(""):'<div class="text-center p-3 text-muted">공지사항 없음</div>';noticesData=data}
 function viewNotice(i){const n=noticesData[i];document.getElementById("noticeModalTitle").innerText=n.title;document.getElementById("noticeModalDate").innerText=n.created_at.slice(0,10);document.getElementById("noticeModalWriter").innerText=n.writer||"관리자";document.getElementById("noticeModalContent").innerText=n.content;const l=document.getElementById("noticeFileLink"),a=document.getElementById("noticeFileArea");if(n.file_url){a.classList.remove("hidden");l.href=n.file_url}else a.classList.add("hidden");noticeDetailModal.show()}
-function runCertIssue(){/*증명서발급로직*/}
+// [추가] 범용 확인 모달 열기 함수
+function openConfirmModal(msg, callback) {
+    document.getElementById("confirmMessage").innerText = msg;
+    confirmActionFunc = callback; // 확인 버튼 누르면 실행할 함수를 기억해둠
+    confirmModal.show();
+}
+
+// [추가] 모달에서 '확인' 버튼 클릭 시 실행
+function executeConfirmAction() {
+    if (confirmActionFunc) {
+        confirmActionFunc(); // 기억해둔 함수 실행
+    }
+    confirmModal.hide();
+}
+function runCertIssue(){
+    // 1. 입력된 용도 가져오기
+    const s = document.getElementById("certPurposeSelect").value;
+    const e = document.getElementById("certPurposeEtc").value;
+    const purpose = (s === '기타') ? e : s;
+    if(!purpose){ showAlert("용도를 입력해주세요."); return; }
+
+    // 2. 팝업 닫기
+    purposeModal.hide();
+
+    // 3. 오늘 날짜 및 생년월일 처리
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일`;
+    // 주민번호 뒷자리는 보안상 마스킹 처리 (앞 6자리 + *******)
+    const birth = myInfo.birth_date ? myInfo.birth_date.replace(/-/g,'') : '000000'; // 임시 처리
+    const rrnMask = birth.length >= 6 ? birth.substring(0,6) + "-*******" : "******-*******";
+
+    // 4. 새 창 열기 및 HTML 생성
+    const w = window.open('', '', 'width=900,height=1100');
+    const html = `
+    <div style="font-family:'Batang',serif; padding:40px; color:#000;">
+        <h1 style="text-align:center; font-size:36px; text-decoration:underline; margin-bottom:50px;">재 직 증 명 서</h1>
+        
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; border:1px solid #000;">
+            <tr style="height:40px;">
+                <td style="width:20%; background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">성 명</td>
+                <td style="width:30%; padding:5px 10px; border:1px solid #000;">${myInfo.emp_name}</td>
+                <td style="width:20%; background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">주민등록번호</td>
+                <td style="width:30%; padding:5px 10px; border:1px solid #000;">${rrnMask}</td>
+            </tr>
+            <tr style="height:40px;">
+                <td style="background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">주 소</td>
+                <td colspan="3" style="padding:5px 10px; border:1px solid #000;">${myInfo.address || '-'}</td>
+            </tr>
+            <tr style="height:40px;">
+                <td style="background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">부 서</td>
+                <td style="padding:5px 10px; border:1px solid #000;">${myInfo.department || '-'}</td>
+                <td style="background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">직 위</td>
+                <td style="padding:5px 10px; border:1px solid #000;">${myInfo.position || '-'}</td>
+            </tr>
+            <tr style="height:40px;">
+                <td style="background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">재직기간</td>
+                <td colspan="3" style="padding:5px 10px; border:1px solid #000;">
+                    ${myInfo.hire_date} ~ 현재
+                </td>
+            </tr>
+             <tr style="height:40px;">
+                <td style="background:#f0f0f0; text-align:center; border:1px solid #000; font-weight:bold;">용 도</td>
+                <td colspan="3" style="padding:5px 10px; border:1px solid #000;">${purpose}</td>
+            </tr>
+        </table>
+
+        <div style="margin-top:30px; text-align:center; line-height:2.0;">
+            위 사람은 상기와 같이 재직하고 있음을 증명합니다.
+        </div>
+
+        <div style="margin-top:50px; text-align:center; font-size:18px;">
+            ${dateStr}
+        </div>
+
+        <div style="margin-top:80px; text-align:center; position:relative;">
+            <span style="font-size:24px; font-weight:bold;">${companyInfo.company_name || "용인모두의햇빛협동조합"}</span>
+            <br><br>
+            <span style="font-size:20px;">이사장 &nbsp; ${companyInfo.chairman}</span>
+            ${companyInfo.seal_url ? `<img src="${companyInfo.seal_url}" style="position:absolute; width:80px; top:30px; margin-left:-40px; opacity:0.8;">` : ''}
+        </div>
+    </div>
+    `;
+
+    w.document.write(`
+        <html><head><title>재직증명서</title>
+        <style>
+            @page { size: A4; margin: 0; }
+            body { margin: 0; background: #555; display:flex; justify-content:center; padding:20px; }
+            .page { width: 210mm; min-height: 297mm; background: #fff; padding: 20mm; box-shadow: 0 0 10px rgba(0,0,0,0.1); box-sizing: border-box;}
+            .no-print { position: fixed; bottom: 30px; right: 30px; background: #333; color:#fff; padding: 10px 20px; border-radius: 30px; cursor: pointer; }
+            @media print { body { background: none; padding: 0; } .no-print { display: none; } .page { box-shadow: none; } }
+        </style>
+        </head><body>
+            <div class="page">${html}</div>
+            <div class="no-print" onclick="window.print()">🖨️ 인쇄하기</div>
+        </body></html>
+    `);
+    w.document.close();
+}
+  
 </script>
 </body>
 </html>
