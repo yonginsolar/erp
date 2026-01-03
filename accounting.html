@@ -105,23 +105,7 @@
   </div>
 </div>
 
-<div class="mb-3">
-  <label class="small text-muted">계정과목</label>
-  <div class="input-group">
-    <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
-    <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
-    <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
-  </div>
-  <input type="hidden" id="hiddenItem">
-  <input type="hidden" id="hiddenStandard">
-  <input type="hidden" id="hiddenCode">
-  <input type="hidden" id="isTaxFree">
-  <input type="hidden" id="specialMode"> 
-</div>
 
-<div id="dynamicArea" class="mb-3"></div>
-
-<div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
 
         <div class="mb-3 p-2 border rounded bg-light">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -154,17 +138,22 @@
         </div>
 
         <div class="mb-3">
-          <label class="small text-muted">계정과목</label>
-          <div class="input-group">
-            <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
-            <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
-            <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
-          </div>
-          <input type="hidden" id="hiddenItem"><input type="hidden" id="hiddenStandard">
-          <input type="hidden" id="isTaxFree"> 
-        </div>
+  <label class="small text-muted">계정과목</label>
+  <div class="input-group">
+    <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
+    <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
+    <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
+  </div>
+  <input type="hidden" id="hiddenItem">
+  <input type="hidden" id="hiddenStandard">
+  <input type="hidden" id="hiddenCode">
+  <input type="hidden" id="isTaxFree">
+  <input type="hidden" id="specialMode"> 
+</div>
 
-        <div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
+<div id="dynamicArea" class="mb-3"></div>
+
+<div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
         <div class="mb-2"><label class="small text-muted">금액 (합계)</label><input type="number" class="form-control form-control-lg" id="inputAmount" placeholder="0" required min="0"></div>
         
         <div class="d-flex justify-content-between align-items-center mt-3">
