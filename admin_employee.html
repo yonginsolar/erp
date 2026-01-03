@@ -297,56 +297,71 @@ function doResign() { document.getElementById("inputResignDate").value = new Dat
 async function confirmResign() { const rDate = document.getElementById("inputResignDate").value; if(!rDate) return showAlert("퇴사일을 입력해주세요."); resignModal.hide(); await _supabase.from('ref_employees').update({ resign_date: rDate }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); showAlert("퇴사 처리되었습니다."); }
 async function cancelResign() { showConfirm("퇴사 취소하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
 
+// [수정] 급여 데이터 로드 및 반자동 공제 알림 (최종판)
 async function loadSalaryData() {
     const month = document.getElementById("salaryMonth").value;
     const badge = document.getElementById("salaryStatusBadge");
-    const alertBox = document.getElementById("salaryAlertBox"); // 알림 박스
+    const alertBox = document.getElementById("salaryAlertBox");
     
-    // UI 초기화
+    // 1. UI 초기화
     badge.innerText = "조회 중...";
     badge.className = "badge bg-secondary";
     alertBox.classList.add("hidden");
     alertBox.innerHTML = "";
+    
+    // 날짜나 직원이 선택되지 않았으면 중단
+    if (!month || !currentEmpId) return;
 
     // ---------------------------------------------------------
-    // [추가 로직] 무급휴가 자동 감지 (반자동 알림)
+    // [로직] 무급휴가 및 공제 대상 감지 (가승인 포함)
     // ---------------------------------------------------------
-    if (month && currentEmpId) {
-        // 해당 월의 1일 ~ 말일 범위 설정 (간편하게 문자열 비교)
-        const startDate = `${month}-01`;
-        const endDate = `${month}-31`;
+    const startDate = `${month}-01`;
+    const endDate = `${month}-31`;
 
-        // DB 조회: 해당 직원의 '완료'된 문서 중 '무급' 키워드가 포함된 것
-        const { data: unpaidDocs } = await _supabase.from('ref_approval')
-            .select('amount, title, created_at')
-            .eq('drafter_id', currentEmpId)
-            .eq('status', '완료')
-            .like('doc_type', '%무급%') // "휴가(무급휴가)" 감지
-            .gte('created_at', startDate)
-            .lte('created_at', endDate);
+    // DB 조회: 
+    // 1) 기안자가 현재 직원이고
+    // 2) 상태가 '완료'이거나 '가승인'(대리상신) 상태이며
+    // 3) 문서 타입에 '무급', '생리', '결근' 등의 키워드가 포함된 경우
+    const { data: unpaidDocs, error } = await _supabase.from('ref_approval')
+        .select('amount, doc_type, title, created_at, status')
+        .eq('drafter_id', currentEmpId)
+        .in('status', ['완료', '가승인']) 
+        .or('doc_type.ilike.%무급%,doc_type.ilike.%생리%,doc_type.ilike.%결근%') 
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
 
-        if (unpaidDocs && unpaidDocs.length > 0) {
-            // 무급휴가 일수 합계 계산
-            let totalUnpaidDays = 0;
-            unpaidDocs.forEach(d => totalUnpaidDays += Number(d.amount));
+    if (unpaidDocs && unpaidDocs.length > 0) {
+        let totalUnpaidDays = 0;
+        // 목록 생성
+        const docListHtml = unpaidDocs.map(d => {
+            totalUnpaidDays += Number(d.amount);
+            // 가승인 상태면 (가승인) 표시를 해줌
+            const stateLabel = d.status === '가승인' ? '<span class="text-danger small">(증빙대기)</span>' : '';
+            return `<li>${d.doc_type} <strong>${d.amount}일</strong> ${stateLabel}</li>`;
+        }).join("");
 
-            // 경고창 표시
-            alertBox.innerHTML = `
-                <div class="alert alert-danger d-flex align-items-center mb-0" role="alert">
-                    <div class="me-2 fs-4">⚠️</div>
-                    <div>
-                        <strong>[주의] 무급휴가 발생 확인</strong><br>
-                        이번 달 승인된 무급휴가가 총 <strong>${totalUnpaidDays}일</strong> 있습니다.<br>
-                        <span style="font-size:0.85rem;">(급여에서 해당 일수만큼 수동으로 차감해 주세요)</span>
+        // 경고창 표시
+        alertBox.innerHTML = `
+            <div class="alert alert-danger d-flex align-items-center mb-0" role="alert">
+                <div class="me-3 fs-2">⚠️</div>
+                <div class="w-100">
+                    <h6 class="alert-heading fw-bold mb-1">급여 공제 대상 감지</h6>
+                    <p class="mb-1 small">이번 달 <strong>총 ${totalUnpaidDays}일</strong>의 공제 대상 휴가가 있습니다.</p>
+                    <ul class="mb-2 small text-muted ps-3 bg-white py-2 rounded border">
+                        ${docListHtml}
+                    </ul>
+                    <div style="font-size:0.8rem;" class="text-end text-danger fw-bold">
+                        ※ 위 일수만큼 급여 차감액을 직접 입력해주세요.
                     </div>
                 </div>
-            `;
-            alertBox.classList.remove("hidden");
-        }
+            </div>
+        `;
+        alertBox.classList.remove("hidden");
     }
-    // ---------------------------------------------------------
 
-    // 기존 급여 데이터 조회
+    // ---------------------------------------------------------
+    // [로직] 기존 저장된 급여 내역 불러오기 (기존과 동일)
+    // ---------------------------------------------------------
     const { data: saved } = await _supabase.from('hr_salary')
         .select('*')
         .eq('emp_id', currentEmpId)
@@ -354,7 +369,6 @@ async function loadSalaryData() {
         .single();
 
     if (saved) {
-        // 저장된 데이터가 있으면 불러옴
         document.getElementById("payTotalFixed").value = saved.pay_total || 0;
         document.getElementById("payMeal").value = saved.pay_meal;
         document.getElementById("payCar").value = saved.pay_car;
@@ -364,11 +378,10 @@ async function loadSalaryData() {
         badge.innerText = "저장된 데이터";
         badge.className = "badge bg-success";
         
-        // 인쇄용 데이터 캐싱
         currentSalaryDataForPrint = saved;
         currentSalaryDataForPrint.year_month = month;
     } else {
-        // 저장된 게 없으면 연봉 기준 자동 계산
+        // 데이터 없으면 연봉 기준 자동 세팅
         const monthlyTotal = Math.floor(currentAnnualSalary / 12); 
         document.getElementById("payTotalFixed").value = monthlyTotal; 
         document.getElementById("payMeal").value = 0;
@@ -382,7 +395,7 @@ async function loadSalaryData() {
         currentSalaryDataForPrint = null;
     }
 
-    // 기본급 및 공제액 재계산
+    // 계산식 적용
     recalcSalaryComponents();
 }
 
