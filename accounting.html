@@ -97,13 +97,31 @@
   <div class="tab-content no-print">
     <div class="tab-pane fade show active" id="tabForm">
       <form id="erpForm" onsubmit="handleFormSubmit(event)">
-        <div class="row mb-3">
-          <div class="col-6"><label class="small text-muted">날짜</label><input type="date" class="form-control" id="dateField" required></div>
-          <div class="col-6">
-            <label class="small text-muted">프로젝트</label>
-           <select class="form-select" id="projectSelect" required></select>
-          </div>
-        </div>
+<div class="row mb-3">
+  <div class="col-6"><label class="small text-muted">날짜</label><input type="date" class="form-control" id="dateField" required></div>
+  <div class="col-6">
+    <label class="small text-muted">프로젝트</label>
+    <select class="form-select" id="projectSelect" required></select>
+  </div>
+</div>
+
+<div class="mb-3">
+  <label class="small text-muted">계정과목</label>
+  <div class="input-group">
+    <input type="text" class="form-control readonly-input ime-kr" id="displayAccount" placeholder="선택하세요 (유형에 맞는 항목만 표시됨)" readonly onclick="openSelModal()">
+    <button class="btn btn-secondary" type="button" onclick="openSelModal()">🔍</button>
+    <button class="btn btn-outline-secondary" type="button" onclick="openAddModal()">➕</button>
+  </div>
+  <input type="hidden" id="hiddenItem">
+  <input type="hidden" id="hiddenStandard">
+  <input type="hidden" id="hiddenCode">
+  <input type="hidden" id="isTaxFree">
+  <input type="hidden" id="specialMode"> 
+</div>
+
+<div id="dynamicArea" class="mb-3"></div>
+
+<div class="mb-3"><label class="small text-muted">적요</label><input type="text" class="form-control ime-kr" id="inputDesc" required></div>
 
         <div class="mb-3 p-2 border rounded bg-light">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -161,31 +179,54 @@
       </form>
     </div>
 
-    <div class="tab-pane fade" id="tabSync">
-      <div class="d-grid gap-3">
-          <div class="card p-3 border-start border-5 border-info bg-light">
-             <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">💼 급여 대장 연동</h6><small class="text-muted">HR_Salary → 회계 전표</small></div>
-               <div class="d-flex align-items-center gap-2">
-                   <input type="month" id="salaryMonth" class="form-control form-control-sm" style="width: 130px;">
-                   <button class="btn btn-info btn-sm text-white" onclick="confirmSync('salary')">실행</button>
-               </div>
-             </div>
-          </div>
-          <div class="card p-3 border-start border-5 border-warning bg-light">
-             <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료된 지출결의서 불러오기</small></div>
-               <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
-             </div>
-          </div>
-          <div class="card p-3 border-start border-5 border-danger bg-light">
-             <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">📅 연말결산</h6><small class="text-muted">손익계정 마감 (준비중)</small></div>
-               <button class="btn btn-danger btn-sm" onclick="showAlert('알림', '준비중인 기능입니다.')">실행</button>
-             </div>
-          </div>
+<div class="tab-pane fade" id="tabSync">
+  <div class="d-grid gap-3">
+      <div class="card p-3 border-start border-5 border-info bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">💼 급여 대장 연동</h6><small class="text-muted">HR_Salary → 회계 전표</small></div>
+           <div class="d-flex align-items-center gap-2">
+               <input type="month" id="salaryMonth" class="form-control form-control-sm" style="width: 130px;">
+               <button class="btn btn-info btn-sm text-white" onclick="confirmSync('salary')">실행</button>
+           </div>
+         </div>
       </div>
-    </div>
+
+      <div class="card p-3 border-start border-5 border-warning bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료된 지출결의서 불러오기</small></div>
+           <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
+         </div>
+      </div>
+
+      <div class="card p-3 border-start border-5 border-success bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">💰 출자금 연동</h6><small class="text-muted">신규 입금 내역 전표 처리</small></div>
+           <button class="btn btn-success btn-sm text-white" onclick="confirmSync('capital')">실행</button>
+         </div>
+      </div>
+
+      <div class="card p-3 border-start border-5 border-primary bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">💸 배당금 연동</h6><small class="text-muted">배당금 지급 내역 처리</small></div>
+           <button class="btn btn-primary btn-sm text-white" onclick="confirmSync('dividend')">실행</button>
+         </div>
+      </div>
+
+      <div class="card p-3 border-start border-5 border-secondary bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">📉 감가상각 실행</h6><small class="text-muted">고정자산 대장 기준 (연 1회)</small></div>
+           <button class="btn btn-secondary btn-sm text-white" onclick="confirmSync('depreciation')">실행</button>
+         </div>
+      </div>
+
+      <div class="card p-3 border-start border-5 border-danger bg-light">
+         <div class="d-flex justify-content-between align-items-center">
+           <div><h6 class="fw-bold mb-1">📅 연말결산 (손익마감)</h6><small class="text-muted">수익/비용 마감 및 자본 대체</small></div>
+           <button class="btn btn-danger btn-sm text-white" onclick="confirmSync('closing')">실행</button>
+         </div>
+      </div>
+  </div>
+</div>
 
     <div class="tab-pane fade" id="tabHistory">
       <div class="d-flex justify-content-between align-items-center mb-3">
