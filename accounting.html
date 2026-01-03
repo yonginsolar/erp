@@ -286,6 +286,7 @@ let mData=[], cardData=[];
 let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal;
 let myInfo = null, confirmCallback = null;
 
+// 1. 초기화
 window.onload = async function() {
     selectModal = new bootstrap.Modal(document.getElementById('selectModal'));
     reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
@@ -302,7 +303,7 @@ window.onload = async function() {
     document.getElementById('dateField').valueAsDate = new Date();
     document.getElementById('salaryMonth').value = new Date().toISOString().slice(0, 7);
 
-    // [Ver.12] 보고서 연도 옵션
+    // 보고서 연도 옵션 생성
     const yearSel = document.getElementById("reportYearSelect");
     const currentYear = new Date().getFullYear();
     for (let y = currentYear; y >= currentYear - 2; y--) {
@@ -310,19 +311,40 @@ window.onload = async function() {
         opt.value = y; opt.text = y + "년"; yearSel.add(opt);
     }
 
-    // [수정] loadProjects 추가
-    await Promise.all([ loadMasterData(), loadCards(), loadProjects(), refreshDashboard() ]);
+    // 데이터 로드 (순서 중요: 프로젝트 -> 마스터 -> 카드 -> 대시보드)
+    await loadProjects(); 
+    await Promise.all([ loadMasterData(), loadCards(), refreshDashboard() ]);
 };
 
 // Helper
 function showAlert(t,m) { document.getElementById("alertTitle").innerText=t; document.getElementById("alertBody").innerHTML=m; alertModal.show(); }
 function showConfirm(t,m,cb) { document.getElementById("confirmTitle").innerText=t; document.getElementById("confirmBody").innerHTML=m; confirmCallback=cb; confirmModal.show(); }
+function validNum(el) { if(el.value < 0) el.value = Math.abs(el.value); }
 
-// 1. 데이터 로드
+// 2. 데이터 로드 함수들
+
+// [신규] 프로젝트 목록 로드 (DB 연동)
+async function loadProjects() {
+    const { data, error } = await _supabase.from('ref_projects').select('*').order('id');
+    const sel = document.getElementById("projectSelect");
+    sel.innerHTML = "";
+    
+    if (data && data.length > 0) {
+        data.forEach(p => sel.add(new Option(p.project_name, p.project_name)));
+    } else {
+        // 데이터가 없으면 기본값
+        sel.add(new Option("본사", "본사"));
+        sel.add(new Option("1호기", "1호기"));
+        sel.add(new Option("2호기", "2호기"));
+    }
+}
+
+// [수정] 마스터 데이터 로드 (SpecialType, Tax_Free, Usage 확인)
 async function loadMasterData() {
     const { data } = await _supabase.from('ac_master').select('*').order('Type').order('Standard').order('Item');
-    if(data) mData = data;
+    if(data) mData = data; 
 }
+
 async function loadCards() {
     const { data } = await _supabase.from('ref_cards').select('*');
     if(data) {
@@ -333,7 +355,7 @@ async function loadCards() {
     }
 }
 
-// 2. 대시보드
+// 3. 대시보드 새로고침
 async function refreshDashboard() {
     const { data } = await _supabase.from('ac_journal').select('*');
     let rev=0, exp=0, ast=0, vatIn=0, vatOut=0, bankBalance=0;
@@ -352,14 +374,162 @@ async function refreshDashboard() {
     document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString();
 }
 
-// 3. 전표 저장
-// [수정] 전표 저장 로직 고도화
+// 4. 모달 및 UI 제어 로직
+
+function resetAccountInput() {
+    document.getElementById("displayAccount").value = "";
+    document.getElementById("hiddenItem").value = "";
+    document.getElementById("hiddenCode").value = "";
+    document.getElementById("isTaxFree").value = "";
+    document.getElementById("specialMode").value = "";
+    document.getElementById("dynamicArea").innerHTML = "";
+    document.getElementById("cardOptionDiv").style.display = "none";
+}
+
+function openSelModal() { 
+    filterAccounts(); 
+    selectModal.show(); 
+    setTimeout(() => document.getElementById("accountSearchInput").focus(), 300); 
+}
+
+// [수정] 계정과목 검색 필터 (Usage 연동)
+function filterAccounts() {
+    const k = document.getElementById("accountSearchInput").value.trim();
+    const type = document.querySelector('input[name="inputType"]:checked').value;
+    const currentProject = document.getElementById("projectSelect").value || "본사";
+    const list = document.getElementById("accountList");
+    
+    list.innerHTML = "";
+    
+    // 필터 조건: 
+    // 1. 계정 유형(Type) 일치
+    // 2. 검색어(k) 포함 (항목명 또는 중분류)
+    // 3. [Usage] '전체' 이거나, 현재 선택된 프로젝트와 일치하는 경우
+    const filtered = mData.filter(m => {
+        // DB 칼럼명 대소문자 주의 (Supabase 설정에 따라 다를 수 있으나 보통 그대로 옴)
+        // 안전하게 m.Type, m.Usage 등 대소문자 확인하여 접근
+        const mType = m.Type || m.type;
+        const mItem = m.Item || m.item;
+        const mStandard = m.Standard || m.standard;
+        const mUsage = m.Usage || m.usage || "전체"; // 없으면 전체로 간주
+
+        const typeMatch = (mType === type);
+        const keywordMatch = (mItem.includes(k) || mStandard.includes(k));
+        const usageMatch = (mUsage === "전체" || mUsage === currentProject);
+
+        return typeMatch && keywordMatch && usageMatch;
+    });
+    
+    if(filtered.length === 0) { list.innerHTML = "<div class='p-3 text-center text-muted'>검색 결과가 없습니다.</div>"; return; }
+
+    filtered.forEach(acc => {
+        const d = document.createElement("div");
+        d.className = "list-group-item list-group-item-action p-2 ps-3 border-0 border-bottom search-list-item";
+        
+        // 면세 여부 및 특수코드 확인 (DB 칼럼명: Tax_Free, SpecialType)
+        const isTaxFree = acc.Tax_Free || acc.tax_free; 
+        const specialType = acc.SpecialType || acc.specialtype;
+        
+        const badge = (isTaxFree === true || isTaxFree === 'TRUE' || isTaxFree === '면세') ? '<span class="badge bg-secondary ms-2" style="font-size:0.7em;">면세</span>' : '';
+        const spBadge = (specialType) ? `<span class="badge bg-info text-dark ms-1" style="font-size:0.7em;">${specialType}</span>` : '';
+
+        d.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><span class="acc-item-name">${acc.Item}</span><span class="acc-item-std ms-1">(${acc.Standard})</span></div><div>${spBadge}${badge}</div></div>`;
+        
+        d.onclick = () => {
+            document.getElementById("displayAccount").value = acc.Item;
+            document.getElementById("hiddenItem").value = acc.Item;
+            document.getElementById("hiddenStandard").value = acc.Standard;
+            document.getElementById("hiddenCode").value = acc.Code || ""; // 코드
+            document.getElementById("isTaxFree").value = isTaxFree; // 면세여부 저장
+            document.getElementById("specialMode").value = specialType || ""; // 특수코드 저장
+            
+            updateDynamicUI(acc.Item, acc.Type, specialType, isTaxFree);
+            selectModal.hide();
+        };
+        list.appendChild(d);
+    });
+}
+
+// [수정] 계정과목 선택 후 UI 변경 (특수 로직 반영)
+function updateDynamicUI(accName, accType, specialCode, isTaxFree) {
+    const area = document.getElementById("dynamicArea");
+    const vatCheck = document.getElementById("vatCheck");
+    const cardDiv = document.getElementById("cardOptionDiv");
+    
+    area.innerHTML = ""; 
+    
+    // 1. 면세 처리 (Tax_Free 칼럼 체크)
+    if (isTaxFree === true || isTaxFree === 'TRUE' || isTaxFree === '면세') { 
+        vatCheck.checked = false; 
+        vatCheck.disabled = true; 
+    } else { 
+        vatCheck.disabled = false; 
+        vatCheck.checked = true; 
+    }
+    
+    // 초기화
+    document.getElementById("payMethod").checked = false;
+    document.getElementById("cardSelect").classList.add("hidden");
+    cardDiv.style.display = (accType === "비용") ? "flex" : "none";
+
+    // 2. SpecialType 값에 따른 UI 생성
+    if (specialCode === "interest_inc") { // 이자수익
+        area.innerHTML = `<div class="special-box alert alert-primary p-2 mb-2"><small class="fw-bold">ℹ️ 이자수익 (원천징수 자동분개)</small><br>세전 이자총액을 입력하세요. (15.4% 자동 차감)</div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "salary" || specialCode === "retirement_pension") { // 급여, 퇴직연금
+        area.innerHTML = `<div class="special-box alert alert-success p-2 mb-2"><small class="fw-bold">ℹ️ 인건비 처리</small><br>4대보험/세금 등은 급여연동 기능을 권장합니다.</div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "insurance") { // 4대보험
+        area.innerHTML = `<div class="special-box alert alert-info p-2 mb-2"><small class="fw-bold">ℹ️ 4대보험 납부</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">직원부담분(예수금)</span><input type="number" class="form-control" id="workerShare" placeholder="급여에서 뗀 금액" min="0" oninput="validNum(this)"></div><div class="form-text x-small">* 나머지는 회사부담분(비용)으로 처리됩니다.</div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "loan_pay") { // 대출상환
+        area.innerHTML = `<div class="special-box alert alert-warning p-2 mb-2"><small class="fw-bold">ℹ️ 대출 원리금 상환</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">이자 포함분</span><input type="number" class="form-control" id="loanInterest" placeholder="이 중 이자는 얼마?" min="0" oninput="validNum(this)"></div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "labor") { // 인적용역
+        area.innerHTML = `<div class="special-box alert alert-danger p-2 mb-2"><small class="fw-bold">ℹ️ 사업소득세 (원천징수)</small><div class="btn-group btn-group-sm w-100 mt-1"><input type="radio" class="btn-check" name="laborTaxRate" id="tax33" value="0.033" checked><label class="btn btn-outline-secondary" for="tax33">3.3% (일반)</label><input type="radio" class="btn-check" name="laborTaxRate" id="tax88" value="0.088"><label class="btn btn-outline-secondary" for="tax88">8.8% (강사료 등)</label></div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    }
+}
+
+// 거래 구분 변경 시 UI 제어
+function toggleSettleMode() {
+    const mode = document.querySelector('input[name="settleMode"]:checked').value;
+    const inputDiv = document.getElementById("payerInputDiv");
+    const payerLabel = document.getElementById("payerLabel");
+    const badge = document.getElementById("modeBadge");
+    
+    inputDiv.classList.add("hidden");
+    
+    if (mode === "pre_expense") {
+        inputDiv.classList.remove("hidden");
+        payerLabel.innerText = "지출자";
+        badge.className = "badge bg-primary"; badge.innerText = "미지급금";
+    } else if (mode === "reimburse") {
+        inputDiv.classList.remove("hidden");
+        payerLabel.innerText = "받는분";
+        badge.className = "badge bg-danger"; badge.innerText = "상환";
+    } else {
+        badge.className = "badge bg-secondary"; badge.innerText = "일반";
+    }
+}
+
+function toggleCard() { 
+    const chk = document.getElementById("payMethod").checked;
+    const sel = document.getElementById("cardSelect");
+    if(chk) { sel.classList.remove("hidden"); sel.required = true; }
+    else { sel.classList.add("hidden"); sel.value=""; sel.required = false; }
+}
+
+// 5. 전표 저장 로직 (핵심)
 async function handleFormSubmit(e) {
-    if(e) e.preventDefault();
+    e.preventDefault();
     const item = document.getElementById("hiddenItem").value;
     if(!item) return showAlert("오류", "계정과목을 선택하세요.");
     
-    // 기본 값 가져오기
     const fDate = document.getElementById("dateField").value;
     const project = document.getElementById("projectSelect").value;
     const type = document.querySelector('input[name="inputType"]:checked').value;
@@ -368,15 +538,13 @@ async function handleFormSubmit(e) {
     const totalAmt = Number(document.getElementById("inputAmount").value);
     const useVAT = document.getElementById("vatCheck").checked;
     
-    // 특수 모드 값
+    // 특수 코드 값 가져오기
     const specialCode = document.getElementById("specialMode").value;
     
-    // 결제 수단
     const isCard = (settleMode === "") && document.getElementById("payMethod").checked;
     const cardName = isCard ? document.getElementById("cardSelect").value : "";
     const payerName = document.getElementById("payerName").value || "지출자";
 
-    // 적요 생성
     let finalDesc = desc;
     if(isCard) finalDesc = `[${cardName}] ${desc}`;
     if(settleMode === 'pre_expense') finalDesc = `[설립전] ${desc} (${payerName})`;
@@ -392,71 +560,48 @@ async function handleFormSubmit(e) {
     let entries = [];
     const writer = myInfo ? myInfo.emp_name : "WebUser";
 
-    // --- [특수 분개 로직 시작] ---
+    // --- 특수 분개 로직 ---
     
-    // 1. 4대보험 납부 (회사부담분 + 직원부담분)
-    if (specialCode === 'insurance') {
+    if (specialCode === 'insurance') { // 4대보험
         const workerShare = Number(document.getElementById("workerShare")?.value || 0);
         const companyShare = totalAmt - workerShare;
-        
-        // (1) 대변: 돈 나감
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        // (2) 차변: 예수금 상계 (직원부담분)
         if(workerShare > 0) entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 직원부담분`, Debit: workerShare, Credit: 0, Project: project, Operator: writer });
-        // (3) 차변: 비용 처리 (회사부담분)
         if(companyShare > 0) entries.push({ Date: fDate, Type: '비용', Account: item, Description: `[${item}] 회사부담분`, Debit: companyShare, Credit: 0, Project: project, Operator: writer });
     }
-    // 2. 대출 원리금 상환 (원금 + 이자)
-    else if (specialCode === 'loan_pay') {
+    else if (specialCode === 'loan_pay') { // 대출상환
         const interest = Number(document.getElementById("loanInterest")?.value || 0);
         const principal = totalAmt - interest;
-        
-        // (1) 대변: 돈 나감
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        // (2) 차변: 이자비용
         if(interest > 0) entries.push({ Date: fDate, Type: '비용', Account: '이자비용', Description: `[${item}] 이자`, Debit: interest, Credit: 0, Project: project, Operator: writer });
-        // (3) 차변: 부채 상환 (원금)
         if(principal > 0) entries.push({ Date: fDate, Type: '부채', Account: item, Description: `[${item}] 원금상환`, Debit: principal, Credit: 0, Project: project, Operator: writer });
     }
-    // 3. 인건비/강사료 (3.3% 원천징수)
-    else if (specialCode === 'labor') {
+    else if (specialCode === 'labor') { // 인적용역
         const taxRate = Number(document.querySelector('input[name="laborTaxRate"]:checked').value);
-        const taxAmt = Math.floor(totalAmt * taxRate / 10) * 10; // 1원단위 절사
+        const taxAmt = Math.floor(totalAmt * taxRate / 10) * 10;
         const realPay = totalAmt - taxAmt;
-        
-        // (1) 차변: 비용 (총액)
         entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
-        // (2) 대변: 예수금 (세금)
         entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 원천징수(${taxRate*100}%)`, Debit: 0, Credit: taxAmt, Project: project, Operator: writer });
-        // (3) 대변: 보통예금 (실지급액)
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: realPay, Project: project, Operator: writer });
     }
-    // 4. 이자수익 (15.4% 원천징수)
-    else if (specialCode === 'interest_inc') {
+    else if (specialCode === 'interest_inc') { // 이자수익
         const taxAmt = Math.floor(totalAmt * 0.154 / 10) * 10;
         const realIn = totalAmt - taxAmt;
-        
-        // (1) 대변: 수익 (총액)
         entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        // (2) 차변: 선납세금 (떼인 세금) - 자산 증가
         entries.push({ Date: fDate, Type: '자산', Account: '선납세금', Description: `[${item}] 원천징수`, Debit: taxAmt, Credit: 0, Project: project, Operator: writer });
-        // (3) 차변: 보통예금 (실수령액)
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: realIn, Credit: 0, Project: project, Operator: writer });
     }
-    // --- [일반 분개 (기존 로직 유지)] ---
+    // --- 일반 분개 ---
     else if (settleMode === 'pre_expense') {
-        // 설립전 비용
         entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
         if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
         entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
     } 
     else if (settleMode === 'reimburse') {
-        // 비용 정산 지급
         entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
     } 
     else {
-        // 일반 매출/비용/자산
         if (type === '매출') {
             entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
             if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
@@ -483,7 +628,6 @@ async function handleFormSubmit(e) {
         showAlert("완료", "저장되었습니다.");
         document.getElementById("erpForm").reset();
         document.getElementById("smNorm").checked = true;
-        // 초기화
         document.getElementById("dynamicArea").innerHTML = "";
         document.getElementById("specialMode").value = "";
         toggleSettleMode();
@@ -491,108 +635,284 @@ async function handleFormSubmit(e) {
     }
 }
 
-// 4. 모달: 계정과목 검색
-function resetAccountInput() {
-    document.getElementById("displayAccount").value = "";
-    document.getElementById("hiddenItem").value = "";
-    document.getElementById("isTaxFree").value = "false";
-}
-function openSelModal() { filterAccounts(); selectModal.show(); setTimeout(() => document.getElementById("accountSearchInput").focus(), 300); }
-function filterAccounts() {
-    const k = document.getElementById("accountSearchInput").value.trim();
-    const type = document.querySelector('input[name="inputType"]:checked').value;
-    const list = document.getElementById("accountList");
-    list.innerHTML = "";
-    const filtered = mData.filter(m => m.Type === type && (m.Item.includes(k) || m.Standard.includes(k)));
-    
-    if(filtered.length === 0) { list.innerHTML = "<div class='p-3 text-center text-muted'>검색 결과가 없습니다.</div>"; return; }
+// 6. 자동 연동 기능 (6종 완벽 구현)
+function confirmSync(type) {
+    const today = new Date().toISOString().slice(0,10);
+    const writer = myInfo ? myInfo.emp_name : "System";
 
-    filtered.forEach(acc => {
-        const d = document.createElement("div");
-        d.className = "list-group-item list-group-item-action p-2 ps-3 border-0 border-bottom search-list-item";
-        d.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><span class="acc-item-name">${acc.Item}</span><span class="acc-item-std ms-1">(${acc.Standard})</span></div>${(acc.Tax_Free=='TRUE'||acc.Tax_Free===true)?'<span class="badge bg-secondary" style="font-size:0.7em;">면세</span>':''}</div>`;
-        d.onclick = () => {
-            document.getElementById("displayAccount").value = acc.Item;
-            document.getElementById("hiddenItem").value = acc.Item;
-            document.getElementById("hiddenStandard").value = acc.Standard;
-            const isTF = (acc.Tax_Free=='TRUE'||acc.Tax_Free===true);
-            document.getElementById("isTaxFree").value = isTF;
-            const vat = document.getElementById("vatCheck");
-            if(isTF) { vat.checked=false; vat.disabled=true; } else { vat.disabled=false; vat.checked=true; }
-            selectModal.hide();
-        };
-        list.appendChild(d);
+    // (1) 급여 연동
+    if(type === 'salary') {
+        const ym = document.getElementById("salaryMonth").value;
+        if(!ym) return showAlert("알림", "년-월을 선택하세요.");
+        showConfirm("급여 연동", `${ym}월 급여 내역을 회계 전표로 가져오시겠습니까?`, async () => {
+            const { data: salaries } = await _supabase.from('hr_salary').select('*').eq('year_month', ym);
+            if(!salaries || !salaries.length) return showAlert("오류", "해당 월의 급여 데이터가 없습니다.");
+            
+            const descCheck = `[급여] ${ym}월`;
+            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "이미 연동된 급여 내역이 있습니다.");
+
+            let totalPay=0, totalDed=0, totalNet=0;
+            salaries.forEach(s => {
+                totalPay += Number(s.pay_total);
+                totalDed += Number(s.ded_total);
+                totalNet += Number(s.net_pay);
+            });
+
+            let entries = [];
+            const relatedKey = `SAL-${ym}`;
+            entries.push({Date:`${ym}-25`, Type:'비용', Account:'급여', Description:`${descCheck} 정기급여 (${salaries.length}명)`, Debit:totalPay, Credit:0, RelatedID:relatedKey, Project:'본사', Operator:writer});
+            if(totalDed > 0) entries.push({Date:`${ym}-25`, Type:'부채', Account:'예수금', Description:`${descCheck} 공제(세금/보험)`, Debit:0, Credit:totalDed, RelatedID:relatedKey, Project:'본사', Operator:writer});
+            if(totalNet > 0) entries.push({Date:`${ym}-25`, Type:'자산', Account:'보통예금', Description:`${descCheck} 급여이체`, Debit:0, Credit:totalNet, RelatedID:relatedKey, Project:'본사', Operator:writer});
+
+            const { error } = await _supabase.from('ac_journal').insert(entries);
+            if(!error) { showAlert("성공", "급여 연동 완료"); refreshDashboard(); }
+        });
+    } 
+    // (2) 전자결재 연동
+    else if (type === 'approval') {
+        showConfirm("전자결재 연동", "완료된 지출결의서를 전표로 불러오시겠습니까?", async () => {
+            const { data: approvals } = await _supabase.from('ac_approval').select('*').eq('status', '완료').ilike('doc_type', '%지출%');
+            if(!approvals || !approvals.length) return showAlert("알림", "불러올 결재 건이 없습니다.");
+            
+            const appIds = approvals.map(a => String(a.id));
+            const { data: existing } = await _supabase.from('ac_journal').select('RelatedID').in('RelatedID', appIds);
+            const existingSet = new Set(existing ? existing.map(e => e.RelatedID) : []);
+            const targetDocs = approvals.filter(a => !existingSet.has(String(a.id)));
+            
+            if(targetDocs.length === 0) return showAlert("알림", "이미 모두 연동되었습니다.");
+
+            let entries = [];
+            targetDocs.forEach(doc => {
+                const amt = Number(doc.amount);
+                entries.push({Date: today, Type: '비용', Account: '미분류비용', Description: `[전자결재] ${doc.title}`, Debit: amt, Credit: 0, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
+                entries.push({Date: today, Type: '부채', Account: '미지급금', Description: `[전자결재] ${doc.title}`, Debit: 0, Credit: amt, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
+            });
+
+            const { error } = await _supabase.from('ac_journal').insert(entries);
+            if(!error) { showAlert("완료", `${targetDocs.length}건 연동 성공`); refreshDashboard(); loadHistory(); }
+        });
+    }
+    // (3) 출자금 연동
+    else if (type === 'capital') {
+        showConfirm("출자금 연동", "신규 입금된 출자금을 전표로 생성하시겠습니까?<br>(상태가 '완료'인 항목만 처리)", async () => {
+            const { data: members } = await _supabase.from('ref_members').select('*').eq('status', '완료');
+            if(!members || members.length === 0) return showAlert("알림", "신규 내역이 없습니다.");
+            
+            let entries = [];
+            let processedIds = [];
+            members.forEach(m => {
+                const amt = Number(m.amount);
+                if(amt > 0) {
+                    const desc = `[출자] ${m.depositor || m.member_id}`;
+                    entries.push({Date: m.deposit_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: amt, Credit: 0, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
+                    entries.push({Date: m.deposit_date || today, Type: '자본', Account: '출자금', Description: desc, Debit: 0, Credit: amt, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
+                    processedIds.push(m.id);
+                }
+            });
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                await _supabase.from('ref_members').update({ status: '전표완료' }).in('id', processedIds);
+                showAlert("성공", `${processedIds.length}건 연동 완료`); refreshDashboard();
+            }
+        });
+    }
+    // (4) 배당금 연동
+    else if (type === 'dividend') {
+        showConfirm("배당금 연동", "배당금 지급 내역을 전표로 처리하시겠습니까?", async () => {
+            const { data: divs } = await _supabase.from('ref_dividends').select('*').or('is_accounted.is.null,is_accounted.eq.false');
+            if(!divs || divs.length === 0) return showAlert("알림", "신규 내역이 없습니다.");
+
+            let entries = [];
+            let processedIds = [];
+            divs.forEach(d => {
+                const amt = Number(d.amount);
+                if(amt > 0) {
+                    const desc = `[배당] ${d.member_id} 지급`;
+                    entries.push({Date: d.payment_date || today, Type: '자본', Account: '이월이익잉여금', Description: desc, Debit: amt, Credit: 0, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
+                    entries.push({Date: d.payment_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: 0, Credit: amt, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
+                    processedIds.push(d.id);
+                }
+            });
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                await _supabase.from('ref_dividends').update({ is_accounted: true }).in('id', processedIds);
+                showAlert("성공", `${processedIds.length}건 처리 완료`); refreshDashboard();
+            }
+        });
+    }
+    // (5) 감가상각
+    else if (type === 'depreciation') {
+        const thisYear = new Date().getFullYear();
+        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?`, async () => {
+            const descCheck = `[결산] ${thisYear}년 감가상각`;
+            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "이미 처리되었습니다.");
+
+            const { data: assets } = await _supabase.from('ref_assets').select('*');
+            if(!assets || assets.length === 0) return showAlert("알림", "고정자산이 없습니다.");
+
+            let entries = [];
+            const dateStr = `${thisYear}-12-31`;
+            assets.forEach(a => {
+                const cost = Number(a.acquisition_cost);
+                const life = Number(a.useful_life);
+                const buyDate = new Date(a.acquisition_date);
+                if(cost > 0 && life > 0 && buyDate.getFullYear() <= thisYear && (buyDate.getFullYear() + life) > thisYear) {
+                    let yearDep = Math.floor(cost / life);
+                    if(buyDate.getFullYear() === thisYear) {
+                        const monthsUsed = 12 - buyDate.getMonth();
+                        yearDep = Math.floor(yearDep * (monthsUsed / 12));
+                    }
+                    if(yearDep > 0) {
+                        const desc = `${descCheck} (${a.asset_name})`;
+                        entries.push({Date: dateStr, Type: '비용', Account: '감가상각비', Description: desc, Debit: yearDep, Credit: 0, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
+                        entries.push({Date: dateStr, Type: '자산', Account: '감가상각누계액', Description: desc, Debit: 0, Credit: yearDep, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
+                    }
+                }
+            });
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                showAlert("성공", `${entries.length/2}건 처리 완료`); refreshDashboard();
+            } else { showAlert("알림", "처리할 대상이 없습니다."); }
+        });
+    }
+    // (6) 연말결산
+    else if (type === 'closing') {
+        const thisYear = new Date().getFullYear();
+        showConfirm("연말결산", `${thisYear}년도 손익을 마감하시겠습니까?`, async () => {
+            const startDate = `${thisYear}-01-01`;
+            const endDate = `${thisYear}-12-31`;
+            const closingTag = `[결산] ${thisYear}년 손익마감`;
+
+            const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Operator', 'System(Closing)').ilike('Description', `%${thisYear}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "이미 수행되었습니다.");
+
+            const { data: journals } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate).in('Type', ['매출', '비용']);
+            if(!journals || journals.length === 0) return showAlert("알림", "마감할 내역이 없습니다.");
+
+            let balances = {};
+            journals.forEach(j => {
+                const acc = j.Account;
+                const db = Number(j.Debit), cr = Number(j.Credit);
+                if(!balances[acc]) balances[acc] = 0;
+                balances[acc] += (db - cr);
+            });
+
+            let entries = [];
+            const dateStr = `${thisYear}-12-31`;
+            let netIncome = 0;
+
+            for (const [acc, bal] of Object.entries(balances)) {
+                if(bal === 0) continue;
+                if (bal > 0) { // 비용 잔액(차변) -> 대변 기입
+                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: bal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    entries.push({Date: dateStr, Type: '비용', Account: acc, Description: `${closingTag} 마감`, Debit: 0, Credit: bal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    netIncome -= bal;
+                } else { // 수익 잔액(대변) -> 차변 기입
+                    const absBal = Math.abs(bal);
+                    entries.push({Date: dateStr, Type: '매출', Account: acc, Description: `${closingTag} 마감`, Debit: absBal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: 0, Credit: absBal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    netIncome += absBal;
+                }
+            }
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                showAlert("성공", `당기순손익 ${netIncome.toLocaleString()}원 대체 완료`); refreshDashboard();
+            }
+        });
+    }
+}
+
+function loadHistory() {
+    const el = document.getElementById("historyList");
+    el.innerHTML = "로딩 중...";
+    _supabase.from('ac_journal').select('*').order('Date', {ascending:false}).limit(10).then(({data}) => {
+        el.innerHTML = "";
+        if(data) data.forEach(item => {
+            const amt = Number(item.Debit||0) + Number(item.Credit||0);
+            el.innerHTML += `<div class="list-group-item d-flex justify-content-between"><div><span class="badge bg-secondary me-1">${item.Type}</span><b>${item.Account}</b> <small>${item.Description}</small></div><div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" onclick="deleteTx('${item.id}')">×</span></div></div>`;
+        });
     });
 }
 
-// 5. 모달: 항목 추가
+async function deleteTx(id) {
+    showConfirm("삭제 확인", "정말 삭제하시겠습니까?", async function() {
+        await _supabase.from('ac_journal').delete().eq('id', id);
+        loadHistory(); refreshDashboard();
+    });
+}
+
 function openAddModal() {
     document.getElementById("addTypeSelect").value = document.querySelector('input[name="inputType"]:checked').value;
-    updateAddCategorySelect();
-    addModal.show();
-}
-function updateAddCategorySelect() {
     const type = document.getElementById("addTypeSelect").value;
     const catSel = document.getElementById("addCategorySelect");
     catSel.innerHTML = "";
     const cats = [...new Set(mData.filter(m => m.Type === type).map(m => m.Standard))].sort();
     cats.forEach(c => catSel.add(new Option(c, c)));
+    addModal.show();
 }
+
 function toggleManualCat() {
     const chk = document.getElementById("chkManualCat").checked;
     document.getElementById("addCategorySelect").classList.toggle("hidden", chk);
     document.getElementById("manualCatInput").classList.toggle("hidden", !chk);
 }
+
 async function confAdd() {
     const type = document.getElementById("addTypeSelect").value;
     const name = document.getElementById("addNewItemName").value;
     let cat = document.getElementById("addCategorySelect").value;
     if(document.getElementById("chkManualCat").checked) cat = document.getElementById("manualCatInput").value;
     const usage = document.getElementById("addUsageSelect").value;
-    const isTaxFree = document.getElementById("addTaxFreeCheck").checked ? "TRUE" : "FALSE";
+    const isTaxFree = document.getElementById("addTaxFreeCheck").checked ? "TRUE" : "FALSE"; // DB값 통일
 
     if(!name || !cat) return showAlert("알림", "내용을 입력하세요");
+    // DB 칼럼명 확인: Type, Standard, Item, Usage, Tax_Free
     await _supabase.from('ac_master').insert({Type:type, Standard:cat, Item:name, Usage:usage, Tax_Free:isTaxFree});
     showAlert("성공", "추가되었습니다."); addModal.hide(); loadMasterData();
 }
 
-// 6. 결산 보고서 (Ver.12: 기간 선택 및 대표자 표시)
+// 정보 모달
+async function openInfoModal() {
+    const { data } = await _supabase.from('ref_company_info').select('*');
+    const map = {}; if(data) data.forEach(i=>map[i.key]=i.value);
+    document.getElementById("orgName").value = map['orgName']||"";
+    document.getElementById("ceoName").value = map['ceoName']||""; 
+    document.getElementById("bizNum").value = map['bizNum']||"";   
+    document.getElementById("estDate").value = map['estDate']||"";
+    const { data: cap } = await _supabase.from('ac_journal').select('*').eq('Account','출자금');
+    let totalCap=0; if(cap) cap.forEach(c=>totalCap+=c.Credit);
+    document.getElementById("totalCap").value = totalCap.toLocaleString();
+    infoModal.show();
+}
+
 async function printReport() {
-    // 1) 선택된 연도 가져오기
     const selYear = Number(document.getElementById("reportYearSelect").value);
     const currYear = new Date().getFullYear();
     const todayStr = new Date().toISOString().slice(0, 10);
-    
-    // 2) 날짜 범위 설정
     const startDate = `${selYear}-01-01`;
-    let endDate = (selYear === currYear) ? todayStr : `${selYear}-12-31`;
+    const endDate = (selYear === currYear) ? todayStr : `${selYear}-12-31`;
     let rangeText = (selYear === currYear) ? `${startDate} ~ ${endDate} (가결산)` : `${startDate} ~ ${endDate} (확정)`;
 
-    // 3) 데이터 필터링 조회
-    const { data } = await _supabase.from('ac_journal').select('*')
-        .gte('Date', startDate)
-        .lte('Date', endDate);
-    
-    // 회사 정보 (대표자, 사업자번호 포함)
+    const { data } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate);
     const { data: infoData } = await _supabase.from('ref_company_info').select('*');
     const info = {}; if(infoData) infoData.forEach(i=>info[i.key]=i.value);
-    
     const { count } = await _supabase.from('ref_members').select('*', { count: 'exact', head: true });
     const memberCount = count || 0;
 
     let asset={}, liab={}, equity={}, rev={}, exp={};
     let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0;
-    let capital = 0; // 기간 내 자본 변동이 아니라, 전체 누적 자본금을 보여주는 게 맞지만, 여기선 일단 기간 필터링된 값 + 기초 잔액 개념이 필요함. 
-    // *주의: 재무상태표(BS)는 '특정 시점'의 잔액이므로 원래는 전체 기간 데이터를 다 가져와서 집계해야 맞습니다.
-    // 하지만 국장님 요청하신 '기간별' 조회는 주로 손익계산서(PL)에 해당합니다.
-    // 여기서는 편의상 BS도 해당 기간 누적분만 보여주되, 실제로는 '전체 기간'으로 조회해서 BS를 채우는 게 회계적으로 맞습니다.
-    // (일단 요청하신대로 선택된 기간 데이터만 가지고 집계합니다.)
+    let capital = 0; 
 
     data.forEach(r => {
         const debit = Number(r.Debit||0), credit = Number(r.Credit||0);
         const valDr = debit - credit;
         const valCr = credit - debit;
-
         if(r.Type==='자산') { asset[r.Account]=(asset[r.Account]||0)+valDr; tAsset+=valDr; }
         else if(r.Type==='부채') { liab[r.Account]=(liab[r.Account]||0)+valCr; tLiab+=valCr; }
         else if(r.Type==='자본') { equity[r.Account]=(equity[r.Account]||0)+valCr; tEquity+=valCr; if(r.Account==='출자금') capital+=valCr; }
@@ -603,459 +923,21 @@ async function printReport() {
     const netIncome = tRev - tExp;
     const totalLiabEquity = tLiab + tEquity + netIncome;
 
-    const headerHtml = `
-        <div class="rpt-title">재무제표</div>
-        <table class="rpt-header-tbl">
-            <tr><th>회사명</th><td>${info.orgName||''}</td><th>사업자번호</th><td>${info.bizNum||''}</td></tr>
-            <tr><th>회계기간</th><td>${rangeText}</td><th>대표자</th><td>${info.ceoName||''}</td></tr>
-            <tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr>
-        </table>
-    `;
+    const headerHtml = `<div class="rpt-title">재무제표</div><table class="rpt-header-tbl"><tr><th>회사명</th><td>${info.orgName||''}</td><th>사업자번호</th><td>${info.bizNum||''}</td></tr><tr><th>회계기간</th><td>${rangeText}</td><th>대표자</th><td>${info.ceoName||''}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>`;
+    
+    const bsHtml = `<div class="rpt-sec">1. 대차대조표 (Balance Sheet)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div><table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>`;
 
-    // BS (대차대조표)
-    const bsHtml = `
-        <div class="rpt-sec">1. 대차대조표 (Balance Sheet)</div>
-        <div style="text-align:right; font-size:11px;">(단위: 원)</div>
-        <table class="rpt-tbl">
-            <colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup>
-            <tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr>
-            <tr style="vertical-align:top;">
-                <td colspan="2">
-                    <div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>
-                    ${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}
-                    <div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div>
-                </td>
-                <td colspan="2">
-                    <div style="font-weight:bold; margin-bottom:5px;">[부채]</div>
-                    ${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}
-                    <div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div>
-                    
-                    <div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>
-                    ${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}
-                    <div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div>
-                    <div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div>
-                </td>
-            </tr>
-        </table>
-    `;
-
-    // PL (손익계산서)
-    const plHtml = `
-        <div class="page-break"></div>
-        <div class="rpt-sec mt-4">2. 손익계산서 (Income Statement)</div>
-        <div style="text-align:right; font-size:11px;">(단위: 원)</div>
-        <table class="rpt-tbl">
-            <tr><th>계정과목</th><th>코드</th><th>금액</th></tr>
-            <tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>
-            ${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}
-            <tr class="bg-light"><td class="fw-bold">II. 매출총이익</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>
-            <tr class="bg-light"><td class="fw-bold">III. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>
-            ${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}
-            <tr class="bg-light" style="border-top:2px solid #000;"><td class="fw-bold">IV. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${netIncome.toLocaleString()}</td></tr>
-            <tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr>
-        </table>
-    `;
+    const plHtml = `<div class="page-break"></div><div class="rpt-sec mt-4">2. 손익계산서 (Income Statement)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div><table class="rpt-tbl"><tr><th>계정과목</th><th>코드</th><th>금액</th></tr><tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}<tr class="bg-light"><td class="fw-bold">II. 매출총이익</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr><tr class="bg-light"><td class="fw-bold">III. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}<tr class="bg-light" style="border-top:2px solid #000;"><td class="fw-bold">IV. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${netIncome.toLocaleString()}</td></tr><tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr></table>`;
 
     document.getElementById("reportContent").innerHTML = headerHtml + bsHtml + plHtml;
     reportModal.show();
 }
+
 function realPrint() {
     const w = window.open();
     w.document.write(`<html><head><title>결산보고서</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{padding:40px; font-family:'Malgun Gothic', serif;} .rpt-title{text-align:center; font-size:28px; font-weight:bold; margin-bottom:30px; text-decoration:underline;} .rpt-header-tbl{width:100%; border:2px solid #000; border-collapse:collapse; margin-bottom:30px;} .rpt-header-tbl th{background:#eee; padding:8px; border:1px solid #000; text-align:center; width:15%; font-weight:bold;} .rpt-header-tbl td{padding:8px; border:1px solid #000;} .rpt-sec{font-size:18px; font-weight:bold; margin:20px 0 10px 0; border-bottom:2px solid #555; padding-bottom:5px;} .rpt-tbl{width:100%; border-collapse:collapse; margin-bottom:20px; border:2px solid #000;} .rpt-tbl th, .rpt-tbl td{border:1px solid #000; padding:8px; font-size:14px;} .rpt-tbl th{background:#f8f9fa; text-align:center;} .rpt-amt{text-align:right; font-family:'Consolas', monospace;} .rpt-indent{padding-left:20px !important;} @media print{ .page-break{page-break-before:always;} .bg-light{background-color:#f8f9fa !important; -webkit-print-color-adjust:exact;} }</style></head><body>${document.getElementById("reportContent").innerHTML}</body></html>`);
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); w.close(); }, 500);
-}
-
-// 기타 기능들
-async function loadHistory() {
-    const el = document.getElementById("historyList");
-    el.innerHTML = "로딩 중...";
-    const { data } = await _supabase.from('ac_journal').select('*').order('Date', {ascending:false}).limit(10);
-    el.innerHTML = "";
-    if(data) data.forEach(item => {
-        const amt = Number(item.Debit||0) + Number(item.Credit||0);
-        el.innerHTML += `<div class="list-group-item d-flex justify-content-between"><div><span class="badge bg-secondary me-1">${item.Type}</span><b>${item.Account}</b> <small>${item.Description}</small></div><div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" onclick="deleteTx('${item.id}')">×</span></div></div>`;
-    });
-}
-async function deleteTx(id) {
-    showConfirm("삭제 확인", "정말 이 내역을 삭제하시겠습니까?", async function() {
-        await _supabase.from('ac_journal').delete().eq('id', id);
-        loadHistory(); refreshDashboard();
-    });
-}
-function toggleCard() { document.getElementById("cardSelect").classList.toggle("hidden", !document.getElementById("payMethod").checked); }
-function toggleSettleMode() {
-    const mode = document.querySelector('input[name="settleMode"]:checked').value;
-    document.getElementById("payerInputDiv").classList.toggle("hidden", !mode);
-}
-// [Ver.12] 설정 모달: 대표자/사업자번호 불러오기
-async function openInfoModal() {
-    const { data } = await _supabase.from('ref_company_info').select('*');
-    const map = {}; if(data) data.forEach(i=>map[i.key]=i.value);
-    
-    document.getElementById("orgName").value = map['orgName']||"";
-    document.getElementById("ceoName").value = map['ceoName']||""; // 신규
-    document.getElementById("bizNum").value = map['bizNum']||"";   // 신규
-    document.getElementById("estDate").value = map['estDate']||"";
-    
-    // 출자금 총액 계산
-    const { data: cap } = await _supabase.from('ac_journal').select('*').eq('Account','출자금');
-    let totalCap=0; if(cap) cap.forEach(c=>totalCap+=c.Credit);
-    document.getElementById("totalCap").value = totalCap.toLocaleString();
-    
-    infoModal.show();
-}
-// [Ver.12] 설정 저장: 대표자/사업자번호 저장
-async function saveInfo() {
-    const updates = [
-        { key: 'orgName', value: document.getElementById("orgName").value },
-        { key: 'ceoName', value: document.getElementById("ceoName").value }, // 신규
-        { key: 'bizNum', value: document.getElementById("bizNum").value },   // 신규
-        { key: 'estDate', value: document.getElementById("estDate").value }
-    ];
-    await _supabase.from('ref_company_info').upsert(updates);
-    showAlert("성공", "설정이 저장되었습니다."); infoModal.hide();
-}
-
-// 연동 기능 (Confirm 모달 적용)
-// [수정] 자동 연동 기능 (급여, 결재, 출자, 배당, 감가, 결산 - 실전 로직 적용)
-function confirmSync(type) {
-    const today = new Date().toISOString().slice(0,10);
-    const writer = myInfo ? myInfo.emp_name : "System";
-
-    // -----------------------------------------------------------
-    // 1. 급여 대장 연동 (HR_Salary)
-    // -----------------------------------------------------------
-    if(type === 'salary') {
-        const ym = document.getElementById("salaryMonth").value;
-        if(!ym) return showAlert("알림", "년-월을 선택하세요.");
-        
-        showConfirm("급여 연동", `${ym}월 급여 내역을 회계 전표로 가져오시겠습니까?`, async () => {
-            // A. 데이터 조회
-            const { data: salaries } = await _supabase.from('hr_salary').select('*').eq('year_month', ym);
-            if(!salaries || !salaries.length) return showAlert("오류", "해당 월의 급여 데이터가 없습니다.");
-            
-            // B. 중복 방지 (적요의 키워드 활용)
-            const descCheck = `[급여] ${ym}월`;
-            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
-            if(dup && dup.length > 0) return showAlert("중복", "이미 연동된 급여 내역이 있습니다.");
-
-            // C. 금액 집계
-            let totalPay=0, totalDed=0, totalNet=0;
-            salaries.forEach(s => {
-                totalPay += Number(s.pay_total);
-                totalDed += Number(s.ded_total);
-                totalNet += Number(s.net_pay);
-            });
-
-            // D. 전표 생성 (RelatedID는 급여의 경우 'SAL-년월')
-            let entries = [];
-            const relatedKey = `SAL-${ym}`;
-            
-            // (1) 차변: 급여 (비용)
-            entries.push({Date:`${ym}-25`, Type:'비용', Account:'급여', Description:`${descCheck} 정기급여 (${salaries.length}명)`, Debit:totalPay, Credit:0, RelatedID:relatedKey, Project:'본사', Operator:writer});
-            // (2) 대변: 예수금 (부채)
-            if(totalDed > 0) entries.push({Date:`${ym}-25`, Type:'부채', Account:'예수금', Description:`${descCheck} 공제(세금/보험)`, Debit:0, Credit:totalDed, RelatedID:relatedKey, Project:'본사', Operator:writer});
-            // (3) 대변: 보통예금 (자산 감소)
-            if(totalNet > 0) entries.push({Date:`${ym}-25`, Type:'자산', Account:'보통예금', Description:`${descCheck} 급여이체`, Debit:0, Credit:totalNet, RelatedID:relatedKey, Project:'본사', Operator:writer});
-
-            const { error } = await _supabase.from('ac_journal').insert(entries);
-            if(error) showAlert("오류", "연동 실패: " + error.message);
-            else { showAlert("성공", "급여 연동이 완료되었습니다."); refreshDashboard(); }
-        });
-    } 
-    // -----------------------------------------------------------
-    // 2. 전자결재 연동 (AC_Approval) - 중복 방지 강화
-    // -----------------------------------------------------------
-    else if (type === 'approval') {
-        showConfirm("전자결재 연동", "완료된 지출결의서를 전표로 불러오시겠습니까?", async () => {
-            // A. 결재 데이터 가져오기 (완료된 지출 건)
-            const { data: approvals } = await _supabase.from('ac_approval')
-                .select('*')
-                .eq('status', '완료')
-                .ilike('doc_type', '%지출%');
-            
-            if(!approvals || !approvals.length) return showAlert("알림", "불러올 결재 건이 없습니다.");
-            
-            // B. 중복 확인 (RelatedID에 approval.id가 이미 있는지 체크)
-            const appIds = approvals.map(a => String(a.id));
-            const { data: existing } = await _supabase.from('ac_journal')
-                .select('RelatedID')
-                .in('RelatedID', appIds);
-            
-            const existingSet = new Set(existing ? existing.map(e => e.RelatedID) : []);
-            
-            // C. 신규 건만 필터링
-            const targetDocs = approvals.filter(a => !existingSet.has(String(a.id)));
-            if(targetDocs.length === 0) return showAlert("알림", "모든 결재 건이 이미 연동되어 있습니다.");
-
-            // D. 전표 생성
-            let entries = [];
-            targetDocs.forEach(doc => {
-                const amt = Number(doc.amount);
-                // (1) 차변: 미분류비용 (추후 수정 필요)
-                entries.push({Date: today, Type: '비용', Account: '미분류비용', Description: `[전자결재] ${doc.title}`, Debit: amt, Credit: 0, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
-                // (2) 대변: 미지급금 (일단 부채 잡고 지급 시 상계)
-                entries.push({Date: today, Type: '부채', Account: '미지급금', Description: `[전자결재] ${doc.title}`, Debit: 0, Credit: amt, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
-            });
-
-            const { error } = await _supabase.from('ac_journal').insert(entries);
-            if(error) showAlert("오류", "저장 실패: " + error.message);
-            else { showAlert("완료", `${targetDocs.length}건의 결재 내역이 연동되었습니다.`); refreshDashboard(); loadHistory(); }
-        });
-    }
-    // -----------------------------------------------------------
-    // 3. 출자금 연동 (Ref_Members)
-    // -----------------------------------------------------------
-    else if (type === 'capital') {
-        showConfirm("출자금 연동", "신규 입금된 출자금을 전표로 생성하시겠습니까?<br>(상태가 '완료'인 항목만 처리됩니다)", async () => {
-            // A. 상태가 '완료'인 것만 조회
-            const { data: members, error } = await _supabase.from('ref_members').select('*').eq('status', '완료');
-            if(!members || members.length === 0) return showAlert("알림", "연동할 신규 출자금 내역이 없습니다.");
-            
-            let entries = [];
-            let processedIds = [];
-            
-            members.forEach(m => {
-                const amt = Number(m.amount);
-                if(amt > 0) {
-                    const desc = `[출자] ${m.depositor || m.member_id}`;
-                    // RelatedID를 member 테이블의 id로 설정하여 추적 가능하게 함
-                    entries.push({Date: m.deposit_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: amt, Credit: 0, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
-                    entries.push({Date: m.deposit_date || today, Type: '자본', Account: '출자금', Description: desc, Debit: 0, Credit: amt, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
-                    processedIds.push(m.id);
-                }
-            });
-
-            if(entries.length > 0) {
-                // B. 전표 저장
-                await _supabase.from('ac_journal').insert(entries);
-                // C. 상태 업데이트 (완료 -> 전표완료) : 중복 방지 핵심
-                await _supabase.from('ref_members').update({ status: '전표완료' }).in('id', processedIds);
-                showAlert("성공", `${processedIds.length}건의 출자금이 연동되었습니다.`); refreshDashboard();
-            }
-        });
-    }
-    // -----------------------------------------------------------
-    // 4. 배당금 연동 (Ref_Dividends)
-    // -----------------------------------------------------------
-    else if (type === 'dividend') {
-        showConfirm("배당금 연동", "배당금 지급 내역을 전표로 처리하시겠습니까?<br>(아직 처리되지 않은 내역만 가져옵니다)", async () => {
-            // A. is_accounted가 false 또는 null인 것만 조회
-            const { data: divs } = await _supabase.from('ref_dividends')
-                .select('*')
-                .or('is_accounted.is.null,is_accounted.eq.false');
-
-            if(!divs || divs.length === 0) return showAlert("알림", "연동할 신규 배당금 지급 내역이 없습니다.");
-
-            let entries = [];
-            let processedIds = [];
-
-            divs.forEach(d => {
-                const amt = Number(d.amount);
-                if(amt > 0) {
-                    const desc = `[배당] ${d.member_id} 지급`;
-                    // (차) 이월이익잉여금 (자본감소) / (대) 보통예금 (자산감소)
-                    // *참고: 배당은 이익잉여금을 처분하는 것이므로 차변에 잉여금이 옴.
-                    entries.push({Date: d.payment_date || today, Type: '자본', Account: '이월이익잉여금', Description: desc, Debit: amt, Credit: 0, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
-                    entries.push({Date: d.payment_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: 0, Credit: amt, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
-                    processedIds.push(d.id);
-                }
-            });
-
-            if(entries.length > 0) {
-                // B. 전표 저장
-                await _supabase.from('ac_journal').insert(entries);
-                // C. 상태 업데이트 (is_accounted -> true)
-                await _supabase.from('ref_dividends').update({ is_accounted: true }).in('id', processedIds);
-                showAlert("성공", `${processedIds.length}건의 배당금이 처리되었습니다.`); refreshDashboard();
-            }
-        });
-    }
-    // -----------------------------------------------------------
-    // 5. 감가상각 실행 (Ref_Assets)
-    // -----------------------------------------------------------
-    else if (type === 'depreciation') {
-        const thisYear = new Date().getFullYear();
-        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?<br>(고정자산 대장 기준)`, async () => {
-            // A. 중복 실행 방지
-            const descCheck = `[결산] ${thisYear}년 감가상각`;
-            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
-            if(dup && dup.length > 0) return showAlert("중복", "올해 감가상각은 이미 처리되었습니다.");
-
-            // B. 자산 목록 가져오기
-            const { data: assets } = await _supabase.from('ref_assets').select('*');
-            if(!assets || assets.length === 0) return showAlert("알림", "등록된 고정자산이 없습니다.");
-
-            let entries = [];
-            const dateStr = `${thisYear}-12-31`;
-
-            assets.forEach(a => {
-                const cost = Number(a.acquisition_cost);
-                const life = Number(a.useful_life);
-                const buyDate = new Date(a.acquisition_date);
-                
-                // 유효성 검사 및 기간 체크 (내용연수 내에 있는지)
-                if(cost > 0 && life > 0 && buyDate.getFullYear() <= thisYear && (buyDate.getFullYear() + life) > thisYear) {
-                    let yearDep = Math.floor(cost / life);
-                    
-                    // 첫해 일할/월할 계산 (단순화: 월할)
-                    if(buyDate.getFullYear() === thisYear) {
-                        const monthsUsed = 12 - buyDate.getMonth(); 
-                        yearDep = Math.floor(yearDep * (monthsUsed / 12));
-                    }
-
-                    if(yearDep > 0) {
-                        const desc = `${descCheck} (${a.asset_name})`;
-                        // (차) 감가상각비 / (대) 감가상각누계액
-                        entries.push({Date: dateStr, Type: '비용', Account: '감가상각비', Description: desc, Debit: yearDep, Credit: 0, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
-                        entries.push({Date: dateStr, Type: '자산', Account: '감가상각누계액', Description: desc, Debit: 0, Credit: yearDep, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
-                    }
-                }
-            });
-
-            if(entries.length > 0) {
-                await _supabase.from('ac_journal').insert(entries);
-                showAlert("성공", `${entries.length/2}건의 자산에 대한 감가상각 처리가 완료되었습니다.`); refreshDashboard();
-            } else {
-                showAlert("알림", "올해 감가상각 대상 자산이 없거나 금액이 0원입니다.");
-            }
-        });
-    }
-    // -----------------------------------------------------------
-    // 6. 연말결산 (Real Closing - 계정별 마감)
-    // -----------------------------------------------------------
-    else if (type === 'closing') {
-        const thisYear = new Date().getFullYear();
-        showConfirm("연말결산", `${thisYear}년도 손익 계정을 마감하고<br>당기순손익을 이월이익잉여금으로 대체합니다.<br>(주의: 취소할 수 없습니다)`, async () => {
-            const startDate = `${thisYear}-01-01`;
-            const endDate = `${thisYear}-12-31`;
-            const closingTag = `[결산] ${thisYear}년 손익마감`;
-
-            // A. 중복 방지
-            const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Operator', 'System(Closing)').ilike('Description', `%${thisYear}%`).limit(1);
-            if(dup && dup.length > 0) return showAlert("중복", "올해 연말결산은 이미 수행되었습니다.");
-
-            // B. 해당 연도 모든 전표 가져오기 (매출/비용만)
-            const { data: journals } = await _supabase.from('ac_journal')
-                .select('*')
-                .gte('Date', startDate)
-                .lte('Date', endDate)
-                .in('Type', ['매출', '비용']);
-            
-            if(!journals || journals.length === 0) return showAlert("알림", "마감할 손익 내역이 없습니다.");
-
-            // C. 계정별 잔액 집계 (Aggregation)
-            let balances = {}; // { '제품매출': -1000, '급여': 500 } (대변은 -, 차변은 + 로 계산)
-            
-            journals.forEach(j => {
-                const acc = j.Account;
-                const db = Number(j.Debit);
-                const cr = Number(j.Credit);
-                if(!balances[acc]) balances[acc] = { type: j.Type, sum: 0 };
-                
-                // 자산/비용은 차변이 증가(+), 부채/자본/수익은 대변이 증가(-)
-                // 여기서는 마감을 위해 '잔액'을 구해야 하므로 단순 차-대 로 계산
-                balances[acc].sum += (db - cr);
-            });
-
-            let entries = [];
-            const dateStr = `${thisYear}-12-31`;
-            let netIncome = 0; // 순이익 검증용
-
-            // D. 마감 분개 생성
-            // (모든 수익/비용 계정의 잔액을 0으로 만듦)
-            for (const [acc, info] of Object.entries(balances)) {
-                const bal = info.sum;
-                if(bal === 0) continue;
-
-                // 잔액이 +(차변)이면 대변에 기입해서 0으로 만듦
-                // 잔액이 -(대변)이면 차변에 기입해서 0으로 만듦
-                if (bal > 0) { 
-                    // 비용 계정 마감: (차) 이월이익잉여금 / (대) 비용계정
-                    // 원래는 '집합손익'을 거치지만, 실무상 바로 잉여금 대체도 가능. 
-                    // 국장님 요청하신 'Real'은 집합손익을 거치는 것이 정석이나, 전산상으로는 잉여금 직행이 깔끔함.
-                    // 여기서는 잉여금으로 바로 대체합니다.
-                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: bal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    entries.push({Date: dateStr, Type: '비용', Account: acc, Description: `${closingTag} 마감`, Debit: 0, Credit: bal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    netIncome -= bal;
-                } else {
-                    // 수익 계정 마감: (차) 수익계정 / (대) 이월이익잉여금
-                    const absBal = Math.abs(bal);
-                    entries.push({Date: dateStr, Type: '매출', Account: acc, Description: `${closingTag} 마감`, Debit: absBal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: 0, Credit: absBal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    netIncome += absBal;
-                }
-            }
-
-            if(entries.length > 0) {
-                await _supabase.from('ac_journal').insert(entries);
-                showAlert("성공", `결산 완료! 당기순손익 ${netIncome.toLocaleString()}원이 자본(이월이익잉여금)에 반영되었습니다.`); 
-                refreshDashboard();
-            } else {
-                showAlert("알림", "마감할 잔액이 없습니다.");
-            }
-        });
-    }
-}
-  // [신규] 프로젝트(발전소) 목록 로드
-async function loadProjects() {
-    const { data } = await _supabase.from('ref_projects').select('*').order('id');
-    const sel = document.getElementById("projectSelect");
-    sel.innerHTML = ""; // 초기화
-    if (data && data.length > 0) {
-        data.forEach(p => sel.add(new Option(p.project_name, p.project_name)));
-    } else {
-        sel.add(new Option("본사", "본사")); // 데이터 없을 시 기본값
-    }
-}
-  // [수정] 계정과목 선택 시 UI 변경 (특수 로직 반영)
-function updateDynamicUI(accName, accType, specialCode, isTaxFree) {
-    const area = document.getElementById("dynamicArea");
-    const specialInput = document.getElementById("specialMode");
-    const vatCheck = document.getElementById("vatCheck");
-    const cardDiv = document.getElementById("cardOptionDiv");
-    
-    area.innerHTML = ""; 
-    specialInput.value = specialCode || ""; // DB에서 가져온 코드 설정
-    
-    // 1. 면세 항목 처리 (DB값 우선)
-    // isTaxFree가 true이거나 문자열 'true'/'TRUE'인 경우
-    if (String(isTaxFree).toUpperCase() === 'TRUE') { 
-        vatCheck.checked = false; 
-        vatCheck.disabled = true; 
-    } else { 
-        vatCheck.disabled = false; 
-        vatCheck.checked = true; 
-    }
-    
-    // 초기화
-    document.getElementById("payMethod").checked = false;
-    document.getElementById("cardSelect").classList.add("hidden");
-    cardDiv.style.display = (accType === "비용") ? "flex" : "none";
-
-    // 2. 특수 코드별 UI 생성
-    if (specialCode === "interest_inc") {
-        area.innerHTML = `<div class="special-box"><small class="text-primary fw-bold">ℹ️ 이자수익 (원천징수 자동분개)</small><br>입금된 실 수령액이 아니라, <b>세전 이자총액</b>을 입력하세요. (15.4% 자동 차감)</div>`;
-        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    } 
-    else if (specialCode === "salary" || specialCode === "retirement") {
-        area.innerHTML = `<div class="special-box"><small class="text-success fw-bold">ℹ️ 인건비 처리</small><br>4대보험/세금 등은 급여연동 기능을 권장합니다.</div>`;
-        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    } 
-    else if (specialCode === "insurance") {
-        // [복원] 4대보험 직원부담분 입력칸
-        area.innerHTML = `<div class="special-box"><small class="text-info fw-bold">ℹ️ 4대보험 납부</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">직원부담분(예수금)</span><input type="number" class="form-control" name="workerShare" id="workerShare" placeholder="급여에서 뗀 금액" min="0" oninput="validNum(this)"></div><div class="form-text x-small">* 입력한 금액은 '예수금'으로, 나머지는 '비용'으로 처리됩니다.</div></div>`;
-        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    } 
-    else if (specialCode === "loan_pay") {
-        area.innerHTML = `<div class="special-box"><small class="text-warning fw-bold">ℹ️ 대출 원리금 상환</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">이자 포함분</span><input type="number" class="form-control" name="loanInterest" id="loanInterest" placeholder="이 중 이자는 얼마?" min="0" oninput="validNum(this)"></div></div>`;
-        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    } 
-    else if (specialCode === "labor") {
-        area.innerHTML = `<div class="special-box"><small class="text-danger fw-bold">ℹ️ 사업소득세 (원천징수)</small><div class="btn-group btn-group-sm w-100 mt-1"><input type="radio" class="btn-check" name="laborTaxRate" id="tax33" value="0.033" checked><label class="btn btn-outline-secondary" for="tax33">3.3% (일반)</label><input type="radio" class="btn-check" name="laborTaxRate" id="tax88" value="0.088"><label class="btn btn-outline-secondary" for="tax88">8.8% (강사료 등)</label></div></div>`;
-        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    }
 }
 </script>
 </body>
