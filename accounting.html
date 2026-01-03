@@ -101,9 +101,7 @@
           <div class="col-6"><label class="small text-muted">날짜</label><input type="date" class="form-control" id="dateField" required></div>
           <div class="col-6">
             <label class="small text-muted">프로젝트</label>
-            <select class="form-select" id="projectSelect">
-              <option value="본사">본사</option><option value="1호기">1호기</option><option value="2호기">2호기</option>
-            </select>
+           <select class="form-select" id="projectSelect" required></select>
           </div>
         </div>
 
@@ -278,17 +276,16 @@ window.onload = async function() {
     document.getElementById('dateField').valueAsDate = new Date();
     document.getElementById('salaryMonth').value = new Date().toISOString().slice(0, 7);
 
-    // [Ver.12] 보고서 연도 옵션 채우기 (현재 연도 ~ 2년 전까지)
+    // [Ver.12] 보고서 연도 옵션
     const yearSel = document.getElementById("reportYearSelect");
     const currentYear = new Date().getFullYear();
     for (let y = currentYear; y >= currentYear - 2; y--) {
         const opt = document.createElement("option");
-        opt.value = y;
-        opt.text = y + "년";
-        yearSel.add(opt);
+        opt.value = y; opt.text = y + "년"; yearSel.add(opt);
     }
 
-    await Promise.all([ loadMasterData(), loadCards(), refreshDashboard() ]);
+    // [수정] loadProjects 추가
+    await Promise.all([ loadMasterData(), loadCards(), loadProjects(), refreshDashboard() ]);
 };
 
 // Helper
@@ -330,48 +327,110 @@ async function refreshDashboard() {
 }
 
 // 3. 전표 저장
+// [수정] 전표 저장 로직 고도화
 async function handleFormSubmit(e) {
-    e.preventDefault();
+    if(e) e.preventDefault();
     const item = document.getElementById("hiddenItem").value;
     if(!item) return showAlert("오류", "계정과목을 선택하세요.");
     
-    // UI Values
+    // 기본 값 가져오기
     const fDate = document.getElementById("dateField").value;
     const project = document.getElementById("projectSelect").value;
     const type = document.querySelector('input[name="inputType"]:checked').value;
     const settleMode = document.querySelector('input[name="settleMode"]:checked').value;
     const desc = document.getElementById("inputDesc").value;
     const totalAmt = Number(document.getElementById("inputAmount").value);
-    const isTaxFree = (document.getElementById("isTaxFree").value === "true");
     const useVAT = document.getElementById("vatCheck").checked;
     
+    // 특수 모드 값
+    const specialCode = document.getElementById("specialMode").value;
+    
+    // 결제 수단
     const isCard = (settleMode === "") && document.getElementById("payMethod").checked;
     const cardName = isCard ? document.getElementById("cardSelect").value : "";
     const payerName = document.getElementById("payerName").value || "지출자";
 
-    let netAmount = totalAmt, vatAmount = 0;
-    if (useVAT && !isTaxFree && type !== '자산' && settleMode !== 'reimburse') {
-        netAmount = Math.round(totalAmt / 1.1);
-        vatAmount = totalAmt - netAmount;
-    }
-
+    // 적요 생성
     let finalDesc = desc;
     if(isCard) finalDesc = `[${cardName}] ${desc}`;
     if(settleMode === 'pre_expense') finalDesc = `[설립전] ${desc} (${payerName})`;
     if(settleMode === 'reimburse') finalDesc = `[정산] ${desc} (${payerName})`;
 
+    // 부가세 계산
+    let netAmount = totalAmt, vatAmount = 0;
+    if (useVAT && type !== '자산' && settleMode !== 'reimburse' && !document.getElementById("vatCheck").disabled) {
+        netAmount = Math.round(totalAmt / 1.1);
+        vatAmount = totalAmt - netAmount;
+    }
+
     let entries = [];
     const writer = myInfo ? myInfo.emp_name : "WebUser";
 
-    // 분개
-    if (settleMode === 'pre_expense') {
+    // --- [특수 분개 로직 시작] ---
+    
+    // 1. 4대보험 납부 (회사부담분 + 직원부담분)
+    if (specialCode === 'insurance') {
+        const workerShare = Number(document.getElementById("workerShare")?.value || 0);
+        const companyShare = totalAmt - workerShare;
+        
+        // (1) 대변: 돈 나감
+        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        // (2) 차변: 예수금 상계 (직원부담분)
+        if(workerShare > 0) entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 직원부담분`, Debit: workerShare, Credit: 0, Project: project, Operator: writer });
+        // (3) 차변: 비용 처리 (회사부담분)
+        if(companyShare > 0) entries.push({ Date: fDate, Type: '비용', Account: item, Description: `[${item}] 회사부담분`, Debit: companyShare, Credit: 0, Project: project, Operator: writer });
+    }
+    // 2. 대출 원리금 상환 (원금 + 이자)
+    else if (specialCode === 'loan_pay') {
+        const interest = Number(document.getElementById("loanInterest")?.value || 0);
+        const principal = totalAmt - interest;
+        
+        // (1) 대변: 돈 나감
+        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        // (2) 차변: 이자비용
+        if(interest > 0) entries.push({ Date: fDate, Type: '비용', Account: '이자비용', Description: `[${item}] 이자`, Debit: interest, Credit: 0, Project: project, Operator: writer });
+        // (3) 차변: 부채 상환 (원금)
+        if(principal > 0) entries.push({ Date: fDate, Type: '부채', Account: item, Description: `[${item}] 원금상환`, Debit: principal, Credit: 0, Project: project, Operator: writer });
+    }
+    // 3. 인건비/강사료 (3.3% 원천징수)
+    else if (specialCode === 'labor') {
+        const taxRate = Number(document.querySelector('input[name="laborTaxRate"]:checked').value);
+        const taxAmt = Math.floor(totalAmt * taxRate / 10) * 10; // 1원단위 절사
+        const realPay = totalAmt - taxAmt;
+        
+        // (1) 차변: 비용 (총액)
+        entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
+        // (2) 대변: 예수금 (세금)
+        entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 원천징수(${taxRate*100}%)`, Debit: 0, Credit: taxAmt, Project: project, Operator: writer });
+        // (3) 대변: 보통예금 (실지급액)
+        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: realPay, Project: project, Operator: writer });
+    }
+    // 4. 이자수익 (15.4% 원천징수)
+    else if (specialCode === 'interest_inc') {
+        const taxAmt = Math.floor(totalAmt * 0.154 / 10) * 10;
+        const realIn = totalAmt - taxAmt;
+        
+        // (1) 대변: 수익 (총액)
+        entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        // (2) 차변: 선납세금 (떼인 세금) - 자산 증가
+        entries.push({ Date: fDate, Type: '자산', Account: '선납세금', Description: `[${item}] 원천징수`, Debit: taxAmt, Credit: 0, Project: project, Operator: writer });
+        // (3) 차변: 보통예금 (실수령액)
+        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: realIn, Credit: 0, Project: project, Operator: writer });
+    }
+    // --- [일반 분개 (기존 로직 유지)] ---
+    else if (settleMode === 'pre_expense') {
+        // 설립전 비용
         entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
         if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
         entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-    } else if (settleMode === 'reimburse') {
+    } 
+    else if (settleMode === 'reimburse') {
+        // 비용 정산 지급
         entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-    } else {
+    } 
+    else {
+        // 일반 매출/비용/자산
         if (type === '매출') {
             entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
             if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
@@ -382,9 +441,13 @@ async function handleFormSubmit(e) {
             entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
             if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
             entries.push({ Date: fDate, Type: creditType, Account: creditAcc, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        } else { // 자산
-            entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
-            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        } else { // 자산 등 기타
+            const isDebit = (type === "자산" || type === "자본반환" || type === "부채감소");
+            const db = isDebit ? totalAmt : 0;
+            const cr = isDebit ? 0 : totalAmt;
+            let saveType = type === "자본반환" ? "자본" : type;
+            entries.push({ Date: fDate, Type: saveType, Account: item, Description: finalDesc, Debit: db, Credit: cr, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: cr, Credit: db, Project: project, Operator: writer });
         }
     }
 
@@ -394,6 +457,9 @@ async function handleFormSubmit(e) {
         showAlert("완료", "저장되었습니다.");
         document.getElementById("erpForm").reset();
         document.getElementById("smNorm").checked = true;
+        // 초기화
+        document.getElementById("dynamicArea").innerHTML = "";
+        document.getElementById("specialMode").value = "";
         toggleSettleMode();
         refreshDashboard();
     }
@@ -626,28 +692,343 @@ async function saveInfo() {
 }
 
 // 연동 기능 (Confirm 모달 적용)
+// [수정] 자동 연동 기능 (급여, 결재, 출자, 배당, 감가, 결산 - 실전 로직 적용)
 function confirmSync(type) {
+    const today = new Date().toISOString().slice(0,10);
+    const writer = myInfo ? myInfo.emp_name : "System";
+
+    // -----------------------------------------------------------
+    // 1. 급여 대장 연동 (HR_Salary)
+    // -----------------------------------------------------------
     if(type === 'salary') {
         const ym = document.getElementById("salaryMonth").value;
         if(!ym) return showAlert("알림", "년-월을 선택하세요.");
+        
         showConfirm("급여 연동", `${ym}월 급여 내역을 회계 전표로 가져오시겠습니까?`, async () => {
+            // A. 데이터 조회
             const { data: salaries } = await _supabase.from('hr_salary').select('*').eq('year_month', ym);
             if(!salaries || !salaries.length) return showAlert("오류", "해당 월의 급여 데이터가 없습니다.");
-            let total=0; salaries.forEach(s=>total+=Number(s.pay_total));
-            await _supabase.from('ac_journal').insert([{Date:`${ym}-25`, Type:'비용', Account:'급여', Description:`${ym}월 급여 (${salaries.length}명)`, Debit:total, Credit:0, Project:'본사', Operator:'System'}, {Date:`${ym}-25`, Type:'자산', Account:'보통예금', Description:`${ym}월 급여 이체`, Debit:0, Credit:total, Project:'본사', Operator:'System'}]);
-            showAlert("성공", "연동이 완료되었습니다."); refreshDashboard();
+            
+            // B. 중복 방지 (적요의 키워드 활용)
+            const descCheck = `[급여] ${ym}월`;
+            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "이미 연동된 급여 내역이 있습니다.");
+
+            // C. 금액 집계
+            let totalPay=0, totalDed=0, totalNet=0;
+            salaries.forEach(s => {
+                totalPay += Number(s.pay_total);
+                totalDed += Number(s.ded_total);
+                totalNet += Number(s.net_pay);
+            });
+
+            // D. 전표 생성 (RelatedID는 급여의 경우 'SAL-년월')
+            let entries = [];
+            const relatedKey = `SAL-${ym}`;
+            
+            // (1) 차변: 급여 (비용)
+            entries.push({Date:`${ym}-25`, Type:'비용', Account:'급여', Description:`${descCheck} 정기급여 (${salaries.length}명)`, Debit:totalPay, Credit:0, RelatedID:relatedKey, Project:'본사', Operator:writer});
+            // (2) 대변: 예수금 (부채)
+            if(totalDed > 0) entries.push({Date:`${ym}-25`, Type:'부채', Account:'예수금', Description:`${descCheck} 공제(세금/보험)`, Debit:0, Credit:totalDed, RelatedID:relatedKey, Project:'본사', Operator:writer});
+            // (3) 대변: 보통예금 (자산 감소)
+            if(totalNet > 0) entries.push({Date:`${ym}-25`, Type:'자산', Account:'보통예금', Description:`${descCheck} 급여이체`, Debit:0, Credit:totalNet, RelatedID:relatedKey, Project:'본사', Operator:writer});
+
+            const { error } = await _supabase.from('ac_journal').insert(entries);
+            if(error) showAlert("오류", "연동 실패: " + error.message);
+            else { showAlert("성공", "급여 연동이 완료되었습니다."); refreshDashboard(); }
         });
-    } else if (type === 'approval') {
+    } 
+    // -----------------------------------------------------------
+    // 2. 전자결재 연동 (AC_Approval) - 중복 방지 강화
+    // -----------------------------------------------------------
+    else if (type === 'approval') {
         showConfirm("전자결재 연동", "완료된 지출결의서를 전표로 불러오시겠습니까?", async () => {
-            const { data: approvals } = await _supabase.from('ac_approval').select('*').eq('status', '완료').like('doc_type', '%지출%');
+            // A. 결재 데이터 가져오기 (완료된 지출 건)
+            const { data: approvals } = await _supabase.from('ac_approval')
+                .select('*')
+                .eq('status', '완료')
+                .ilike('doc_type', '%지출%');
+            
             if(!approvals || !approvals.length) return showAlert("알림", "불러올 결재 건이 없습니다.");
-            let count = 0; const today = new Date().toISOString().slice(0,10);
-            for (const doc of approvals) {
-                const { error } = await _supabase.from('ac_journal').insert([{Date:today, Type:'비용', Account:'미분류비용', Description:`[전자결재] ${doc.title}`, Debit:doc.amount, Credit:0, Project:'본사', Operator:doc.drafter_name}, {Date:today, Type:'부채', Account:'미지급금', Description:`[전자결재] ${doc.title}`, Debit:0, Credit:doc.amount, Project:'본사', Operator:doc.drafter_name}]);
-                if(!error) count++;
-            }
-            showAlert("완료", `${count}건의 결재 내역이 연동되었습니다.`); refreshDashboard(); loadHistory();
+            
+            // B. 중복 확인 (RelatedID에 approval.id가 이미 있는지 체크)
+            const appIds = approvals.map(a => String(a.id));
+            const { data: existing } = await _supabase.from('ac_journal')
+                .select('RelatedID')
+                .in('RelatedID', appIds);
+            
+            const existingSet = new Set(existing ? existing.map(e => e.RelatedID) : []);
+            
+            // C. 신규 건만 필터링
+            const targetDocs = approvals.filter(a => !existingSet.has(String(a.id)));
+            if(targetDocs.length === 0) return showAlert("알림", "모든 결재 건이 이미 연동되어 있습니다.");
+
+            // D. 전표 생성
+            let entries = [];
+            targetDocs.forEach(doc => {
+                const amt = Number(doc.amount);
+                // (1) 차변: 미분류비용 (추후 수정 필요)
+                entries.push({Date: today, Type: '비용', Account: '미분류비용', Description: `[전자결재] ${doc.title}`, Debit: amt, Credit: 0, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
+                // (2) 대변: 미지급금 (일단 부채 잡고 지급 시 상계)
+                entries.push({Date: today, Type: '부채', Account: '미지급금', Description: `[전자결재] ${doc.title}`, Debit: 0, Credit: amt, RelatedID: String(doc.id), Project: '본사', Operator: doc.drafter_name});
+            });
+
+            const { error } = await _supabase.from('ac_journal').insert(entries);
+            if(error) showAlert("오류", "저장 실패: " + error.message);
+            else { showAlert("완료", `${targetDocs.length}건의 결재 내역이 연동되었습니다.`); refreshDashboard(); loadHistory(); }
         });
+    }
+    // -----------------------------------------------------------
+    // 3. 출자금 연동 (Ref_Members)
+    // -----------------------------------------------------------
+    else if (type === 'capital') {
+        showConfirm("출자금 연동", "신규 입금된 출자금을 전표로 생성하시겠습니까?<br>(상태가 '완료'인 항목만 처리됩니다)", async () => {
+            // A. 상태가 '완료'인 것만 조회
+            const { data: members, error } = await _supabase.from('ref_members').select('*').eq('status', '완료');
+            if(!members || members.length === 0) return showAlert("알림", "연동할 신규 출자금 내역이 없습니다.");
+            
+            let entries = [];
+            let processedIds = [];
+            
+            members.forEach(m => {
+                const amt = Number(m.amount);
+                if(amt > 0) {
+                    const desc = `[출자] ${m.depositor || m.member_id}`;
+                    // RelatedID를 member 테이블의 id로 설정하여 추적 가능하게 함
+                    entries.push({Date: m.deposit_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: amt, Credit: 0, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
+                    entries.push({Date: m.deposit_date || today, Type: '자본', Account: '출자금', Description: desc, Debit: 0, Credit: amt, RelatedID: `CAP-${m.id}`, Project: '본사', Operator: writer});
+                    processedIds.push(m.id);
+                }
+            });
+
+            if(entries.length > 0) {
+                // B. 전표 저장
+                await _supabase.from('ac_journal').insert(entries);
+                // C. 상태 업데이트 (완료 -> 전표완료) : 중복 방지 핵심
+                await _supabase.from('ref_members').update({ status: '전표완료' }).in('id', processedIds);
+                showAlert("성공", `${processedIds.length}건의 출자금이 연동되었습니다.`); refreshDashboard();
+            }
+        });
+    }
+    // -----------------------------------------------------------
+    // 4. 배당금 연동 (Ref_Dividends)
+    // -----------------------------------------------------------
+    else if (type === 'dividend') {
+        showConfirm("배당금 연동", "배당금 지급 내역을 전표로 처리하시겠습니까?<br>(아직 처리되지 않은 내역만 가져옵니다)", async () => {
+            // A. is_accounted가 false 또는 null인 것만 조회
+            const { data: divs } = await _supabase.from('ref_dividends')
+                .select('*')
+                .or('is_accounted.is.null,is_accounted.eq.false');
+
+            if(!divs || divs.length === 0) return showAlert("알림", "연동할 신규 배당금 지급 내역이 없습니다.");
+
+            let entries = [];
+            let processedIds = [];
+
+            divs.forEach(d => {
+                const amt = Number(d.amount);
+                if(amt > 0) {
+                    const desc = `[배당] ${d.member_id} 지급`;
+                    // (차) 이월이익잉여금 (자본감소) / (대) 보통예금 (자산감소)
+                    // *참고: 배당은 이익잉여금을 처분하는 것이므로 차변에 잉여금이 옴.
+                    entries.push({Date: d.payment_date || today, Type: '자본', Account: '이월이익잉여금', Description: desc, Debit: amt, Credit: 0, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
+                    entries.push({Date: d.payment_date || today, Type: '자산', Account: '보통예금', Description: desc, Debit: 0, Credit: amt, RelatedID: `DIV-${d.id}`, Project: d.project || '본사', Operator: writer});
+                    processedIds.push(d.id);
+                }
+            });
+
+            if(entries.length > 0) {
+                // B. 전표 저장
+                await _supabase.from('ac_journal').insert(entries);
+                // C. 상태 업데이트 (is_accounted -> true)
+                await _supabase.from('ref_dividends').update({ is_accounted: true }).in('id', processedIds);
+                showAlert("성공", `${processedIds.length}건의 배당금이 처리되었습니다.`); refreshDashboard();
+            }
+        });
+    }
+    // -----------------------------------------------------------
+    // 5. 감가상각 실행 (Ref_Assets)
+    // -----------------------------------------------------------
+    else if (type === 'depreciation') {
+        const thisYear = new Date().getFullYear();
+        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?<br>(고정자산 대장 기준)`, async () => {
+            // A. 중복 실행 방지
+            const descCheck = `[결산] ${thisYear}년 감가상각`;
+            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "올해 감가상각은 이미 처리되었습니다.");
+
+            // B. 자산 목록 가져오기
+            const { data: assets } = await _supabase.from('ref_assets').select('*');
+            if(!assets || assets.length === 0) return showAlert("알림", "등록된 고정자산이 없습니다.");
+
+            let entries = [];
+            const dateStr = `${thisYear}-12-31`;
+
+            assets.forEach(a => {
+                const cost = Number(a.acquisition_cost);
+                const life = Number(a.useful_life);
+                const buyDate = new Date(a.acquisition_date);
+                
+                // 유효성 검사 및 기간 체크 (내용연수 내에 있는지)
+                if(cost > 0 && life > 0 && buyDate.getFullYear() <= thisYear && (buyDate.getFullYear() + life) > thisYear) {
+                    let yearDep = Math.floor(cost / life);
+                    
+                    // 첫해 일할/월할 계산 (단순화: 월할)
+                    if(buyDate.getFullYear() === thisYear) {
+                        const monthsUsed = 12 - buyDate.getMonth(); 
+                        yearDep = Math.floor(yearDep * (monthsUsed / 12));
+                    }
+
+                    if(yearDep > 0) {
+                        const desc = `${descCheck} (${a.asset_name})`;
+                        // (차) 감가상각비 / (대) 감가상각누계액
+                        entries.push({Date: dateStr, Type: '비용', Account: '감가상각비', Description: desc, Debit: yearDep, Credit: 0, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
+                        entries.push({Date: dateStr, Type: '자산', Account: '감가상각누계액', Description: desc, Debit: 0, Credit: yearDep, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
+                    }
+                }
+            });
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                showAlert("성공", `${entries.length/2}건의 자산에 대한 감가상각 처리가 완료되었습니다.`); refreshDashboard();
+            } else {
+                showAlert("알림", "올해 감가상각 대상 자산이 없거나 금액이 0원입니다.");
+            }
+        });
+    }
+    // -----------------------------------------------------------
+    // 6. 연말결산 (Real Closing - 계정별 마감)
+    // -----------------------------------------------------------
+    else if (type === 'closing') {
+        const thisYear = new Date().getFullYear();
+        showConfirm("연말결산", `${thisYear}년도 손익 계정을 마감하고<br>당기순손익을 이월이익잉여금으로 대체합니다.<br>(주의: 취소할 수 없습니다)`, async () => {
+            const startDate = `${thisYear}-01-01`;
+            const endDate = `${thisYear}-12-31`;
+            const closingTag = `[결산] ${thisYear}년 손익마감`;
+
+            // A. 중복 방지
+            const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Operator', 'System(Closing)').ilike('Description', `%${thisYear}%`).limit(1);
+            if(dup && dup.length > 0) return showAlert("중복", "올해 연말결산은 이미 수행되었습니다.");
+
+            // B. 해당 연도 모든 전표 가져오기 (매출/비용만)
+            const { data: journals } = await _supabase.from('ac_journal')
+                .select('*')
+                .gte('Date', startDate)
+                .lte('Date', endDate)
+                .in('Type', ['매출', '비용']);
+            
+            if(!journals || journals.length === 0) return showAlert("알림", "마감할 손익 내역이 없습니다.");
+
+            // C. 계정별 잔액 집계 (Aggregation)
+            let balances = {}; // { '제품매출': -1000, '급여': 500 } (대변은 -, 차변은 + 로 계산)
+            
+            journals.forEach(j => {
+                const acc = j.Account;
+                const db = Number(j.Debit);
+                const cr = Number(j.Credit);
+                if(!balances[acc]) balances[acc] = { type: j.Type, sum: 0 };
+                
+                // 자산/비용은 차변이 증가(+), 부채/자본/수익은 대변이 증가(-)
+                // 여기서는 마감을 위해 '잔액'을 구해야 하므로 단순 차-대 로 계산
+                balances[acc].sum += (db - cr);
+            });
+
+            let entries = [];
+            const dateStr = `${thisYear}-12-31`;
+            let netIncome = 0; // 순이익 검증용
+
+            // D. 마감 분개 생성
+            // (모든 수익/비용 계정의 잔액을 0으로 만듦)
+            for (const [acc, info] of Object.entries(balances)) {
+                const bal = info.sum;
+                if(bal === 0) continue;
+
+                // 잔액이 +(차변)이면 대변에 기입해서 0으로 만듦
+                // 잔액이 -(대변)이면 차변에 기입해서 0으로 만듦
+                if (bal > 0) { 
+                    // 비용 계정 마감: (차) 이월이익잉여금 / (대) 비용계정
+                    // 원래는 '집합손익'을 거치지만, 실무상 바로 잉여금 대체도 가능. 
+                    // 국장님 요청하신 'Real'은 집합손익을 거치는 것이 정석이나, 전산상으로는 잉여금 직행이 깔끔함.
+                    // 여기서는 잉여금으로 바로 대체합니다.
+                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: bal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    entries.push({Date: dateStr, Type: '비용', Account: acc, Description: `${closingTag} 마감`, Debit: 0, Credit: bal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    netIncome -= bal;
+                } else {
+                    // 수익 계정 마감: (차) 수익계정 / (대) 이월이익잉여금
+                    const absBal = Math.abs(bal);
+                    entries.push({Date: dateStr, Type: '매출', Account: acc, Description: `${closingTag} 마감`, Debit: absBal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: 0, Credit: absBal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
+                    netIncome += absBal;
+                }
+            }
+
+            if(entries.length > 0) {
+                await _supabase.from('ac_journal').insert(entries);
+                showAlert("성공", `결산 완료! 당기순손익 ${netIncome.toLocaleString()}원이 자본(이월이익잉여금)에 반영되었습니다.`); 
+                refreshDashboard();
+            } else {
+                showAlert("알림", "마감할 잔액이 없습니다.");
+            }
+        });
+    }
+}
+  // [신규] 프로젝트(발전소) 목록 로드
+async function loadProjects() {
+    const { data } = await _supabase.from('ref_projects').select('*').order('id');
+    const sel = document.getElementById("projectSelect");
+    sel.innerHTML = ""; // 초기화
+    if (data && data.length > 0) {
+        data.forEach(p => sel.add(new Option(p.project_name, p.project_name)));
+    } else {
+        sel.add(new Option("본사", "본사")); // 데이터 없을 시 기본값
+    }
+}
+  // [수정] 계정과목 선택 시 UI 변경 (특수 로직 반영)
+function updateDynamicUI(accName, accType, specialCode, isTaxFree) {
+    const area = document.getElementById("dynamicArea");
+    const specialInput = document.getElementById("specialMode");
+    const vatCheck = document.getElementById("vatCheck");
+    const cardDiv = document.getElementById("cardOptionDiv");
+    
+    area.innerHTML = ""; 
+    specialInput.value = specialCode || ""; // DB에서 가져온 코드 설정
+    
+    // 1. 면세 항목 처리 (DB값 우선)
+    // isTaxFree가 true이거나 문자열 'true'/'TRUE'인 경우
+    if (String(isTaxFree).toUpperCase() === 'TRUE') { 
+        vatCheck.checked = false; 
+        vatCheck.disabled = true; 
+    } else { 
+        vatCheck.disabled = false; 
+        vatCheck.checked = true; 
+    }
+    
+    // 초기화
+    document.getElementById("payMethod").checked = false;
+    document.getElementById("cardSelect").classList.add("hidden");
+    cardDiv.style.display = (accType === "비용") ? "flex" : "none";
+
+    // 2. 특수 코드별 UI 생성
+    if (specialCode === "interest_inc") {
+        area.innerHTML = `<div class="special-box"><small class="text-primary fw-bold">ℹ️ 이자수익 (원천징수 자동분개)</small><br>입금된 실 수령액이 아니라, <b>세전 이자총액</b>을 입력하세요. (15.4% 자동 차감)</div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "salary" || specialCode === "retirement") {
+        area.innerHTML = `<div class="special-box"><small class="text-success fw-bold">ℹ️ 인건비 처리</small><br>4대보험/세금 등은 급여연동 기능을 권장합니다.</div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "insurance") {
+        // [복원] 4대보험 직원부담분 입력칸
+        area.innerHTML = `<div class="special-box"><small class="text-info fw-bold">ℹ️ 4대보험 납부</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">직원부담분(예수금)</span><input type="number" class="form-control" name="workerShare" id="workerShare" placeholder="급여에서 뗀 금액" min="0" oninput="validNum(this)"></div><div class="form-text x-small">* 입력한 금액은 '예수금'으로, 나머지는 '비용'으로 처리됩니다.</div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "loan_pay") {
+        area.innerHTML = `<div class="special-box"><small class="text-warning fw-bold">ℹ️ 대출 원리금 상환</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">이자 포함분</span><input type="number" class="form-control" name="loanInterest" id="loanInterest" placeholder="이 중 이자는 얼마?" min="0" oninput="validNum(this)"></div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+    } 
+    else if (specialCode === "labor") {
+        area.innerHTML = `<div class="special-box"><small class="text-danger fw-bold">ℹ️ 사업소득세 (원천징수)</small><div class="btn-group btn-group-sm w-100 mt-1"><input type="radio" class="btn-check" name="laborTaxRate" id="tax33" value="0.033" checked><label class="btn btn-outline-secondary" for="tax33">3.3% (일반)</label><input type="radio" class="btn-check" name="laborTaxRate" id="tax88" value="0.088"><label class="btn btn-outline-secondary" for="tax88">8.8% (강사료 등)</label></div></div>`;
+        vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
     }
 }
 </script>
