@@ -1,398 +1,272 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>마이페이지</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-  <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-  
-  <style>
-    /* 기본 레이아웃 스타일 (기존 유지) */
-    body { background-color: #f0f2f5; padding: 20px; font-family: 'Malgun Gothic', sans-serif; }
-    .main-container { max-width: 1000px; margin: 0 auto; padding-bottom: 80px; }
-    .hidden { display: none !important; }
-    
-    /* 프로필 카드 디자인 */
-    .profile-card { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; display: flex; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-    .profile-icon { width: 70px; height: 70px; background: #e9ecef; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin-right: 20px; }
-    
-    /* [수정] 잔여 연차 배지 스타일 (이름 옆에 붙음) */
-    .leave-badge {
-        background-color: #fff;
-        border: 1px solid #0d6efd;
-        color: #0d6efd;
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        margin-left: 10px;
-        vertical-align: middle;
-    }
-    .leave-badge:hover {
-        background-color: #0d6efd;
-        color: white;
-    }
-    
-    /* 탭 메뉴 스타일 정의 */
-    .nav-tabs .nav-link { color: #495057; cursor: pointer; font-weight: 500; padding: 12px 20px; }
-    .nav-tabs .nav-link.active { font-weight: bold; color: #0d6efd; border-bottom: 3px solid #0d6efd; background: transparent; }
-    .tab-content { background: white; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 10px 10px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-
-    /* 입력 필드 상태별 스타일 */
-    .readonly-field { background-color: #f8f9fa; border: 1px solid #eee; color: #555; pointer-events: none; }
-    .editable-field { background-color: #fff; border: 1px solid #ced4da; color: #000; }
-
-    /* 급여 조회 화면용 */
-    .salary-blur { filter: blur(6px); transition: filter 0.3s; cursor: pointer; user-select: none; }
-    .salary-blur:hover { filter: blur(0); }
-    .amount-text { text-align: right; font-family: 'Consolas', monospace; letter-spacing: -0.5px; }
-    
-    /* FullCalendar 달력 커스텀 스타일 */
-    #calendar { max-width: 100%; margin: 0 auto; font-size: 0.9rem; }
-    .fc-event { cursor: pointer; border: none; }
-    .fc-day-sun a { color: red; text-decoration: none; } 
-    .fc-day-sat a { color: blue; text-decoration: none; } 
-
-    /* [수정] 통합 연차 상세 모달 디자인 */
-    .leave-section { margin-bottom: 15px; border: 1px solid #eee; border-radius: 8px; background: #f8f9fa; padding: 15px; }
-    .leave-section h6 { font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; font-size: 0.95rem; }
-    .leave-list { list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
-    .leave-list li { margin-bottom: 6px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>마이페이지</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<style>
+body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-serif}
+.main-container{max-width:1000px;margin:0 auto;padding-bottom:80px}
+.hidden{display:none!important}
+.profile-card{background:white;border-radius:15px;padding:30px;margin-bottom:20px;display:flex;align-items:center;box-shadow:0 4px 15px rgba(0,0,0,0.05)}
+.profile-icon{width:70px;height:70px;background:#e9ecef;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin-right:20px}
+.leave-badge{background-color:#fff;border:1px solid #0d6efd;color:#0d6efd;padding:5px 12px;border-radius:20px;font-size:0.9rem;font-weight:bold;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:5px;margin-left:10px;vertical-align:middle}
+.leave-badge:hover{background-color:#0d6efd;color:white}
+.nav-tabs .nav-link{color:#495057;cursor:pointer;font-weight:500;padding:12px 20px}
+.nav-tabs .nav-link.active{font-weight:bold;color:#0d6efd;border-bottom:3px solid #0d6efd;background:transparent}
+.tab-content{background:white;border:1px solid #dee2e6;border-top:none;border-radius:0 0 10px 10px;padding:30px;box-shadow:0 4px 15px rgba(0,0,0,0.05)}
+.readonly-field{background-color:#f8f9fa;border:1px solid #eee;color:#555;pointer-events:none}
+.editable-field{background-color:#fff;border:1px solid #ced4da;color:#000}
+.salary-blur{filter:blur(6px);transition:filter 0.3s;cursor:pointer;user-select:none}
+.salary-blur:hover{filter:blur(0)}
+.amount-text{text-align:right;font-family:'Consolas',monospace;letter-spacing:-0.5px}
+#calendar{max-width:100%;margin:0 auto;font-size:0.9rem}
+.fc-event{cursor:pointer;border:none}
+.fc-day-sun a{color:red;text-decoration:none}
+.fc-day-sat a{color:blue;text-decoration:none}
+.leave-section{margin-bottom:15px;border:1px solid #eee;border-radius:8px;background:#f8f9fa;padding:15px}
+.leave-section h6{font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:8px;margin-bottom:10px;font-size:0.95rem}
+.leave-list{list-style:none;padding:0;margin:0;font-size:0.85rem}
+.leave-list li{margin-bottom:6px}
+</style>
 </head>
 <body>
-
 <div class="main-container">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="fw-bold m-0">👤 My Page</h4>
-    <button onclick="location.href='index.html'" class="btn btn-outline-secondary btn-sm">🏠 메뉴로</button>
-  </div>
-
-  <div class="profile-card">
-    <div class="profile-icon">👤</div>
-    <div>
-      <div class="d-flex align-items-center mb-1">
-          <h4 class="fw-bold m-0 me-2"><span id="dspName">Loading...</span></h4>
-          <span class="badge bg-primary rounded-pill fs-6" id="dspRank">-</span>
-          
-          <div class="leave-badge" onclick="showLeaveDetail()" title="상세 내역 보기">
-              <span>잔여 연차: <span id="lvRemain">0</span>일</span>
-              <span>🔍</span>
-          </div>
-      </div>
-      <div class="text-muted small">
-        <span id="dspDept">-</span> | 입사일: <span id="dspJoin">-</span> (<span id="dspTenure" class="text-primary fw-bold">-</span>)
-      </div>
-    </div>
-  </div>
-
-  <ul class="nav nav-tabs" id="myTab" role="tablist">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabInfo">내 정보</button></li>
-    <li class="nav-item"><button class="nav-link" id="tab-calendar-btn" data-bs-toggle="tab" data-bs-target="#tabCalendar">📅 전사 일정</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSalary">💰 급여 명세서</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCert">📜 증명서/계약서</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabNotice">📢 공지사항</button></li>
-  </ul>
-
-  <div class="tab-content">
-    
-    <div class="tab-pane fade show active" id="tabInfo">
-      <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-        <h6 class="fw-bold m-0">📝 기본 정보 수정</h6>
-        <div>
-            <button class="btn btn-sm btn-outline-primary" id="btnEditInfo" onclick="toggleEditMode(true)">✏️ 수정하기</button>
-            <button class="btn btn-sm btn-secondary hidden" id="btnCancelInfo" onclick="toggleEditMode(false)">취소</button>
-            <button class="btn btn-sm btn-primary hidden" id="btnSaveInfo" onclick="updateInfo()">💾 저장 완료</button>
-        </div>
-      </div>
-      
-      <div class="row g-3">
-        <div class="col-md-6"><label class="small text-muted">이름</label><input type="text" id="myName" class="form-control bg-light" readonly></div>
-        <div class="col-md-6"><label class="small text-muted">부양가족 (전자결재)</label><input type="number" id="myDependents" class="form-control bg-light" readonly placeholder="0"></div>
-        
-        <div class="col-md-6"><label class="small text-muted">전화번호</label><input type="text" id="myPhone" class="form-control readonly-field" maxlength="13" oninput="autoHyphen(this)"></div>
-        <div class="col-md-6"><label class="small text-muted">이메일</label><input type="email" id="myEmail" class="form-control readonly-field"></div>
-        <div class="col-12"><label class="small text-muted">주소</label><div class="input-group"><input type="text" id="myAddress" class="form-control readonly-field" placeholder="주소" readonly><button class="btn btn-outline-secondary hidden" id="btnAddrSearch" type="button" onclick="openAddressSearch()">🔍 검색</button></div></div>
-        <div class="col-md-6"><label class="small text-muted">급여 은행</label><input type="text" id="myBank" class="form-control readonly-field"></div>
-        <div class="col-md-6"><label class="small text-muted">계좌번호</label><input type="text" id="myAccount" class="form-control readonly-field"></div>
-      </div>
-
-      <div class="mt-5 pt-3 border-top">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-             <h6 class="fw-bold m-0">🚨 비상 연락망</h6>
-             <button class="btn btn-sm btn-outline-dark hidden" id="btnAddEm" onclick="addEmergencyUI()">+ 추가</button>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-light"><tr><th>이름</th><th>관계</th><th>연락처</th><th style="width:60px;"></th></tr></thead>
-                <tbody id="emergencyListBody"></tbody>
-            </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-pane fade" id="tabCalendar">
-        <div id="calendar"></div>
-    </div>
-
-    <div class="tab-pane fade" id="tabSalary">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="input-group" style="max-width: 250px;">
-          <input type="month" class="form-control" id="salaryMonth">
-          <button class="btn btn-primary" onclick="searchSalary()">조회</button>
-        </div>
-        <button class="btn btn-sm btn-dark hidden" id="btnPrintSalary" onclick="printSalaryPopup()">🖨️ 인쇄하기</button>
-      </div>
-      
-      <div id="salaryResult" class="hidden mt-4">
-         <div class="card p-4 shadow-sm border-0">
-            <h5 class="fw-bold text-center mb-4"><span id="sl_ym_display"></span> 급여 내역</h5>
-            <div class="row">
-                <div class="col-6">
-                    <table class="table table-bordered"><thead class="table-light"><tr><th colspan="2" class="text-primary text-center">지급</th></tr></thead><tbody id="tbl_pay_body"></tbody></table>
-                </div>
-                <div class="col-6">
-                    <table class="table table-bordered"><thead class="table-light"><tr><th colspan="2" class="text-danger text-center">공제</th></tr></thead><tbody id="tbl_ded_body"></tbody></table>
-                </div>
-            </div>
-            <div class="p-3 bg-primary bg-opacity-10 rounded text-center border border-primary mt-3">
-                <span class="text-primary me-2 fw-bold">실 수령액</span>
-                <h3 class="fw-bold m-0 d-inline-block"><span class="salary-blur" id="v_net">0</span> 원</h3>
-            </div>
-         </div>
-      </div>
-    </div>
-
-    <div class="tab-pane fade" id="tabCert">
-      <div class="card p-3 border mb-3">
-        <div class="d-flex justify-content-between align-items-center">
-          <div><h6 class="fw-bold mb-1">📄 재직증명서</h6><small class="text-muted">은행/관공서 제출용</small></div>
-          <button class="btn btn-outline-primary" id="btnCert" onclick="openCertModal()">발급 신청</button>
-        </div>
-      </div>
-      <div class="card p-3 border">
-        <div class="d-flex justify-content-between align-items-center">
-          <div><h6 class="fw-bold mb-1">🤝 근로계약서</h6><small class="text-muted">서명 완료된 계약서</small></div>
-          <button class="btn btn-secondary" id="btnContract" onclick="viewContract()" disabled>등록된 계약서 없음</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-pane fade" id="tabNotice">
-      <div class="list-group" id="noticeList"><div class="text-center p-3 text-muted">로딩 중...</div></div>
-    </div>
-  </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h4 class="fw-bold m-0">👤 My Page</h4>
+<button onclick="location.href='index.html'" class="btn btn-outline-secondary btn-sm">🏠 메뉴로</button>
 </div>
-
+<div class="profile-card">
+<div class="profile-icon">👤</div>
+<div>
+<div class="d-flex align-items-center mb-1">
+<h4 class="fw-bold m-0 me-2"><span id="dspName">Loading...</span></h4>
+<span class="badge bg-primary rounded-pill fs-6" id="dspRank">-</span>
+<div class="leave-badge" onclick="showLeaveDetail()" title="상세 내역 보기">
+<span>잔여 연차: <span id="lvRemain">0</span>일</span><span>🔍</span>
+</div>
+</div>
+<div class="text-muted small">
+<span id="dspDept">-</span> | 입사일: <span id="dspJoin">-</span> (<span id="dspTenure" class="text-primary fw-bold">-</span>)
+</div>
+</div>
+</div>
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+<li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabInfo">내 정보</button></li>
+<li class="nav-item"><button class="nav-link" id="tab-calendar-btn" data-bs-toggle="tab" data-bs-target="#tabCalendar">📅 전사 일정</button></li>
+<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSalary">💰 급여 명세서</button></li>
+<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCert">📜 증명서/계약서</button></li>
+<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabNotice">📢 공지사항</button></li>
+</ul>
+<div class="tab-content">
+<div class="tab-pane fade show active" id="tabInfo">
+<div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+<h6 class="fw-bold m-0">📝 기본 정보 수정</h6>
+<div>
+<button class="btn btn-sm btn-outline-primary" id="btnEditInfo" onclick="toggleEditMode(true)">✏️ 수정하기</button>
+<button class="btn btn-sm btn-secondary hidden" id="btnCancelInfo" onclick="toggleEditMode(false)">취소</button>
+<button class="btn btn-sm btn-primary hidden" id="btnSaveInfo" onclick="updateInfo()">💾 저장 완료</button>
+</div>
+</div>
+<div class="row g-3">
+<div class="col-md-6"><label class="small text-muted">이름</label><input type="text" id="myName" class="form-control bg-light" readonly></div>
+<div class="col-md-6"><label class="small text-muted">부양가족 (전자결재)</label><input type="number" id="myDependents" class="form-control bg-light" readonly placeholder="0"></div>
+<div class="col-md-6"><label class="small text-muted">전화번호</label><input type="text" id="myPhone" class="form-control readonly-field" maxlength="13" oninput="autoHyphen(this)"></div>
+<div class="col-md-6"><label class="small text-muted">이메일</label><input type="email" id="myEmail" class="form-control readonly-field"></div>
+<div class="col-12"><label class="small text-muted">주소</label><div class="input-group"><input type="text" id="myAddress" class="form-control readonly-field" placeholder="주소" readonly><button class="btn btn-outline-secondary hidden" id="btnAddrSearch" type="button" onclick="openAddressSearch()">🔍 검색</button></div></div>
+<div class="col-md-6"><label class="small text-muted">급여 은행</label><input type="text" id="myBank" class="form-control readonly-field"></div>
+<div class="col-md-6"><label class="small text-muted">계좌번호</label><input type="text" id="myAccount" class="form-control readonly-field"></div>
+</div>
+<div class="mt-5 pt-3 border-top">
+<div class="d-flex justify-content-between align-items-center mb-3">
+<h6 class="fw-bold m-0">🚨 비상 연락망</h6>
+<button class="btn btn-sm btn-outline-dark hidden" id="btnAddEm" onclick="addEmergencyUI()">+ 추가</button>
+</div>
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+<thead class="table-light"><tr><th>이름</th><th>관계</th><th>연락처</th><th style="width:60px;"></th></tr></thead>
+<tbody id="emergencyListBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="tabCalendar"><div id="calendar"></div></div>
+<div class="tab-pane fade" id="tabSalary">
+<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="input-group" style="max-width: 250px;">
+<input type="month" class="form-control" id="salaryMonth">
+<button class="btn btn-primary" onclick="searchSalary()">조회</button>
+</div>
+<button class="btn btn-sm btn-dark hidden" id="btnPrintSalary" onclick="printSalaryPopup()">🖨️ 인쇄하기</button>
+</div>
+<div id="salaryResult" class="hidden mt-4">
+<div class="card p-4 shadow-sm border-0">
+<h5 class="fw-bold text-center mb-4"><span id="sl_ym_display"></span> 급여 내역</h5>
+<div class="row">
+<div class="col-6"><table class="table table-bordered"><thead class="table-light"><tr><th colspan="2" class="text-primary text-center">지급</th></tr></thead><tbody id="tbl_pay_body"></tbody></table></div>
+<div class="col-6"><table class="table table-bordered"><thead class="table-light"><tr><th colspan="2" class="text-danger text-center">공제</th></tr></thead><tbody id="tbl_ded_body"></tbody></table></div>
+</div>
+<div class="p-3 bg-primary bg-opacity-10 rounded text-center border border-primary mt-3">
+<span class="text-primary me-2 fw-bold">실 수령액</span>
+<h3 class="fw-bold m-0 d-inline-block"><span class="salary-blur" id="v_net">0</span> 원</h3>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="tabCert">
+<div class="card p-3 border mb-3"><div class="d-flex justify-content-between align-items-center"><div><h6 class="fw-bold mb-1">📄 재직증명서</h6><small class="text-muted">은행/관공서 제출용</small></div><button class="btn btn-outline-primary" id="btnCert" onclick="openCertModal()">발급 신청</button></div></div>
+<div class="card p-3 border"><div class="d-flex justify-content-between align-items-center"><div><h6 class="fw-bold mb-1">🤝 근로계약서</h6><small class="text-muted">서명 완료된 계약서</small></div><button class="btn btn-secondary" id="btnContract" onclick="viewContract()" disabled>등록된 계약서 없음</button></div></div>
+</div>
+<div class="tab-pane fade" id="tabNotice"><div class="list-group" id="noticeList"><div class="text-center p-3 text-muted">로딩 중...</div></div></div>
+</div>
+</div>
 <div class="modal fade" id="certPurposeModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">발급 용도</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><select class="form-select mb-2" id="certPurposeSelect" onchange="toggleEtcInput()"><option value="관공서 제출용">관공서 제출용</option><option value="금융기관 제출용">금융기관 제출용</option><option value="기타">기타</option></select><input type="text" id="certPurposeEtc" class="form-control hidden" placeholder="용도 입력"></div><div class="modal-footer"><button class="btn btn-primary btn-sm" onclick="runCertIssue()">인쇄하기</button></div></div></div></div>
-
-<div class="modal fade" id="leaveDetailModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header bg-light">
-        <h6 class="modal-title fw-bold">연차 상세 리포트</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-3">
-        </div>
-      <div class="modal-footer justify-content-center p-1 border-0">
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
-      </div>
-    </div>
-  </div>
-</div>
-
+<div class="modal fade" id="leaveDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">연차 상세 리포트</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-3"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="noticeDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold" id="noticeModalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="text-muted small mb-3"><span id="noticeModalDate"></span> | <span id="noticeModalWriter"></span></div><div id="noticeModalContent" style="white-space: pre-wrap;"></div><div id="noticeFileArea" class="mt-3 pt-2 border-top hidden"><a href="#" id="noticeFileLink" target="_blank">첨부파일 다운로드</a></div></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center fw-bold py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
-<div class="modal fade" id="eventModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 관리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="evtId"> <label class="small text-muted mb-1">일정명</label><input type="text" id="evtTitle" class="form-control mb-2" placeholder="예: 회의, 창립기념일"><label class="small text-muted mb-1">일시</label><div class="d-flex gap-2 mb-2"><input type="date" id="evtDate" class="form-control"><input type="time" id="evtTime" class="form-control"> </div><label class="small text-muted mb-1">반복 설정</label><select id="evtRecure" class="form-select mb-3"><option value="none">반복 없음</option><option value="yearly">매년 반복</option><option value="monthly">매월 반복</option></select><div class="form-check"><input class="form-check-input" type="checkbox" id="evtIsHoliday"><label class="form-check-label small" for="evtIsHoliday">공휴일 (빨간날 표시)</label></div></div><div class="modal-footer justify-content-between"><button type="button" class="btn btn-danger btn-sm hidden" id="btnDelEvent" onclick="deleteEvent()">삭제</button><div><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-primary btn-sm" onclick="saveEvent()">저장</button></div></div></div></div></div>
+<div class="modal fade" id="eventModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 관리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
+<input type="hidden" id="evtId">
+<label class="small text-muted mb-1">일정명</label><input type="text" id="evtTitle" class="form-control mb-2" placeholder="예: 회의, 창립기념일">
+<label class="small text-muted mb-1">공개 범위</label>
+<select id="evtVisibility" class="form-select mb-2">
+<option value="company">🏢 전체 공개 (전직원)</option>
+<option value="admin">🔒 관리자 전용 (세무/행정)</option>
+<option value="private">👤 나만 보기 (개인 일정)</option>
+</select>
+<label class="small text-muted mb-1">일시</label><div class="d-flex gap-2 mb-2"><input type="date" id="evtDate" class="form-control"><input type="time" id="evtTime" class="form-control"></div>
+<label class="small text-muted mb-1">반복 설정</label><select id="evtRecure" class="form-select mb-3"><option value="none">반복 없음</option><option value="yearly">매년 반복</option><option value="monthly">매월 반복</option></select>
+<div class="form-check"><input class="form-check-input" type="checkbox" id="evtIsHoliday"><label class="form-check-label small" for="evtIsHoliday">공휴일 (빨간날 표시)</label></div>
+</div><div class="modal-footer justify-content-between"><button type="button" class="btn btn-danger btn-sm hidden" id="btnDelEvent" onclick="deleteEvent()">삭제</button><div><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-primary btn-sm" onclick="saveEvent()">저장</button></div></div></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
-const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-let myInfo = {}; 
-let companyInfo = {}; 
-let currentSalaryData = null; 
-let calendarInit = false;
-let purposeModal, leaveDetailModal, noticeDetailModal, alertModal, eventModal;
-let tempEmergencyList = [];
-let noticesData = []; // 추가됨
-
-window.onload = async function() {
-    purposeModal = new bootstrap.Modal(document.getElementById('certPurposeModal'));
-    leaveDetailModal = new bootstrap.Modal(document.getElementById('leaveDetailModal'));
-    noticeDetailModal = new bootstrap.Modal(document.getElementById('noticeDetailModal'));
-    alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
-    eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
-
-    const stored = localStorage.getItem('erp_user');
-    if(!stored) { showAlert("로그인이 필요합니다."); location.href='index.html'; return; }
-    myInfo = JSON.parse(stored);
-    
-    document.getElementById("salaryMonth").value = new Date().toISOString().slice(0, 7);
-    document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab', function (e) { renderCalendar(); });
-
-    await loadCompanyInfo(); 
-    
-    await Promise.all([
-        loadProfile(), 
-        loadEmergencyList(), 
-        loadNotices(), 
-        calculateLeave() // 연차 계산 (DB RPC)
-    ]);
+const SUPABASE_URL='https://ifdqlwxgqgsvnawmhlfc.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
+const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
+let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
+window.onload=async function(){
+purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
+leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
+noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal'));
+alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
+eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
+const stored=localStorage.getItem('erp_user');
+if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
+myInfo=JSON.parse(stored);
+document.getElementById("salaryMonth").value=new Date().toISOString().slice(0,7);
+document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
+await loadCompanyInfo();
+await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave()]);
 };
-
-// [수정] 연차 잔여량 계산 (RPC 사용, JS 계산 배제)
-// UI에선 이름 옆 배지에 표시
-async function calculateLeave() {
-    const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: myInfo.emp_id });
-    if (error) { console.error(error); return; }
-
-    // 배지 업데이트
-    const val = remainDays !== null ? remainDays : 0;
-    document.getElementById("lvRemain").innerText = val;
-    
-    // 잔여량에 따라 스타일 변경 (선택사항)
-    const badge = document.querySelector('.leave-badge');
-    if(val <= 0) {
-        badge.style.borderColor = '#dc3545';
-        badge.style.color = '#dc3545';
-    } else {
-        badge.style.borderColor = '#0d6efd';
-        badge.style.color = '#0d6efd';
-    }
+function showAlert(m){document.getElementById("alertBody").innerHTML=m;alertModal.show()}
+function autoHyphen(t){t.value=t.value.replace(/[^0-9]/g,'').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g,"$1-$2-$3").replace(/(\-{1,2})$/g,"")}
+function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.userSelectedType==='R'?d.roadAddress:d.jibunAddress;if(d.buildingName)a+=' ('+d.buildingName+')';document.getElementById("myAddress").value=a}}).open()}
+async function loadCompanyInfo(){
+const {data}=await _supabase.from('ref_company_info').select('*');
+if(data)data.forEach(i=>companyInfo[i.key]=i.value);
+companyInfo.chairman=companyInfo.ceoName||"이사장";
+if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}
+if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}
 }
-
-// [수정] 통합 연차 상세 모달 (발생/조정/사용)
-async function showLeaveDetail() {
-    const modalEl = document.getElementById('leaveDetailModal');
-    const modalBody = document.querySelector('#leaveDetailModal .modal-body');
-    
-    if (!modalEl) return;
-    modalBody.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 small text-muted">내역을 불러오는 중...</div></div>';
-    
-    leaveDetailModal.show();
-
-    // 1. 데이터 조회 (입사일, 조정, 사용)
-    const { data: emp } = await _supabase.from('ref_employees').select('hire_date').eq('emp_id', myInfo.emp_id).single();
-    const { data: adjList } = await _supabase.from('hr_leave_adj').select('*').eq('emp_id', myInfo.emp_id).order('created_at', { ascending: false });
-    
-    const { data: useList } = await _supabase.from('ref_approval')
-        .select('created_at, doc_type, amount, status')
-        .eq('drafter_id', myInfo.emp_id)
-        .in('status', ['완료', '가승인', '증빙확인중'])
-        .or('doc_type.ilike.%(연차)%,doc_type.ilike.%(반차)%') 
-        .order('created_at', { ascending: false });
-
-    // 2. HTML 조립
-    let html = '<div class="d-flex flex-column gap-3">';
-
-    // [A] 발생 내역
-    let genHtml = '<ul class="leave-list">';
-    if (emp && emp.hire_date) {
-        const hireDate = new Date(emp.hire_date);
-        const now = new Date();
-        const oneYearLater = new Date(hireDate);
-        oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-
-        if (now < oneYearLater) {
-             let months = (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth());
-             if (now.getDate() < hireDate.getDate()) months--;
-             const count = Math.min(11, Math.max(0, months));
-             genHtml += `<li class="text-primary">🟢 <strong>1년 미만 월 단위:</strong> ${count}개 (입사 1년내 유효)</li>`;
-        } else {
-             genHtml += `<li class="text-muted">⚪ <strong>1년 미만 월 단위:</strong> 0개 (기간 만료 소멸)</li>`;
-        }
-        if (now.getFullYear() > hireDate.getFullYear()) {
-            genHtml += `<li class="text-primary">🔵 <strong>회계연도(${now.getFullYear()}):</strong> 15개 (1월 1일 발생)</li>`;
-        } else {
-            genHtml += `<li class="text-muted">⚪ <strong>회계연도:</strong> 0개 (미발생)</li>`;
-        }
-    }
-    genHtml += '</ul>';
-    html += `<div class="leave-section"><h6>🎁 발생 내역 (예상)</h6>${genHtml}</div>`;
-
-    // [B] 조정 내역
-    let adjHtml = '<ul class="leave-list">';
-    if (adjList && adjList.length > 0) {
-        adjList.forEach(item => {
-            const color = (item.adj_type === '지급' || item.adj_type === '포상') ? 'text-success' : 'text-danger';
-            const sign = (item.adj_type === '지급' || item.adj_type === '포상') ? '+' : '-';
-            adjHtml += `<li><span class="${color} fw-bold">[${item.adj_type}]</span> ${item.reason || ''} (${sign}${item.days}일)</li>`;
-        });
-    } else {
-        adjHtml += '<li class="text-muted">- 조정 내역 없음 -</li>';
-    }
-    adjHtml += '</ul>';
-    html += `<div class="leave-section"><h6>⚖️ 조정(포상/차감) 내역</h6>${adjHtml}</div>`;
-
-    // [C] 사용 내역
-    let useHtml = '<ul class="leave-list">';
-    if (useList && useList.length > 0) {
-        useList.forEach(item => {
-            const dateStr = item.created_at.slice(0, 10);
-            let badge = '';
-            if(item.status === '가승인') badge = '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';
-            if(item.status === '증빙확인중') badge = '<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';
-
-            useHtml += `<li class="border-bottom pb-1 mb-1">
-                <div class="d-flex justify-content-between">
-                    <span>${item.doc_type} ${badge}</span>
-                    <span class="fw-bold text-danger">-${item.amount}일</span>
-                </div>
-                <div class="text-muted" style="font-size:0.75rem;">${dateStr}</div>
-            </li>`;
-        });
-    } else {
-        useHtml += '<li class="text-muted">- 사용 내역 없음 -</li>';
-    }
-    useHtml += '</ul>';
-    html += `<div class="leave-section"><h6>🎫 사용 내역 (차감)</h6>${useHtml}</div>`;
-    
-    html += '</div>';
-    html += '<div class="text-center mt-2 small text-muted">※ 시스템 계산(DB) 결과와 실시간 연동됩니다.</div>';
-
-    modalBody.innerHTML = html;
+async function loadProfile(){
+const {data}=await _supabase.from('ref_employees').select('*').eq('emp_id',myInfo.emp_id).single();
+if(data){myInfo=data;localStorage.setItem('erp_user',JSON.stringify(data))}
+document.getElementById("dspName").innerText=myInfo.emp_name;
+document.getElementById("dspRank").innerText=myInfo.position;
+document.getElementById("dspDept").innerText=myInfo.department;
+document.getElementById("dspJoin").innerText=myInfo.hire_date||'-';
+document.getElementById("myName").value=myInfo.emp_name;
+document.getElementById("myDependents").value=myInfo.dependents||0;
+document.getElementById("myPhone").value=myInfo.phone||"";
+document.getElementById("myEmail").value=myInfo.email||"";
+document.getElementById("myAddress").value=myInfo.address||"";
+document.getElementById("myBank").value=myInfo.bank_name||"";
+document.getElementById("myAccount").value=myInfo.account_number||"";
+const btn=document.getElementById("btnContract");
+if(myInfo.contract_url){let u=myInfo.contract_url.startsWith('http')?myInfo.contract_url:null;if(!u){const{data:d}=await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url,3600);if(d)u=d.signedUrl}if(u){btn.disabled=false;btn.className="btn btn-outline-primary fw-bold";btn.innerText="📄 계약서 보기";btn.onclick=()=>window.open(u)}}
 }
-
-// --- 이하 기존 로직 그대로 유지 (공지사항, 증명서, 급여 등) ---
-function showAlert(msg) { document.getElementById("alertBody").innerHTML = msg; alertModal.show(); }
-function autoHyphen(t) { t.value = t.value.replace(/[^0-9]/g, '').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g, "$1-$2-$3").replace(/(\-{1,2})$/g, ""); }
-function openAddressSearch() { new daum.Postcode({ oncomplete: function(data) { let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress; if(data.buildingName) addr += ' (' + data.buildingName + ')'; document.getElementById("myAddress").value = addr; } }).open(); }
-async function loadCompanyInfo() { const { data } = await _supabase.from('ref_company_info').select('*'); if(data) data.forEach(i => companyInfo[i.key] = i.value); companyInfo.chairman = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: d } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = d.publicUrl; } if (companyInfo.seal_url) { let p = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: d } = await _supabase.storage.from('attachments').createSignedUrl(p, 3600); if(d) companyInfo.seal_url = d.signedUrl; } }
-async function loadProfile() { const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single(); if(data) { myInfo = data; localStorage.setItem('erp_user', JSON.stringify(data)); } document.getElementById("dspName").innerText = myInfo.emp_name; document.getElementById("dspRank").innerText = myInfo.position; document.getElementById("dspDept").innerText = myInfo.department; document.getElementById("dspJoin").innerText = myInfo.hire_date || '-'; document.getElementById("myName").value = myInfo.emp_name; document.getElementById("myDependents").value = myInfo.dependents || 0; document.getElementById("myPhone").value = myInfo.phone || ""; document.getElementById("myEmail").value = myInfo.email || ""; document.getElementById("myAddress").value = myInfo.address || ""; document.getElementById("myBank").value = myInfo.bank_name || ""; document.getElementById("myAccount").value = myInfo.account_number || ""; const btn = document.getElementById("btnContract"); if (myInfo.contract_url) { let url = myInfo.contract_url.startsWith('http') ? myInfo.contract_url : null; if(!url) { const { data: d } = await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url, 3600); if(d) url = d.signedUrl; } if(url) { btn.disabled = false; btn.className = "btn btn-outline-primary fw-bold"; btn.innerText = "📄 계약서 보기"; btn.onclick = () => window.open(url); } } }
-function toggleEditMode(isEdit) { const fields = document.querySelectorAll('.readonly-field'); fields.forEach(f => { if(isEdit) { f.classList.remove('readonly-field'); f.classList.add('editable-field'); f.readOnly = false; } else { f.classList.add('readonly-field'); f.classList.remove('editable-field'); f.readOnly = true; } }); document.getElementById("btnEditInfo").classList.toggle('hidden', isEdit); document.getElementById("btnCancelInfo").classList.toggle('hidden', !isEdit); document.getElementById("btnSaveInfo").classList.toggle('hidden', !isEdit); document.getElementById("btnAddrSearch").classList.toggle('hidden', !isEdit); document.getElementById("btnAddEm").classList.toggle('hidden', !isEdit); if(!isEdit) { loadProfile(); loadEmergencyList(); } }
-async function updateInfo() { if(!confirm("정보를 저장하시겠습니까?")) return; const updates = { phone: document.getElementById("myPhone").value, email: document.getElementById("myEmail").value, address: document.getElementById("myAddress").value, bank_name: document.getElementById("myBank").value, account_number: document.getElementById("myAccount").value }; const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', myInfo.emp_id); if(error) { showAlert("저장 실패: "+error.message); return; } await _supabase.from('ref_emergency_contacts').delete().eq('emp_id', myInfo.emp_id); if(tempEmergencyList.length > 0) { const inserts = tempEmergencyList.map(item => ({ emp_id: myInfo.emp_id, contact_name: item.contact_name, relation: item.relation, phone: item.phone })); await _supabase.from('ref_emergency_contacts').insert(inserts); } showAlert("저장되었습니다."); toggleEditMode(false); }
-async function loadEmergencyList() { const { data } = await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id', myInfo.emp_id).order('id'); tempEmergencyList = data || []; renderEmergencyTable(); }
-function renderEmergencyTable() { const tbody = document.getElementById("emergencyListBody"); tbody.innerHTML = ""; const isEdit = !document.getElementById("btnSaveInfo").classList.contains('hidden'); tempEmergencyList.forEach((row, idx) => { tbody.innerHTML += `<tr><td>${row.contact_name}</td><td>${row.relation}</td><td>${row.phone}</td><td>${isEdit ? `<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${idx})">×</button>` : ''}</td></tr>`; }); }
-function addEmergencyUI() { const tbody = document.getElementById("emergencyListBody"); const tr = document.createElement('tr'); tr.innerHTML = `<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`; tbody.appendChild(tr); }
-function confirmAddEm(btn) { const tr = btn.closest('tr'); const name = tr.querySelector('#newEmName').value; const rel = tr.querySelector('#newEmRel').value; const phone = tr.querySelector('#newEmPhone').value; if(!name || !rel) return; tempEmergencyList.push({ contact_name: name, relation: rel, phone: phone }); renderEmergencyTable(); }
-function removeTempEm(idx) { tempEmergencyList.splice(idx, 1); renderEmergencyTable(); }
-async function renderCalendar() { const { data: leaves } = await _supabase.from('ref_approval').select('*').eq('doc_type', '휴가').eq('status', '완료'); const { data: emps } = await _supabase.from('ref_employees').select('emp_name, birth_date, hire_date'); const { data: comps } = await _supabase.from('ref_calendar').select('*'); let events = []; if(leaves) leaves.forEach(l => events.push({ title: `${l.drafter_name} 휴가`, start: l.start_date, end: l.end_date, color: (l.drafter_id === myInfo.emp_id ? '#0d6efd' : '#198754'), allDay: true })); const baseYear = new Date().getFullYear(); const years = [baseYear - 2, baseYear - 1, baseYear, baseYear + 1, baseYear + 2]; if(emps) emps.forEach(e => { years.forEach(y => { if(e.birth_date) events.push({ title: `${e.emp_name} 생일`, start: `${y}-${e.birth_date.slice(5,10)}`, color: '#ffc107', textColor: '#000', allDay: true }); if(e.hire_date) events.push({ title: `${e.emp_name} 입사`, start: `${y}-${e.hire_date.slice(5,10)}`, color: '#0dcaf0', textColor: '#000', allDay: true }); }); }); if(comps) comps.forEach(c => { const bg = c.type === 'holiday' ? '#dc3545' : '#6c757d'; if (c.recurrence === 'yearly') { years.forEach(y => { events.push({ id: c.id, title: c.title, start: `${y}-${c.start_date.slice(5,10)}${c.start_date.length > 10 ? 'T'+c.start_date.slice(11,16) : ''}`, color: bg, extendedProps: { origin: c } }); }); } else if (c.recurrence === 'monthly') { years.forEach(y => { for(let m=1; m<=12; m++) { const mm = String(m).padStart(2,'0'); const dd = c.start_date.slice(8,10); if(new Date(`${y}-${mm}-${dd}`).getDate() == dd) { events.push({ id: c.id, title: c.title, start: `${y}-${mm}-${dd}${c.start_date.length > 10 ? 'T'+c.start_date.slice(11,16) : ''}`, color: bg, extendedProps: { origin: c } }); } } }); } else { events.push({ id: c.id, title: c.title, start: c.start_date, end: c.end_date, color: bg, extendedProps: { origin: c } }); } }); if (companyInfo.estDate) { const thisYear = new Date().getFullYear(); for (let y = thisYear - 50; y <= thisYear + 50; y++) { events.push({ title: "🎉 창립기념일", start: `${y}-${companyInfo.estDate.slice(5, 10)}`, color: '#ff4081', allDay: true }); } } const el = document.getElementById('calendar'); const calendar = new FullCalendar.Calendar(el, { initialView: 'dayGridMonth', locale: 'ko', height: 600, headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }, events: events, selectable: true, dateClick: function(info) { if(myInfo.role === 'admin') openEventModal(null, info.dateStr); }, eventClick: function(info) { if(myInfo.role === 'admin' && info.event.extendedProps.origin) { openEventModal(info.event.extendedProps.origin, null); } } }); calendar.render(); }
-function getYearDate(dateStr) { return `${new Date().getFullYear()}-${dateStr.slice(5,10)}`; }
-function openEventModal(existingEvent, dateStr) { const delBtn = document.getElementById("btnDelEvent"); if (existingEvent) { document.getElementById("evtId").value = existingEvent.id; document.getElementById("evtTitle").value = existingEvent.title; const dt = existingEvent.start_date.split('T'); document.getElementById("evtDate").value = dt[0]; document.getElementById("evtTime").value = dt[1] ? dt[1].slice(0,5) : ""; document.getElementById("evtRecure").value = existingEvent.recurrence || 'none'; document.getElementById("evtIsHoliday").checked = (existingEvent.type === 'holiday'); delBtn.classList.remove("hidden"); } else { document.getElementById("evtId").value = ""; document.getElementById("evtTitle").value = ""; document.getElementById("evtDate").value = dateStr; document.getElementById("evtTime").value = ""; document.getElementById("evtRecure").value = "none"; document.getElementById("evtIsHoliday").checked = false; delBtn.classList.add("hidden"); } eventModal.show(); }
-async function saveEvent() { const id = document.getElementById("evtId").value; const title = document.getElementById("evtTitle").value; const date = document.getElementById("evtDate").value; const time = document.getElementById("evtTime").value; const recur = document.getElementById("evtRecure").value; const type = document.getElementById("evtIsHoliday").checked ? 'holiday' : 'company'; if(!title || !date) { showAlert("일정명과 날짜를 입력하세요."); return; } const fullDate = time ? `${date}T${time}:00` : date; const payload = { title: title, start_date: fullDate, type: type, recurrence: recur }; if (id) { await _supabase.from('ref_calendar').update(payload).eq('id', id); } else { await _supabase.from('ref_calendar').insert(payload); } eventModal.hide(); renderCalendar(); }
-async function searchSalary() { const ym = document.getElementById("salaryMonth").value; const { data } = await _supabase.from('hr_salary').select('*').eq('emp_id', myInfo.emp_id).eq('year_month', ym).single(); if(!data) { showAlert("급여 내역이 없습니다."); return; } currentSalaryData = data; currentSalaryData.year_month = ym; document.getElementById("salaryResult").classList.remove("hidden"); document.getElementById("btnPrintSalary").classList.remove("hidden"); const [y, m] = ym.split('-'); document.getElementById("sl_ym_display").innerText = `${y}년 ${Number(m)}월`; const f = (n) => Number(n).toLocaleString(); const pItems = [['pay_basic','기본급'], ['pay_meal','식대'], ['pay_car','차량유지비'], ['pay_position','직책수당'], ['pay_service','근속수당'], ['pay_overtime','연장수당'], ['pay_child','육아수당'], ['pay_bonus','상여금']]; let pHtml=""; pItems.forEach(i => pHtml+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`); pHtml+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`; document.getElementById("tbl_pay_body").innerHTML = pHtml; const dItems = [['ded_pension','국민연금'], ['ded_health','건강보험'], ['ded_care','장기요양'], ['ded_employ','고용보험'], ['ded_income','소득세'], ['ded_local','지방소득세'], ['ded_advance','가불금'], ['ded_capital','출자금']]; let dHtml=""; dItems.forEach(i => dHtml+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`); dHtml+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`; document.getElementById("tbl_ded_body").innerHTML = dHtml; document.getElementById("v_net").innerText = f(data.net_pay); }
-function printSalaryPopup() { if(!currentSalaryData) return showAlert("먼저 급여를 조회해주세요."); printDocument(currentSalaryData); }
-function printDocument(d) { const win = window.open('', '', 'width=900,height=1100'); const [y, m] = d.year_month.split('-'); const [yy, mm] = d.year_month.split('-').map(Number); let startDay=1, lastDay=new Date(yy,mm,0).getDate(); if(myInfo.hire_date){ const h=new Date(myInfo.hire_date); if(h.getFullYear()===yy && h.getMonth()+1===mm) startDay=h.getDate(); } const attrDate = `${y}년 ${Number(m)}월<br><span style="font-size:11px; color:#555;">(${y}.${m}.${String(startDay).padStart(2,'0')} ~ ${y}.${m}.${lastDay})</span>`; const payDateObj = new Date(y, Number(m), 10); const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth()+1}월 ${payDateObj.getDate()}일`; const f = (n) => n ? Number(n).toLocaleString() : '0'; const content = ` <div style="font-family:'Malgun Gothic',serif; color:#333; position:relative; padding-top:20px;"> <div style="height:60px; margin-bottom:30px;"> <h1 style="text-align:center; font-size:32px; margin:0; padding-top:10px; font-weight:500;">${y}년 ${Number(m)}월 급여명세서</h1> </div> <table style="width:100%; border-collapse:collapse; margin-bottom:30px; font-size:13px;"> <tr> <td style="background:#e0e0e0; width:15%; padding:8px; border:1px solid #000;">귀속연월</td> <td style="width:35%; padding:8px; border:1px solid #000;">${attrDate}</td> <td style="background:#e0e0e0; width:15%; padding:8px; border:1px solid #000;">사원번호/명</td> <td style="width:35%; padding:8px; border:1px solid #000;">${myInfo.emp_id} / ${myInfo.emp_name}</td> </tr> <tr> <td style="background:#e0e0e0; padding:8px; border:1px solid #000;">지급일자</td> <td style="padding:8px; border:1px solid #000;">${payDateStr}</td> <td style="background:#e0e0e0; padding:8px; border:1px solid #000;">소속/직급</td> <td style="padding:8px; border:1px solid #000;">${myInfo.department} / ${myInfo.position}</td> </tr> </table> <div style="display:flex; gap:30px; margin-bottom:40px; border-top:2px solid #aaa;"> <div style="flex:1;"> <div style="text-align:center; color:#1e88e5; font-weight:bold; padding:8px 0; border-bottom:2px solid #1e88e5; margin-bottom:5px;">지급내역</div> <table style="width:100%; font-size:13px; line-height:2.0;"> <tr><td>기본급</td><td style="text-align:right;">${f(d.pay_basic)}</td></tr> <tr><td>식 대</td><td style="text-align:right;">${f(d.pay_meal)}</td></tr> <tr><td>차량유지비</td><td style="text-align:right;">${f(d.pay_car)}</td></tr> <tr><td>직책수당</td><td style="text-align:right;">${f(d.pay_position)}</td></tr> <tr><td>근속수당</td><td style="text-align:right;">${f(d.pay_service)}</td></tr> <tr><td>연장수당</td><td style="text-align:right;">${f(d.pay_overtime)}</td></tr> <tr><td>육아수당</td><td style="text-align:right;">${f(d.pay_child)}</td></tr> <tr><td>상여금</td><td style="text-align:right;">${f(d.pay_bonus)}</td></tr> </table> </div> <div style="flex:1;"> <div style="text-align:center; color:#e53935; font-weight:bold; padding:8px 0; border-bottom:2px solid #e53935; margin-bottom:5px;">공제내역</div> <table style="width:100%; font-size:13px; line-height:2.0;"> <tr><td>국민연금</td><td style="text-align:right;">${f(d.ded_pension)}</td></tr> <tr><td>건강보험</td><td style="text-align:right;">${f(d.ded_health)}</td></tr> <tr><td>장기요양</td><td style="text-align:right;">${f(d.ded_care)}</td></tr> <tr><td>고용보험</td><td style="text-align:right;">${f(d.ded_employ)}</td></tr> <tr><td>소득세</td><td style="text-align:right;">${f(d.ded_income)}</td></tr> <tr><td>지방소득세</td><td style="text-align:right;">${f(d.ded_local)}</td></tr> <tr><td>가불금</td><td style="text-align:right;">${f(d.ded_advance)}</td></tr> <tr><td>출자금</td><td style="text-align:right;">${f(d.ded_capital)}</td></tr> </table> </div> </div> <div style="border-top:1px solid #999; margin-bottom:20px;"></div> <div style="position:relative; height:120px;"> <div style="position:absolute; top:30px; left:20px; color:#666; font-size:14px;">귀하의 노고에 진심으로 감사드립니다.</div> <table style="position:absolute; right:0; top:0; width:350px; border-collapse:collapse; font-size:13px; background:#fff;"> <tr><td style="border:1px solid #000; padding:6px; background:#f5f5f5;">지급합계</td><td style="border:1px solid #000; padding:6px; text-align:right;">${f(d.pay_total)}</td></tr> <tr><td style="border:1px solid #000; padding:6px; background:#f5f5f5;">공제합계</td><td style="border:1px solid #000; padding:6px; text-align:right;">${f(d.ded_total)}</td></tr> <tr><td style="border:1px solid #000; padding:6px; background:#f5f5f5;">실지급액</td><td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold;">${f(d.net_pay)}</td></tr> </table> </div> <div style="text-align:center; margin-top:40px; position:relative;"> <span style="font-size:20px; font-weight:600;">${companyInfo.company_name||"용인모두의햇빛협동조합"} 이사장 ${companyInfo.chairman}</span> ${companyInfo.seal_url ? `<img src="${companyInfo.seal_url}" style="position:absolute; width:60px; margin-left:-30px; top:-15px; opacity:0.8;">` : ''} </div> </div>`; win.document.write(`<html><head><title>${y}-${m}_${myInfo.emp_name}_급여명세서</title><style>@page{size:A4 portrait;margin:0} body{margin:0;padding:0;background:#555} .page-wrap{width:210mm;height:297mm;padding:20mm;background:#fff;margin:0 auto;box-sizing:border-box;overflow:hidden} .print-fab{position:fixed;bottom:30px;right:30px;background:#fff;padding:10px 20px;border-radius:50px;box-shadow:0 4px 15px rgba(0,0,0,0.3);display:flex;gap:10px;align-items:center;cursor:pointer} .btn-print{color:#0d6efd;border:none;background:none;font-weight:bold} .btn-close{color:#555;border:none;background:none} @media print{body{background:#fff} .page-wrap{margin:0;box-shadow:none} .no-print{display:none}}</style></head><body><div class="page-wrap">${content}</div><div class="print-fab no-print"><span style="font-size:12px;color:#999">인쇄 미리보기</span><button class="btn-print" onclick="window.print()">🖨️ 인쇄하기</button><div style="width:1px;height:15px;background:#ddd"></div><button class="btn-close" onclick="window.close()">닫기</button></div></body></html>`); win.document.close(); }
-function toggleEtcInput() { const v=document.getElementById("certPurposeSelect").value; const e=document.getElementById("certPurposeEtc"); if(v==='기타'){e.classList.remove('hidden');e.focus();}else{e.classList.add('hidden');} }
-function openCertModal() { purposeModal.show(); }
-async function loadNotices() { const { data } = await _supabase.from('ref_notice').select('*').order('created_at', {ascending:false}).limit(5); document.getElementById("noticeList").innerHTML = data && data.length ? data.map((n, i) => `<div class="list-group-item notice-item" onclick="viewNotice(${i})"><h6 class="fw-bold mb-1">${n.title}</h6><small class="text-muted">${n.created_at.slice(0,10)}</small></div>`).join("") : '<div class="text-center p-3 text-muted">공지사항이 없습니다.</div>'; noticesData = data; }
-function viewNotice(i) { const n = noticesData[i]; document.getElementById("noticeModalTitle").innerText = n.title; document.getElementById("noticeModalDate").innerText = n.created_at.slice(0,10); document.getElementById("noticeModalWriter").innerText = n.writer || "관리자"; document.getElementById("noticeModalContent").innerText = n.content; const l = document.getElementById("noticeFileLink"); const a = document.getElementById("noticeFileArea"); if(n.file_url) { a.classList.remove("hidden"); l.href = n.file_url; } else a.classList.add("hidden"); noticeDetailModal.show(); }
-function runCertIssue() { /* 증명서 발급 로직 */ }
-async function deleteEvent() { const id = document.getElementById("evtId").value; if(!id) return; if(!confirm("이 일정을 삭제하시겠습니까?")) return; await _supabase.from('ref_calendar').delete().eq('id', id); eventModal.hide(); renderCalendar(); }
+function toggleEditMode(e){
+const f=document.querySelectorAll('.readonly-field');
+f.forEach(x=>{if(e){x.classList.remove('readonly-field');x.classList.add('editable-field');x.readOnly=false}else{x.classList.add('readonly-field');x.classList.remove('editable-field');x.readOnly=true}});
+document.getElementById("btnEditInfo").classList.toggle('hidden',e);
+document.getElementById("btnCancelInfo").classList.toggle('hidden',!e);
+document.getElementById("btnSaveInfo").classList.toggle('hidden',!e);
+document.getElementById("btnAddrSearch").classList.toggle('hidden',!e);
+document.getElementById("btnAddEm").classList.toggle('hidden',!e);
+if(!e){loadProfile();loadEmergencyList()}
+}
+async function updateInfo(){
+if(!confirm("정보를 저장하시겠습니까?"))return;
+const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};
+const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);
+if(error){showAlert("저장 실패: "+error.message);return}
+await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);
+if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}
+showAlert("저장되었습니다.");toggleEditMode(false)
+}
+async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
+function renderEmergencyTable(){const b=document.getElementById("emergencyListBody");b.innerHTML="";const e=!document.getElementById("btnSaveInfo").classList.contains('hidden');tempEmergencyList.forEach((r,i)=>{b.innerHTML+=`<tr><td>${r.contact_name}</td><td>${r.relation}</td><td>${r.phone}</td><td>${e?`<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${i})">×</button>`:''}</td></tr>`})}
+function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
+function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
+function removeTempEm(i){tempEmergencyList.splice(i,1);renderEmergencyTable()}
+async function renderCalendar(){
+const{data:l}=await _supabase.from('ref_approval').select('*').eq('doc_type','휴가').eq('status','완료');
+const{data:e}=await _supabase.from('ref_employees').select('emp_name,birth_date,hire_date');
+const{data:c}=await _supabase.from('ref_calendar').select('*');
+let evts=[];
+const bY=new Date().getFullYear();const yrs=[bY-2,bY-1,bY,bY+1,bY+2];
+if(l)l.forEach(x=>evts.push({title:`${x.drafter_name} 휴가`,start:x.start_date,end:x.end_date,color:(x.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true}));
+if(e)e.forEach(p=>{
+if(p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name} 생일 🎂`,start:`${y}-${p.birth_date.slice(5,10)}`,color:'#ffc107',textColor:'#000',allDay:true}));
+if(p.hire_date){
+const hY=parseInt(p.hire_date.substring(0,4));
+yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true})});
+}
+});
+if(c)c.forEach(x=>{
+if(x.visibility==='admin'&&myInfo.role!=='admin')return;
+if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;
+const bg=x.type==='holiday'?'#dc3545':'#6c757d';
+if(x.recurrence==='yearly'){yrs.forEach(y=>{evts.push({id:x.id,title:x.title,start:`${y}-${x.start_date.slice(5,10)}${x.start_date.length>10?'T'+x.start_date.slice(11,16):''}`,color:bg,extendedProps:{origin:x}})});
+}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=x.start_date.slice(8,10);if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${x.start_date.length>10?'T'+x.start_date.slice(11,16):''}`,color:bg,extendedProps:{origin:x}})}}});
+}else{evts.push({id:x.id,title:x.title,start:x.start_date,end:x.end_date,color:bg,extendedProps:{origin:x}})}
+});
+if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:"🎉 창립기념일",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true})}}
+const el=document.getElementById('calendar');
+const cal=new FullCalendar.Calendar(el,{initialView:'dayGridMonth',locale:'ko',height:600,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},events:evts,selectable:true,dateClick:function(i){openEventModal(null,i.dateStr)},eventClick:function(i){if(i.event.extendedProps.origin&&(myInfo.role==='admin'||i.event.extendedProps.origin.created_by===myInfo.emp_id)){openEventModal(i.event.extendedProps.origin,null)}}});
+cal.render();
+}
+async function calculateLeave(){const{data:r,error}=await _supabase.rpc('calculate_leave_days',{p_emp_id:myInfo.emp_id});if(error){console.error(error);return}const v=r!==null?r:0;document.getElementById("lvRemain").innerText=v;const b=document.querySelector('.leave-badge');if(v<=0){b.style.borderColor='#dc3545';b.style.color='#dc3545'}else{b.style.borderColor='#0d6efd';b.style.color='#0d6efd'}}
+async function showLeaveDetail(){
+const el=document.getElementById('leaveDetailModal'),bd=el.querySelector('.modal-body');if(!el)return;
+bd.innerHTML='<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div></div>';leaveDetailModal.show();
+const{data:em}=await _supabase.from('ref_employees').select('hire_date').eq('emp_id',myInfo.emp_id).single();
+const{data:al}=await _supabase.from('hr_leave_adj').select('*').eq('emp_id',myInfo.emp_id).order('created_at',{ascending:false});
+const{data:ul}=await _supabase.from('ref_approval').select('created_at,doc_type,amount,status').eq('drafter_id',myInfo.emp_id).in('status',['완료','가승인','증빙확인중']).or('doc_type.ilike.%(연차)%,doc_type.ilike.%(반차)%').order('created_at',{ascending:false});
+let h='<div class="d-flex flex-column gap-3">';
+let gh='<ul class="leave-list">';
+if(em&&em.hire_date){const hd=new Date(em.hire_date),n=new Date(),oy=new Date(hd);oy.setFullYear(oy.getFullYear()+1);if(n<oy){let m=(n.getFullYear()-hd.getFullYear())*12+(n.getMonth()-hd.getMonth());if(n.getDate()<hd.getDate())m--;gh+=`<li class="text-primary">🟢 1년 미만: ${Math.min(11,Math.max(0,m))}개</li>`}else{gh+=`<li class="text-muted">⚪ 1년 미만: 0개</li>`}if(n.getFullYear()>hd.getFullYear())gh+=`<li class="text-primary">🔵 회계연도(${n.getFullYear()}): 15개</li>`;else gh+=`<li class="text-muted">⚪ 회계연도: 0개</li>`}gh+='</ul>';h+=`<div class="leave-section"><h6>🎁 발생 내역</h6>${gh}</div>`;
+let ah='<ul class="leave-list">';if(al&&al.length>0)al.forEach(i=>{const c=(i.adj_type==='지급'||i.adj_type==='포상')?'text-success':'text-danger',s=(i.adj_type==='지급'||i.adj_type==='포상')?'+':'-';ah+=`<li><span class="${c} fw-bold">[${i.adj_type}]</span> ${i.reason||''} (${s}${i.days}일)</li>`});else ah+='<li class="text-muted">- 없음 -</li>';ah+='</ul>';h+=`<div class="leave-section"><h6>⚖️ 조정 내역</h6>${ah}</div>`;
+let uh='<ul class="leave-list">';if(ul&&ul.length>0)ul.forEach(i=>{const d=i.created_at.slice(0,10);let b='';if(i.status==='가승인')b='<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';if(i.status==='증빙확인중')b='<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';uh+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${i.doc_type} ${b}</span><span class="fw-bold text-danger">-${i.amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${d}</div></li>`});else uh+='<li class="text-muted">- 없음 -</li>';uh+='</ul>';h+=`<div class="leave-section"><h6>🎫 사용 내역</h6>${uh}</div>`;
+h+='</div>';bd.innerHTML=h;
+}
+function openEventModal(e,d){const b=document.getElementById("btnDelEvent");if(e){document.getElementById("evtId").value=e.id;document.getElementById("evtTitle").value=e.title;document.getElementById("evtVisibility").value=e.visibility||'company';const dt=e.start_date.split('T');document.getElementById("evtDate").value=dt[0];document.getElementById("evtTime").value=dt[1]?dt[1].slice(0,5):"";document.getElementById("evtRecure").value=e.recurrence||'none';document.getElementById("evtIsHoliday").checked=(e.type==='holiday');b.classList.remove("hidden")}else{document.getElementById("evtId").value="";document.getElementById("evtTitle").value="";document.getElementById("evtVisibility").value='private';document.getElementById("evtDate").value=d;document.getElementById("evtTime").value="";document.getElementById("evtRecure").value="none";document.getElementById("evtIsHoliday").checked=false;b.classList.add("hidden")}eventModal.show()}
+async function saveEvent(){const i=document.getElementById("evtId").value,t=document.getElementById("evtTitle").value,v=document.getElementById("evtVisibility").value,d=document.getElementById("evtDate").value,tm=document.getElementById("evtTime").value,r=document.getElementById("evtRecure").value,tp=document.getElementById("evtIsHoliday").checked?'holiday':'company';if(!t||!d){showAlert("입력 확인");return}const fd=tm?`${d}T${tm}:00`:d,p={title:t,start_date:fd,type:tp,recurrence:r,visibility:v,created_by:myInfo.emp_id};if(i)await _supabase.from('ref_calendar').update(p).eq('id',i);else await _supabase.from('ref_calendar').insert(p);eventModal.hide();renderCalendar()}
+async function deleteEvent(){const i=document.getElementById("evtId").value;if(!i||!confirm("삭제합니까?"))return;await _supabase.from('ref_calendar').delete().eq('id',i);eventModal.hide();renderCalendar()}
+async function searchSalary(){const ym=document.getElementById("salaryMonth").value;const{data}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).single();if(!data){showAlert("내역 없음");return}currentSalaryData=data;currentSalaryData.year_month=ym;document.getElementById("salaryResult").classList.remove("hidden");document.getElementById("btnPrintSalary").classList.remove("hidden");const[y,m]=ym.split('-');document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;const f=n=>Number(n).toLocaleString(),p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']],d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','가불금'],['ded_capital','출자금']];let ph="";p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`;document.getElementById("tbl_pay_body").innerHTML=ph;let dh="";d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`;document.getElementById("tbl_ded_body").innerHTML=dh;document.getElementById("v_net").innerText=f(data.net_pay)}
+function printSalaryPopup(){if(!currentSalaryData)return showAlert("조회 필요");printDocument(currentSalaryData)}
+function printDocument(d){const w=window.open('','','width=900,height=1100'),[y,m]=d.year_month.split('-'),[yy,mm]=d.year_month.split('-').map(Number);let sd=1,ld=new Date(yy,mm,0).getDate();if(myInfo.hire_date){const h=new Date(myInfo.hire_date);if(h.getFullYear()===yy&&h.getMonth()+1===mm)sd=h.getDate()}const ad=`${y}년 ${Number(m)}월<br><span style="font-size:11px;color:#555;">(${y}.${m}.${String(sd).padStart(2,'0')} ~ ${y}.${m}.${ld})</span>`,pd=new Date(y,Number(m),10),pds=`${pd.getFullYear()}년 ${pd.getMonth()+1}월 ${pd.getDate()}일`,f=n=>n?Number(n).toLocaleString():'0',c=`<div style="font-family:'Malgun Gothic',serif;color:#333;padding-top:20px;"><h1 style="text-align:center;font-size:32px;margin:0 0 30px;">${y}년 ${Number(m)}월 급여명세서</h1><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size:13px;"><tr><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">귀속연월</td><td style="width:35%;padding:8px;border:1px solid #000;">${ad}</td><td style="background:#e0e0e0;width:15%;padding:8px;border:1px solid #000;">사원</td><td style="width:35%;padding:8px;border:1px solid #000;">${myInfo.emp_id} / ${myInfo.emp_name}</td></tr><tr><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">지급일자</td><td style="padding:8px;border:1px solid #000;">${pds}</td><td style="background:#e0e0e0;padding:8px;border:1px solid #000;">소속</td><td style="padding:8px;border:1px solid #000;">${myInfo.department}/${myInfo.position}</td></tr></table><div style="display:flex;gap:30px;margin-bottom:40px;border-top:2px solid #aaa;"><div style="flex:1;"><div style="text-align:center;color:#1e88e5;font-weight:bold;padding:8px;border-bottom:2px solid #1e88e5;">지급내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>기본급</td><td style="text-align:right;">${f(d.pay_basic)}</td></tr><tr><td>식대</td><td style="text-align:right;">${f(d.pay_meal)}</td></tr><tr><td>차량</td><td style="text-align:right;">${f(d.pay_car)}</td></tr><tr><td>직책</td><td style="text-align:right;">${f(d.pay_position)}</td></tr><tr><td>근속</td><td style="text-align:right;">${f(d.pay_service)}</td></tr><tr><td>연장</td><td style="text-align:right;">${f(d.pay_overtime)}</td></tr><tr><td>육아</td><td style="text-align:right;">${f(d.pay_child)}</td></tr><tr><td>상여</td><td style="text-align:right;">${f(d.pay_bonus)}</td></tr></table></div><div style="flex:1;"><div style="text-align:center;color:#e53935;font-weight:bold;padding:8px;border-bottom:2px solid #e53935;">공제내역</div><table style="width:100%;font-size:13px;line-height:2.0;"><tr><td>국민연금</td><td style="text-align:right;">${f(d.ded_pension)}</td></tr><tr><td>건강보험</td><td style="text-align:right;">${f(d.ded_health)}</td></tr><tr><td>장기요양</td><td style="text-align:right;">${f(d.ded_care)}</td></tr><tr><td>고용보험</td><td style="text-align:right;">${f(d.ded_employ)}</td></tr><tr><td>소득세</td><td style="text-align:right;">${f(d.ded_income)}</td></tr><tr><td>지방소득세</td><td style="text-align:right;">${f(d.ded_local)}</td></tr><tr><td>가불금</td><td style="text-align:right;">${f(d.ded_advance)}</td></tr><tr><td>출자금</td><td style="text-align:right;">${f(d.ded_capital)}</td></tr></table></div></div><div style="border-top:1px solid #999;margin-bottom:20px;"></div><div style="height:120px;position:relative;"><div style="position:absolute;top:30px;left:20px;color:#666;">노고에 감사드립니다.</div><table style="position:absolute;right:0;top:0;width:350px;font-size:13px;background:#fff;border-collapse:collapse;"><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">지급합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.pay_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">공제합계</td><td style="border:1px solid #000;padding:6px;text-align:right;">${f(d.ded_total)}</td></tr><tr><td style="border:1px solid #000;padding:6px;background:#f5f5f5;">실지급액</td><td style="border:1px solid #000;padding:6px;text-align:right;font-weight:bold;">${f(d.net_pay)}</td></tr></table></div><div style="text-align:center;margin-top:40px;"><span style="font-size:20px;font-weight:600;">${companyInfo.company_name||"조합"} 이사장 ${companyInfo.chairman}</span>${companyInfo.seal_url?`<img src="${companyInfo.seal_url}" style="position:absolute;width:60px;margin-left:-30px;top:-15px;opacity:0.8;">`:''}</div></div>`;w.document.write(`<html><head><title>급여명세서</title><style>@page{size:A4;margin:0}body{margin:0;background:#555}.page-wrap{width:210mm;height:297mm;padding:20mm;background:#fff;margin:0 auto;box-sizing:border-box}.no-print{position:fixed;bottom:30px;right:30px;background:#fff;padding:10px;border-radius:50px;cursor:pointer}@media print{body{background:#fff}.no-print{display:none}}</style></head><body><div class="page-wrap">${c}</div><div class="no-print" onclick="window.print()">🖨️ 인쇄</div></body></html>`);w.document.close()}
+function toggleEtcInput(){const v=document.getElementById("certPurposeSelect").value,e=document.getElementById("certPurposeEtc");if(v==='기타'){e.classList.remove('hidden');e.focus()}else{e.classList.add('hidden')}}
+function openCertModal(){purposeModal.show()}
+async function loadNotices(){const{data}=await _supabase.from('ref_notice').select('*').order('created_at',{ascending:false}).limit(5);document.getElementById("noticeList").innerHTML=data&&data.length?data.map((n,i)=>`<div class="list-group-item" onclick="viewNotice(${i})" style="cursor:pointer"><h6 class="fw-bold mb-1">${n.title}</h6><small class="text-muted">${n.created_at.slice(0,10)}</small></div>`).join(""):'<div class="text-center p-3 text-muted">공지사항 없음</div>';noticesData=data}
+function viewNotice(i){const n=noticesData[i];document.getElementById("noticeModalTitle").innerText=n.title;document.getElementById("noticeModalDate").innerText=n.created_at.slice(0,10);document.getElementById("noticeModalWriter").innerText=n.writer||"관리자";document.getElementById("noticeModalContent").innerText=n.content;const l=document.getElementById("noticeFileLink"),a=document.getElementById("noticeFileArea");if(n.file_url){a.classList.remove("hidden");l.href=n.file_url}else a.classList.add("hidden");noticeDetailModal.show()}
+function runCertIssue(){/*증명서발급로직*/}
 </script>
 </body>
 </html>
