@@ -67,41 +67,82 @@
           </ul>
         </div>
         <div class="tab-content pt-2">
-          <div class="tab-pane fade show active" id="tabInfo">
-            <div id="infoContainer">
-                <div class="d-flex justify-content-end mb-2">
-                    <button class="btn btn-sm btn-outline-primary view-mode" onclick="toggleEditMode(true)">✏️ 정보 수정</button>
-                    <button class="btn btn-sm btn-secondary edit-mode me-2" onclick="toggleEditMode(false)">취소</button>
-                    <button class="btn btn-sm btn-primary edit-mode" onclick="saveBasicInfo()">저장 완료</button>
+        <div class="tab-pane fade show active" id="tabInfo">
+  <div id="infoContainer">
+    <div class="d-flex justify-content-end mb-2">
+      <button class="btn btn-sm btn-outline-primary view-mode" onclick="toggleEditMode(true)">✏️ 정보 수정</button>
+      <button class="btn btn-sm btn-secondary edit-mode me-2" onclick="toggleEditMode(false)">취소</button>
+      <button class="btn btn-sm btn-primary edit-mode" onclick="saveBasicInfo()">저장 완료</button>
+    </div>
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="info-card">
+          <div class="section-title">👤 기본 인적사항</div>
+          <div class="row g-3">
+            <div class="col-md-4"><label class="small text-muted">이름</label><div class="view-mode fw-bold" id="viewName">-</div><input type="text" id="editName" class="form-control edit-mode"></div>
+            <div class="col-md-4"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
+            <div class="col-md-4"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
+            <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
+              <div class="edit-mode"><div class="input-group mb-1"><input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly><button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button></div><input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소"></div>
+            </div>
+            <div class="col-md-6"><label class="small text-muted">입사일</label><div class="view-mode fw-bold" id="viewHireDate">-</div><input type="date" id="editHireDate" class="form-control edit-mode"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="info-card" style="background:#fff3cd;">
+           <div class="section-title text-dark">🚨 비상 연락망</div>
+           <div id="viewEmergency" class="small text-dark ps-2">-</div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="info-card">
+          <div class="section-title">🎂 생년월일</div>
+          <div class="view-mode"><div class="d-flex align-items-center gap-2"><span class="fs-4 fw-bold text-dark" id="viewBirth">미등록</span></div><div class="small text-muted mt-2">* 주민번호 뒷자리 숨김</div></div>
+          <div class="edit-mode"><label class="small text-muted mb-1">주민번호 (전체 입력)</label><div class="d-flex align-items-center gap-2 mb-2"><input type="text" id="rrnFront" class="form-control text-center" maxlength="6" placeholder="생년월일"><span class="fw-bold text-muted">-</span><input type="password" id="rrnBack" class="form-control text-center" maxlength="7" placeholder="뒤 7자리"></div><button class="btn btn-outline-dark btn-sm w-100" onclick="saveRRN()">🔒 암호화 저장</button></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="info-card">
+          <div class="section-title">💰 연봉 계약</div>
+          <div class="view-mode"><label class="small text-muted">현재 연봉</label><div class="d-flex align-items-center gap-2"><span class="fs-5 fw-bold" id="viewSalary">******</span><i class="bi bi-eye text-primary cursor-pointer" onclick="toggleSalaryVisibility()"></i></div><div class="mt-2"><label class="small text-muted">적용 시작일: </label><span class="fw-bold" id="viewSalaryDate">-</span></div></div>
+          <div class="edit-mode"><div class="mb-2"><label class="small text-muted">연봉 총액 (원)</label><input type="number" id="editSalary" class="form-control fw-bold"></div><div class="mb-2"><label class="small text-muted">적용 시작일</label><input type="date" id="salaryApplyDate" class="form-control"></div></div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <div class="info-card" style="background: white; border: 1px solid #dee2e6;">
+              <div class="section-title mb-2">📄 근로계약서</div>
+              <div id="contractView" class="mb-2"></div>
+              <input type="hidden" id="hiddenContractUrl" value="">
+              <div class="edit-mode border-top pt-2">
+                <label class="small text-muted">파일 업데이트</label>
+                <div class="d-flex gap-2">
+                  <input type="file" id="contractFile" class="form-control form-control-sm" accept=".pdf,.jpg,.png,.jpeg">
+                  <button class="btn btn-dark btn-sm text-nowrap" style="min-width: 80px;" onclick="uploadContract()">업로드</button>
                 </div>
-                <div class="row g-3">
-                    <div class="col-12"><div class="info-card"><div class="section-title">👤 기본 인적사항</div><div class="row g-3">
-                        <div class="col-md-4"><label class="small text-muted">이름</label><div class="view-mode fw-bold" id="viewName">-</div><input type="text" id="editName" class="form-control edit-mode"></div>
-                        <div class="col-md-4"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
-                        <div class="col-md-4"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
-                        <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
-                            <div class="edit-mode"><div class="input-group mb-1"><input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly><button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button></div><input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소"></div>
-                        </div>
-                        <div class="col-md-6"><label class="small text-muted">입사일</label><div class="view-mode fw-bold" id="viewHireDate">-</div><input type="date" id="editHireDate" class="form-control edit-mode"></div>
-                    </div></div></div>
-                    <div class="col-md-6"><div class="info-card"><div class="section-title">🎂 생년월일</div>
-                        <div class="view-mode"><div class="d-flex align-items-center gap-2"><span class="fs-4 fw-bold text-dark" id="viewBirth">미등록</span></div><div class="small text-muted mt-2">* 주민번호 뒷자리 숨김</div></div>
-                        <div class="edit-mode"><label class="small text-muted mb-1">주민번호 (전체 입력)</label><div class="d-flex align-items-center gap-2 mb-2"><input type="text" id="rrnFront" class="form-control text-center" maxlength="6" placeholder="생년월일"><span class="fw-bold text-muted">-</span><input type="password" id="rrnBack" class="form-control text-center" maxlength="7" placeholder="뒤 7자리"></div><button class="btn btn-outline-dark btn-sm w-100" onclick="saveRRN()">🔒 암호화 저장</button></div>
-                    </div></div>
-                    <div class="col-md-6"><div class="info-card"><div class="section-title">💰 연봉 계약</div>
-                        <div class="view-mode"><label class="small text-muted">현재 연봉</label><div class="d-flex align-items-center gap-2"><span class="fs-5 fw-bold" id="viewSalary">******</span><i class="bi bi-eye text-primary cursor-pointer" onclick="toggleSalaryVisibility()"></i></div><div class="mt-2"><label class="small text-muted">적용 시작일: </label><span class="fw-bold" id="viewSalaryDate">-</span></div></div>
-                        <div class="edit-mode"><div class="mb-2"><label class="small text-muted">연봉 총액 (원)</label><input type="number" id="editSalary" class="form-control fw-bold"></div><div class="mb-2"><label class="small text-muted">적용 시작일</label><input type="date" id="salaryApplyDate" class="form-control"></div></div>
-                    </div></div>
-                    <div class="col-12"><div class="row g-2">
-                        <div class="col-md-6"><div class="info-card" style="background: white; border: 1px solid #dee2e6;"><div class="section-title mb-2">📄 근로계약서</div><div id="contractView" class="mb-2"></div>
-                          <input type="hidden" id="hiddenContractUrl" value="">
-                          <div class="edit-mode border-top pt-2"><label class="small text-muted">파일 업데이트</label><div class="d-flex gap-2"><input type="file" id="contractFile" class="form-control form-control-sm" accept=".pdf,.jpg,.png,.jpeg"><button class="btn btn-dark btn-sm text-nowrap" style="min-width: 80px;" onclick="uploadContract()">업로드</button></div></div></div></div>
-                        <div class="col-md-6"><div class="info-card" style="background: white; border: 1px solid #dee2e6;"><div class="section-title mb-2">🖨️ 문서 발급</div><div class="d-flex flex-column gap-2"><button class="btn btn-outline-dark w-100" onclick="openAdminCertModal()">📄 재직증명서 발급</button><div class="small text-muted text-center">* 퇴사자는 경력증명서로 출력됨</div></div></div></div>
-                    </div></div>
-                    <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-end gap-2" id="btnResignArea"></div>
-                </div>
+              </div>
             </div>
           </div>
+          <div class="col-md-6">
+            <div class="info-card" style="background: white; border: 1px solid #dee2e6;">
+              <div class="section-title mb-2">🖨️ 문서 발급</div>
+              <div class="d-flex flex-column gap-2">
+                <button class="btn btn-outline-dark w-100" onclick="openAdminCertModal()">📄 재직증명서 발급</button>
+                <div class="small text-muted text-center">* 퇴사자는 경력증명서로 출력됨</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-end gap-2" id="btnResignArea"></div>
+    </div>
+  </div>
+</div> 
        <div class="tab-pane fade" id="tabSalary">
   <div id="salaryAlertBox" class="mb-3 hidden"></div>
 
@@ -261,6 +302,15 @@ async function openDetail(u) {
     const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: u.emp_id });
     document.getElementById("viewBirth").innerText = birthDate || "미등록";
     
+    // [추가된 부분] 비상 연락망 조회 및 표시
+    const { data: emList } = await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id', u.emp_id);
+    const emDiv = document.getElementById("viewEmergency");
+    if(emList && emList.length > 0) {
+        emDiv.innerHTML = emList.map(e => `<div><span class="fw-bold">${e.relation}:</span> ${e.contact_name} (${e.phone})</div>`).join("");
+    } else {
+        emDiv.innerHTML = '<span class="text-muted small">- 등록된 연락망 없음 -</span>';
+    }
+
     toggleEditMode(false);
     document.getElementById("rrnFront").value = ""; document.getElementById("rrnBack").value = "";
     
@@ -541,9 +591,9 @@ async function printLedger() {
 }
 
 function printDocument(data) {
-    const win = window.open('', '', 'width=1100,height=900');
+    const win = window.open('', '', 'width=900,height=1100');
     let contentHtml = "";
-    
+
     const commonCss = `
         * { box-sizing: border-box; } 
         body { font-family: "Malgun Gothic", serif; margin: 0; padding: 0; background: #555; }
@@ -551,7 +601,19 @@ function printDocument(data) {
         @media print { .no-print { display: none !important; } html, body { margin: 0; background: #fff; } }
     `;
 
-    // 1. [가로] 급여대장 스타일
+    // [수정된 부분] .print-cert .print-content에 'position: relative;' 추가
+    const portraitCss = `
+        @page { size: A4 portrait; margin: 0; }
+        .page-wrap { width: 210mm; height: 297mm; margin: 0 auto; padding: 15mm; background: white; overflow: hidden !important; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { border: 1px solid #000 !important; }
+        img { max-width: 100%; height: auto; }
+        .print-salary .print-content { zoom: 0.86; width: 100%; }
+        .print-cert .print-content { zoom: 0.98; width: 100%; position: relative; } 
+        .text-end { text-align: right; } .fw-bold { font-weight: bold; }
+    `;
+    
+    // [가로] 급여대장 스타일
     const landscapeCss = `
         @page { size: A4 landscape; margin: 10mm; } 
         .page-wrap { width: 297mm; min-height: 210mm; padding: 15mm; background: white; margin: 20px auto; } 
@@ -559,18 +621,6 @@ function printDocument(data) {
         th, td { border: 1px solid #999; padding: 4px 6px; } 
         th { background-color: #f5f5f5; text-align: center; font-weight: bold; white-space: nowrap; } 
         .text-center { text-align: center; } .text-end { text-align: right; } .fw-bold { font-weight: bold; } .bg-light { background-color: #f9f9f9; }
-    `;
-
-    // 2. [세로] 1장짜리 명세서 스타일 (overflow:hidden)
-    const portraitCss = `
-        @page { size: A4 portrait; margin: 0; }
-        .page-wrap { width: 210mm; height: 297mm; min-height: 0; margin: 0 auto; padding: 15mm; background: white; overflow: hidden !important; border: none; box-shadow: none; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { border: 1px solid #000 !important; }
-        img { max-width: 100%; height: auto; }
-        .print-salary .print-content { zoom: 0.86; width: 100%; }
-        .print-cert .print-content { zoom: 0.98; width: 100%; }
-        .text-end { text-align: right; } .fw-bold { font-weight: bold; }
     `;
 
     if (data.type === 'ledger') {
@@ -602,50 +652,49 @@ function printDocument(data) {
                 <div style="flex:1;">
                     <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #0d47a1; color:#0d47a1; margin-bottom:5px;">지급내역</div>
                     <table style="width:100%;">
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">기본급</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_basic}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">식 대</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_meal}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">차량유지비</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_car}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">직책수당</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_pos}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">근속수당</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_svc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">연장수당</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_ot}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">육아수당</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_child}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">상여금</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.p_bonus}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">기본급</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_basic}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">식 대</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_meal}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">차량유지비</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_car}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">직책수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_pos}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">근속수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_svc}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">연장수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_ot}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">육아수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_child}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">상여금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_bonus}</td></tr>
                     </table>
                 </div>
                 <div style="flex:1;">
                     <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #b71c1c; color:#b71c1c; margin-bottom:5px;">공제내역</div>
                     <table style="width:100%;">
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">국민연금</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_pen}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">건강보험</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_hlt}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">장기요양</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_care}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">고용보험</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_emp}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">소득세</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_inc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">지방소득세</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_loc}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">가불금</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_adv}</td></tr>
-                        <tr><td style="padding:5px; border-bottom:1px solid #eee; border:none !important;">출자금</td><td class="text-end" style="padding:5px; border-bottom:1px solid #eee; border:none !important;">${data.d_cap}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">국민연금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_pen}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">건강보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_hlt}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">장기요양</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_care}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">고용보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_emp}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_inc}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">지방소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_loc}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">가불금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">출자금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_cap}</td></tr>
                     </table>
                 </div>
             </div>
-            <div style="display:flex; margin-top:40px; border-top:2px solid #888; padding-top:20px; align-items:center;">
-                <div style="flex:1; font-size:14px; color:#555; padding-left:20px;">귀하의 노고에 진심으로 감사드립니다.</div>
-                <div style="width:300px;">
-                    <table style="width:100%;">
-                        <tr><th style="background:#f9f9f9; padding:8px;">지급합계</th><td class="text-end" style="padding:8px; font-weight:bold;">${data.p_total}</td></tr>
-                        <tr><th style="background:#f9f9f9; padding:8px;">공제합계</th><td class="text-end" style="padding:8px; font-weight:bold;">${data.d_total}</td></tr>
-                        <tr><th style="background:#f0f0f0; padding:8px; border-bottom:2px solid #555;">실지급액</th><td class="text-end" style="padding:8px; border-bottom:2px solid #555; font-weight:bold; background:#fff;">${data.net}</td></tr>
-                    </table>
-                </div>
+            <div style="border-top:1px solid #999; margin-bottom:20px;"></div>
+            <div style="height:120px; position:relative;">
+                <div style="position:absolute; top:30px; left:20px; color:#666;">노고에 감사드립니다.</div>
+                <table style="position:absolute; right:0; top:0; width:350px; background:#fff;">
+                    <tr><td style="background:#f5f5f5;">지급합계</td><td class="text-end">${data.p_total}</td></tr>
+                    <tr><td style="background:#f5f5f5;">공제합계</td><td class="text-end">${data.d_total}</td></tr>
+                    <tr><td style="background:#f5f5f5;">실지급액</td><td class="text-end" style="font-weight:bold;">${data.net}</td></tr>
+                </table>
             </div>
-            <div style="margin-top:50px; text-align:center; position:relative;">
-                <span style="font-size:18px; font-weight:bold; position:relative; z-index:1;">${data.compName} 이사장 ${data.chairman}</span>
-                ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
+            <div style="text-align:center; margin-top:40px; position:relative;">
+                <span style="font-size:20px; font-weight:600;">${data.compName} 이사장 ${data.chairman}</span>
+                ${data.seal ? `<img src="${data.seal}" style="position:absolute; width:60px; margin-left:-30px; top:-15px; opacity:0.8;">` : ''}
             </div>
         </div>`;
     } 
     else if(data.type === 'cert') {
         contentHtml = `
-        <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box;">
-            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
+        <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box; position: relative;">
+            ${data.logo ?  `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
             <div style="text-align:right; font-size:12px; margin-top:20px; margin-bottom:5px;">www.yonginsolar.kr</div>
             <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
             <div style="text-align:right; font-size: 13px; margin-bottom: 20px;">문서번호: ${data.docNum}</div>
@@ -662,9 +711,12 @@ function printDocument(data) {
             </table>
             <div style="text-align:center; margin-top: 60px; font-size: 18px;">위와 같이 재직하고 있음을 증명합니다.</div>
             <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
-            <div style="text-align:center; margin-top:60px; position:relative;">
+            <div style="text-align:center; margin-top: 60px; position:relative;">
                 <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 이사장 ${data.chairman}</span>
-                ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
+                ${data.seal ? 
+
+[Image of official seal stamp]
+ `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
             <div style="text-align:center; margin-top: 70px; font-size: 12px; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
         </div>`;
@@ -673,9 +725,15 @@ function printDocument(data) {
     const finalCss = data.type === 'ledger' ? landscapeCss : portraitCss;
     const pageClass = data.type === 'ledger' ? 'print-ledger' : (data.type === 'salary' ? 'print-salary' : 'print-cert');
 
-    const html = `<html><head><title>인쇄 미리보기</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>${commonCss} ${finalCss}</style></head><body><div class="print-fab no-print"><span class="small fw-bold">인쇄 미리보기</span><button class="btn btn-primary btn-sm rounded-pill" onclick="window.print()">🖨️ 인쇄하기</button><button class="btn btn-secondary btn-sm rounded-pill" onclick="window.close()">닫기</button></div><div class="page-wrap ${pageClass}"><div class="print-content">${contentHtml}</div></div>
-   
+    const html = `<html><head><title>인쇄 미리보기</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>${commonCss} ${finalCss}</style></head><body>
+        <div class="print-fab no-print">
+            <span class="small fw-bold">인쇄 미리보기</span>
+            <button class="btn btn-primary btn-sm rounded-pill" onclick="window.print()">🖨️ 인쇄하기</button>
+            <button class="btn btn-secondary btn-sm rounded-pill" onclick="window.close()">닫기</button>
+        </div>
+        <div class="page-wrap ${pageClass}"><div class="print-content">${contentHtml}</div></div>
     </body></html>`;
+    
     win.document.write(html);
     win.document.close();
 }
