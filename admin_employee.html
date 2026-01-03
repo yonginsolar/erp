@@ -601,7 +601,6 @@ function printDocument(data) {
         @media print { .no-print { display: none !important; } html, body { margin: 0; background: #fff; } }
     `;
 
-    // [수정된 부분] .print-cert .print-content에 'position: relative;' 추가
     const portraitCss = `
         @page { size: A4 portrait; margin: 0; }
         .page-wrap { width: 210mm; height: 297mm; margin: 0 auto; padding: 15mm; background: white; overflow: hidden !important; }
@@ -613,7 +612,6 @@ function printDocument(data) {
         .text-end { text-align: right; } .fw-bold { font-weight: bold; }
     `;
     
-    // [가로] 급여대장 스타일
     const landscapeCss = `
         @page { size: A4 landscape; margin: 10mm; } 
         .page-wrap { width: 297mm; min-height: 210mm; padding: 15mm; background: white; margin: 20px auto; } 
@@ -694,7 +692,7 @@ function printDocument(data) {
     else if(data.type === 'cert') {
         contentHtml = `
         <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box; position: relative;">
-            ${data.logo ?  `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
+            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
             <div style="text-align:right; font-size:12px; margin-top:20px; margin-bottom:5px;">www.yonginsolar.kr</div>
             <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
             <div style="text-align:right; font-size: 13px; margin-bottom: 20px;">문서번호: ${data.docNum}</div>
@@ -713,10 +711,7 @@ function printDocument(data) {
             <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
             <div style="text-align:center; margin-top: 60px; position:relative;">
                 <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 이사장 ${data.chairman}</span>
-                ${data.seal ? 
-
-[Image of official seal stamp]
- `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
+                ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
             </div>
             <div style="text-align:center; margin-top: 70px; font-size: 12px; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
         </div>`;
