@@ -984,48 +984,108 @@ function confirmSync(type) {
         });
     }
     // (6) 연말결산
+// (6) 연말결산 (손익마감)
     else if (type === 'closing') {
         const thisYear = new Date().getFullYear();
-        showConfirm("연말결산", `${thisYear}년도 손익을 마감하시겠습니까?`, async () => {
+        
+        showConfirm("연말결산", `${thisYear}년도 손익을 마감하고 순이익을 자본으로 대체하시겠습니까?<br><span class="text-danger small fw-bold">* 주의: 모든 전표 입력이 끝난 후 1회만 실행하세요.</span>`, async () => {
+            const closingTag = `[결산] ${thisYear}년 손익마감`;
             const startDate = `${thisYear}-01-01`;
             const endDate = `${thisYear}-12-31`;
-            const closingTag = `[결산] ${thisYear}년 손익마감`;
+            const relatedKey = `CLOSE-${thisYear}`; // 중복 방지용 키
 
-            const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Operator', 'System(Closing)').ilike('Description', `%${thisYear}%`).limit(1);
-            if(dup && dup.length > 0) return showAlert("중복", "이미 수행되었습니다.");
+            // 1. 중복 실행 방지
+            const { data: dup } = await _supabase.from('ac_journal')
+                .select('id')
+                .eq('RelatedID', relatedKey)
+                .limit(1);
 
-            const { data: journals } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate).in('Type', ['매출', '비용']);
-            if(!journals || journals.length === 0) return showAlert("알림", "마감할 내역이 없습니다.");
+            if (dup && dup.length > 0) return showAlert("중복", `이미 ${thisYear}년도 결산이 완료되었습니다.`);
 
+            // 2. 올해의 매출/비용 내역 전체 조회
+            const { data: journals, error } = await _supabase.from('ac_journal')
+                .select('Type, Account, Debit, Credit')
+                .gte('Date', startDate)
+                .lte('Date', endDate)
+                .in('Type', ['매출', '비용']); // 자산, 부채, 자본은 마감 대상 아님
+
+            if (error) return showAlert("오류", "데이터 조회 실패: " + error.message);
+            if (!journals || journals.length === 0) return showAlert("알림", "마감할 매출/비용 내역이 없습니다.");
+
+            // 3. 계정별 잔액 집계
             let balances = {};
             journals.forEach(j => {
                 const acc = j.Account;
-                const db = Number(j.Debit), cr = Number(j.Credit);
-                if(!balances[acc]) balances[acc] = 0;
-                balances[acc] += (db - cr);
+                // 초기화
+                if (!balances[acc]) balances[acc] = { type: j.Type, amount: 0 };
+                
+                // 차변(Debit) - 대변(Credit)으로 잔액 계산
+                // 비용은 양수(+), 매출은 음수(-)로 집계됨
+                const db = Number(j.Debit || 0);
+                const cr = Number(j.Credit || 0);
+                balances[acc].amount += (db - cr);
             });
 
+            // 4. 마감 분개 생성
             let entries = [];
             const dateStr = `${thisYear}-12-31`;
-            let netIncome = 0;
+            let netIncomeCheck = 0; // 당기순이익 검증용
 
-            for (const [acc, bal] of Object.entries(balances)) {
-                if(bal === 0) continue;
-                if (bal > 0) { // 비용 잔액(차변) -> 대변 기입
-                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: bal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    entries.push({Date: dateStr, Type: '비용', Account: acc, Description: `${closingTag} 마감`, Debit: 0, Credit: bal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    netIncome -= bal;
-                } else { // 수익 잔액(대변) -> 차변 기입
-                    const absBal = Math.abs(bal);
-                    entries.push({Date: dateStr, Type: '매출', Account: acc, Description: `${closingTag} 마감`, Debit: absBal, Credit: 0, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    entries.push({Date: dateStr, Type: '자본', Account: '이월이익잉여금', Description: `${closingTag} (${acc})`, Debit: 0, Credit: absBal, RelatedID: 'CLOSE', Project: '본사', Operator: 'System(Closing)'});
-                    netIncome += absBal;
+            for (const [acc, info] of Object.entries(balances)) {
+                const netAmt = info.amount; 
+                if (netAmt === 0) continue; // 잔액 0이면 패스
+
+                // [비용 마감]: 차변 잔액(양수)을 대변으로 보내 0으로 만듦
+                if (info.type === '비용') {
+                    // (차변) 이월이익잉여금 / (대변) 해당 비용
+                    entries.push({
+                        Date: dateStr, Type: '자본', Account: '이월이익잉여금',
+                        Description: `${closingTag} (${acc})`,
+                        Debit: netAmt, Credit: 0, // 자본 감소 (비용만큼 이익 차감)
+                        RelatedID: relatedKey, Project: '본사', Operator: writer
+                    });
+                    entries.push({
+                        Date: dateStr, Type: '비용', Account: acc,
+                        Description: `${closingTag}`,
+                        Debit: 0, Credit: netAmt, // 비용 대변 기입 -> 잔액 0원됨
+                        RelatedID: relatedKey, Project: '본사', Operator: writer
+                    });
+                    netIncomeCheck -= netAmt;
+                }
+                // [매출 마감]: 대변 잔액(음수)을 차변으로 보내 0으로 만듦
+                else if (info.type === '매출') {
+                    const absAmt = Math.abs(netAmt); // 음수를 양수로 변환
+                    // (차변) 해당 매출 / (대변) 이월이익잉여금
+                    entries.push({
+                        Date: dateStr, Type: '매출', Account: acc,
+                        Description: `${closingTag}`,
+                        Debit: absAmt, Credit: 0, // 매출 차변 기입 -> 잔액 0원됨
+                        RelatedID: relatedKey, Project: '본사', Operator: writer
+                    });
+                    entries.push({
+                        Date: dateStr, Type: '자본', Account: '이월이익잉여금',
+                        Description: `${closingTag} (${acc})`,
+                        Debit: 0, Credit: absAmt, // 자본 증가 (매출만큼 이익 증가)
+                        RelatedID: relatedKey, Project: '본사', Operator: writer
+                    });
+                    netIncomeCheck += absAmt;
                 }
             }
 
-            if(entries.length > 0) {
-                await _supabase.from('ac_journal').insert(entries);
-                showAlert("성공", `당기순손익 ${netIncome.toLocaleString()}원 대체 완료`); refreshDashboard();
+            if (entries.length > 0) {
+                const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+                if (insertError) {
+                    showAlert("오류", "저장 중 문제가 발생했습니다: " + insertError.message);
+                } else {
+                    const incomeStr = netIncomeCheck >= 0 ? 
+                        `당기순이익 ${netIncomeCheck.toLocaleString()}원` : 
+                        `당기순손실 ${Math.abs(netIncomeCheck).toLocaleString()}원`;
+                    
+                    showAlert("성공", `${thisYear}년도 마감이 완료되었습니다.<br>${incomeStr}이 자본으로 대체되었습니다.`);
+                    refreshDashboard();
+                }
+            } else {
+                showAlert("알림", "처리할 잔액이 없습니다.");
             }
         });
     }
