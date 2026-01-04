@@ -358,26 +358,35 @@ async function loadCards() {
 // 3. 대시보드 새로고침
 // [수정] 대시보드 새로고침 (하이브리드 집계 로직 적용)
 // [수정] 대시보드 새로고침 (자산 뻥튀기 오류 수정 및 하이브리드 집계)
+// [수정] 대시보드 새로고침 (부가세 분기별 집계 로직 적용)
 async function refreshDashboard() {
     const { data } = await _supabase.from('ac_journal').select('*');
     if (!data) return;
 
-    const currentYear = new Date().getFullYear().toString();
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = now.getMonth() + 1; // 1~12월
     
-    let rev = 0;         // 매출 (금년도)
-    let exp = 0;         // 비용 (금년도)
+    // 현재 분기 계산 (1: 1~3월, 2: 4~6월, 3: 7~9월, 4: 10~12월)
+    const currentQuarter = Math.ceil(currentMonth / 3);
+    const startMonthOfQuarter = (currentQuarter - 1) * 3 + 1; // 분기 시작월 (1, 4, 7, 10)
+
+    let rev = 0;         // 매출 (금년도 전체)
+    let exp = 0;         // 비용 (금년도 전체)
     let ast = 0;         // 총자산 (전체 누적)
-    let vatIn = 0;       // 부가세예수금 (금년도)
-    let vatOut = 0;      // 부가세대급금 (금년도)
+    let vatIn = 0;       // 부가세예수금 (현재 분기만)
+    let vatOut = 0;      // 부가세대급금 (현재 분기만)
     let bankBalance = 0; // 보통예금 (전체 누적)
 
     data.forEach(r => {
         const db = Number(r.Debit || 0);
         const cr = Number(r.Credit || 0);
-        const rYear = r.Date ? r.Date.substring(0, 4) : "";
+        if (!r.Date) return;
+
+        const rYear = r.Date.substring(0, 4);
+        const rMonth = Number(r.Date.substring(5, 7));
 
         // 1. 자산 현황 및 통장 잔액 (전체 누적)
-        // 오직 '자산' 유형의 계정만 합산해야 2배 오류가 발생하지 않습니다.
         if (r.Type === '자산') {
             ast += (db - cr);
             if (r.Account === '보통예금' || r.Account === '현금') {
@@ -385,25 +394,26 @@ async function refreshDashboard() {
             }
         }
 
-        // 2. 매출/비용 및 부가세 (금년도)
+        // 2. 매출/비용 (금년도 전체 합계)
         if (rYear === currentYear) {
-            if (r.Type === '매출') {
-                rev += cr;
+            if (r.Type === '매출') rev += cr;
+            else if (r.Type === '비용') exp += db;
+
+            // 3. 부가세 (현재 분기 데이터만 집계)
+            // 전표 월(rMonth)이 현재 분기 시작월보다 크거나 같으면 해당 분기 데이터임
+            if (rMonth >= startMonthOfQuarter && rMonth <= (startMonthOfQuarter + 2)) {
                 if (r.Account === '부가세예수금') vatIn += (cr - db);
-            } 
-            else if (r.Type === '비용') {
-                exp += db;
                 if (r.Account === '부가세대급금') vatOut += (db - cr);
             }
         }
     });
 
     // UI 반영
-    document.getElementById("valRev").innerText = rev.toLocaleString();
-    document.getElementById("valExp").innerText = exp.toLocaleString();
-    document.getElementById("valAst").innerText = ast.toLocaleString();
-    document.getElementById("valCash").innerText = bankBalance.toLocaleString();
-    document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString();
+    document.getElementById("valRev").innerText = rev.toLocaleString(); // 올해 총 매출
+    document.getElementById("valExp").innerText = exp.toLocaleString(); // 올해 총 비용
+    document.getElementById("valAst").innerText = ast.toLocaleString(); // 현재 총 자산
+    document.getElementById("valCash").innerText = bankBalance.toLocaleString(); // 현재 통장 잔고
+    document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString(); // ★현재 분기 예상 부가세
 }
 
 // 4. 모달 및 UI 제어 로직
