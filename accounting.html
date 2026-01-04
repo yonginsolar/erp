@@ -1094,6 +1094,7 @@ function confirmSync(type) {
                 showAlert("알림", "처리할 잔액이 없습니다.");
             }
         });
+    }
 // (7) 연말결산 취소 (되돌리기)
     else if (type === 'undo_closing') {
         const thisYear = new Date().getFullYear();
