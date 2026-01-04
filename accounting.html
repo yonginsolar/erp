@@ -946,18 +946,49 @@ function toggleManualCat() {
     document.getElementById("manualCatInput").classList.toggle("hidden", !chk);
 }
 
+// [수정] 다중 속성 처리가 포함된 항목 추가 함수
 async function confAdd() {
     const type = document.getElementById("addTypeSelect").value;
     const name = document.getElementById("addNewItemName").value;
+    
+    // 중분류 처리 (기존 로직 유지)
     let cat = document.getElementById("addCategorySelect").value;
     if(document.getElementById("chkManualCat").checked) cat = document.getElementById("manualCatInput").value;
+    
     const usage = document.getElementById("addUsageSelect").value;
-    const isTaxFree = document.getElementById("addTaxFreeCheck").checked ? "TRUE" : "FALSE"; // DB값 통일
 
     if(!name || !cat) return showAlert("알림", "내용을 입력하세요");
-    // DB 칼럼명 확인: Type, Standard, Item, Usage, Tax_Free
-    await _supabase.from('ac_master').insert({Type:type, Standard:cat, Item:name, Usage:usage, Tax_Free:isTaxFree});
-    showAlert("성공", "추가되었습니다."); addModal.hide(); loadMasterData();
+
+    // [변경 핵심] 다중 속성 값 수집
+    // 1. 체크된 모든 항목의 value를 배열로 가져옴
+    const checkedEls = document.querySelectorAll('.check-attr:checked');
+    const attrValues = Array.from(checkedEls).map(el => el.value);
+
+    // 2. DB 저장 데이터 매핑
+    // (1) SpecialType: 선택된 값들을 쉼표(,)로 연결 (예: "tax_free,labor_3.3")
+    const specialTypeVal = attrValues.join(',');
+    
+    // (2) Tax_Free: 'tax_free' 값이 포함되어 있으면 TRUE, 아니면 FALSE
+    const isTaxFree = attrValues.includes('tax_free') ? "TRUE" : "FALSE";
+
+    // DB Insert
+    // SpecialType 칼럼 추가됨
+    const { error } = await _supabase.from('ac_master').insert({
+        Type: type, 
+        Standard: cat, 
+        Item: name, 
+        Usage: usage, 
+        Tax_Free: isTaxFree,
+        SpecialType: specialTypeVal 
+    });
+
+    if (error) {
+        showAlert("오류", "저장 실패: " + error.message);
+    } else {
+        showAlert("성공", "추가되었습니다."); 
+        addModal.hide(); 
+        loadMasterData();
+    }
 }
 
 // 정보 모달
