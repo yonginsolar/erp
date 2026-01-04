@@ -357,6 +357,7 @@ async function loadCards() {
 
 // 3. 대시보드 새로고침
 // [수정] 대시보드 새로고침 (하이브리드 집계 로직 적용)
+// [수정] 대시보드 새로고침 (자산 뻥튀기 오류 수정 및 하이브리드 집계)
 async function refreshDashboard() {
     const { data } = await _supabase.from('ac_journal').select('*');
     if (!data) return;
@@ -365,38 +366,33 @@ async function refreshDashboard() {
     
     let rev = 0;         // 매출 (금년도)
     let exp = 0;         // 비용 (금년도)
-    let ast = 0;         // 자산 (전체 누적)
-    let vatIn = 0;       // 부가세예수금 (금년도 예상액)
-    let vatOut = 0;      // 부가세대급금 (금년도 예상액)
+    let ast = 0;         // 총자산 (전체 누적)
+    let vatIn = 0;       // 부가세예수금 (금년도)
+    let vatOut = 0;      // 부가세대급금 (금년도)
     let bankBalance = 0; // 보통예금 (전체 누적)
 
     data.forEach(r => {
         const db = Number(r.Debit || 0);
         const cr = Number(r.Credit || 0);
-        const rYear = r.Date ? r.Date.substring(0, 4) : ""; // YYYY-MM-DD에서 연도 추출
+        const rYear = r.Date ? r.Date.substring(0, 4) : "";
 
-        // 1. 자산/부채/자본 및 통장 잔고는 '누적' 계산
+        // 1. 자산 현황 및 통장 잔액 (전체 누적)
+        // 오직 '자산' 유형의 계정만 합산해야 2배 오류가 발생하지 않습니다.
         if (r.Type === '자산') {
             ast += (db - cr);
             if (r.Account === '보통예금' || r.Account === '현금') {
                 bankBalance += (db - cr);
             }
-        } else if (r.Type === '부채') {
-            ast -= (cr - db); // 부채가 늘면 순자산은 감소하므로 자산 현황에서 차감 표시
-        } else if (r.Type === '자본') {
-            ast += (cr - db);
         }
 
-        // 2. 매출/비용 및 부가세는 '금년도'만 계산
+        // 2. 매출/비용 및 부가세 (금년도)
         if (rYear === currentYear) {
             if (r.Type === '매출') {
                 rev += cr;
-                // 부가세예수금 집계
                 if (r.Account === '부가세예수금') vatIn += (cr - db);
             } 
             else if (r.Type === '비용') {
                 exp += db;
-                // 부가세대급금 집계
                 if (r.Account === '부가세대급금') vatOut += (db - cr);
             }
         }
