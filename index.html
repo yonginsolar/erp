@@ -87,7 +87,7 @@
     </div>
   </div>
 
-  <div class="text-center mt-4">
+<div class="text-center mt-4 hidden" id="patchNoteArea">
     <small class="text-muted" style="cursor: pointer; text-decoration: underline;" onclick="openPatchModal()">
       Ver <span id="currentVersion">Loading...</span> (Release Notes)
     </small>
@@ -124,6 +124,8 @@ async function loadUserInfo(email) {
     if (data.role === 'admin' || data.position === '국장') {
         document.getElementById('btnAdmin').classList.remove('hidden');
     }
+  // [추가] 로그인 성공 시에만 패치노트 영역 보이기
+    document.getElementById('patchNoteArea').classList.remove('hidden');
     showScreen('menuArea');
 }
 
