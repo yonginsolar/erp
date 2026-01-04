@@ -204,12 +204,18 @@
                <button class="btn btn-secondary btn-sm text-white" onclick="confirmSync('depreciation')">실행</button>
              </div>
           </div>
-          <div class="card p-3 border-start border-5 border-danger bg-light">
-             <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">📅 연말결산 (손익마감)</h6><small class="text-muted">수익/비용 마감 및 자본 대체</small></div>
-               <button class="btn btn-danger btn-sm text-white" onclick="confirmSync('closing')">실행</button>
-             </div>
-          </div>
+<div class="card p-3 border-start border-5 border-danger bg-light">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h6 class="fw-bold mb-1">📅 연말결산 (손익마감)</h6>
+            <small class="text-muted">수익/비용 마감 및 자본 대체</small>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-1" onclick="confirmSync('undo_closing')">취소</button>
+            <button class="btn btn-danger btn-sm text-white" onclick="confirmSync('closing')">실행</button>
+        </div>
+    </div>
+</div>
       </div>
     </div>
 
