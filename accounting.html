@@ -509,8 +509,8 @@ function filterAccounts() {
         const d = document.createElement("div");
         d.className = "list-group-item list-group-item-action p-2 ps-3 border-0 border-bottom search-list-item";
         
-        const isTaxFree = acc.Tax_Free || acc.tax_free; 
-        const specialType = acc.SpecialType || acc.specialtype;
+        const isTaxFree = acc.tax_free; 
+        const specialType = acc.special_code
         
         const badge = (isTaxFree === true || isTaxFree === 'TRUE' || isTaxFree === '면세') ? '<span class="badge bg-secondary ms-2" style="font-size:0.7em;">면세</span>' : '';
         const spBadge = (specialType) ? `<span class="badge bg-info text-dark ms-1" style="font-size:0.7em;">${specialType}</span>` : '';
@@ -978,8 +978,8 @@ async function confAdd() {
         Standard: cat, 
         Item: name, 
         Usage: usage, 
-        Tax_Free: isTaxFree,
-        SpecialType: specialTypeVal 
+        tax_free: isTaxFree,         
+        special_code: specialTypeVal 
     });
 
     if (error) {
