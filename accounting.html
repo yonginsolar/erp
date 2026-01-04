@@ -564,10 +564,29 @@ function updateDynamicUI(accName, accType, specialCode, isTaxFree) {
         area.innerHTML = `<div class="special-box alert alert-success p-2 mb-2"><small class="fw-bold">ℹ️ 인건비 처리</small><br>4대보험/세금 등은 급여연동 기능을 권장합니다.</div>`;
         vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
     } 
-    else if (specialCode === "insurance") { // 4대보험
-        area.innerHTML = `<div class="special-box alert alert-info p-2 mb-2"><small class="fw-bold">ℹ️ 4대보험 납부</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">직원부담분(예수금)</span><input type="number" class="form-control" id="workerShare" placeholder="급여에서 뗀 금액" min="0" oninput="validNum(this)"></div><div class="form-text x-small">* 나머지는 회사부담분(비용)으로 처리됩니다.</div></div>`;
+else if (specialCode === "insurance") { // 4대보험
+        // 기본값으로 현재 월(YYYY-MM) 설정
+        const todayYM = new Date().toISOString().slice(0, 7);
+        
+        area.innerHTML = `
+            <div class="special-box alert alert-info p-2 mb-2">
+                <small class="fw-bold">ℹ️ 4대보험 납부</small>
+                
+                <div class="input-group input-group-sm mt-2 mb-2">
+                    <span class="input-group-text">귀속월</span>
+                    <input type="month" class="form-control" id="insMonth" value="${todayYM}">
+                    <button class="btn btn-outline-primary" type="button" onclick="fetchInsuranceShare()">직원부담분 가져오기</button>
+                </div>
+
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">직원부담분(예수금)</span>
+                    <input type="number" class="form-control" id="workerShare" placeholder="가져오기 버튼을 누르거나 직접 입력" min="0" oninput="validNum(this)">
+                </div>
+                <div class="form-text x-small text-end">* 총 납부액과의 차액은 회사부담분(비용) 처리</div>
+            </div>`;
+            
         vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
-    } 
+    }
     else if (specialCode === "loan_pay") { // 대출상환
         area.innerHTML = `<div class="special-box alert alert-warning p-2 mb-2"><small class="fw-bold">ℹ️ 대출 원리금 상환</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">이자 포함분</span><input type="number" class="form-control" id="loanInterest" placeholder="이 중 이자는 얼마?" min="0" oninput="validNum(this)"></div></div>`;
         vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
@@ -1052,6 +1071,35 @@ function realPrint() {
     w.document.write(`<html><head><title>결산보고서</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{padding:40px; font-family:'Malgun Gothic', serif;} .rpt-title{text-align:center; font-size:28px; font-weight:bold; margin-bottom:30px; text-decoration:underline;} .rpt-header-tbl{width:100%; border:2px solid #000; border-collapse:collapse; margin-bottom:30px;} .rpt-header-tbl th{background:#eee; padding:8px; border:1px solid #000; text-align:center; width:15%; font-weight:bold;} .rpt-header-tbl td{padding:8px; border:1px solid #000;} .rpt-sec{font-size:18px; font-weight:bold; margin:20px 0 10px 0; border-bottom:2px solid #555; padding-bottom:5px;} .rpt-tbl{width:100%; border-collapse:collapse; margin-bottom:20px; border:2px solid #000;} .rpt-tbl th, .rpt-tbl td{border:1px solid #000; padding:8px; font-size:14px;} .rpt-tbl th{background:#f8f9fa; text-align:center;} .rpt-amt{text-align:right; font-family:'Consolas', monospace;} .rpt-indent{padding-left:20px !important;} @media print{ .page-break{page-break-before:always;} .bg-light{background-color:#f8f9fa !important; -webkit-print-color-adjust:exact;} }</style></head><body>${document.getElementById("reportContent").innerHTML}</body></html>`);
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); w.close(); }, 500);
+}
+  // [신규] 급여대장에서 4대보험 공제액(직원부담분) 합계 가져오기
+async function fetchInsuranceShare() {
+    const ym = document.getElementById("insMonth").value;
+    if(!ym) return showAlert("알림", "귀속월을 선택하세요.");
+
+    // hr_salary 테이블에서 4대보험 관련 공제 항목만 조회 (소득세, 지방세 제외)
+    const { data, error } = await _supabase.from('hr_salary')
+        .select('ded_pension, ded_health, ded_care, ded_employ')
+        .eq('year_month', ym);
+
+    if (error) return showAlert("오류", "데이터 조회 실패: " + error.message);
+    if (!data || data.length === 0) return showAlert("알림", `${ym}월 급여 데이터가 없습니다.`);
+
+    let totalShare = 0;
+    data.forEach(row => {
+        // null 값 방지를 위해 Number()와 || 0 처리
+        totalShare += Number(row.ded_pension || 0); // 국민연금
+        totalShare += Number(row.ded_health || 0);  // 건강보험
+        totalShare += Number(row.ded_care || 0);    // 요양보험
+        totalShare += Number(row.ded_employ || 0);  // 고용보험
+    });
+
+    // 입력창에 값 적용
+    const inputEl = document.getElementById("workerShare");
+    inputEl.value = totalShare;
+    
+    // 알림 메시지 (선택 사항)
+    showAlert("완료", `${ym}월 급여대장에서 직원부담분 합계 ${totalShare.toLocaleString()}원을 가져왔습니다.<br>실제 고지서 금액과 다르다면 수정해주세요.`);
 }
 </script>
 </body>
