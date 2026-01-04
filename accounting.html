@@ -890,40 +890,97 @@ function confirmSync(type) {
         });
     }
     // (5) 감가상각
+// (5) 감가상각 실행
     else if (type === 'depreciation') {
         const thisYear = new Date().getFullYear();
-        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?`, async () => {
+        
+        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?<br><span class="text-danger small">* 1년에 한 번만 실행하세요.</span>`, async () => {
+            // 1. 중복 실행 방지 체크
             const descCheck = `[결산] ${thisYear}년 감가상각`;
-            const { data: dup } = await _supabase.from('ac_journal').select('id').ilike('Description', `${descCheck}%`).limit(1);
-            if(dup && dup.length > 0) return showAlert("중복", "이미 처리되었습니다.");
+            const { data: dup } = await _supabase
+                .from('ac_journal')
+                .select('id')
+                .ilike('Description', `${descCheck}%`)
+                .limit(1);
 
-            const { data: assets } = await _supabase.from('ref_assets').select('*');
-            if(!assets || assets.length === 0) return showAlert("알림", "고정자산이 없습니다.");
+            if (dup && dup.length > 0) return showAlert("중복", `이미 ${thisYear}년도 감가상각이 처리되었습니다.`);
+
+            // 2. 고정자산 대장 불러오기
+            const { data: assets, error } = await _supabase.from('ref_assets').select('*');
+            if (error) return showAlert("오류", "자산 데이터 조회 실패: " + error.message);
+            if (!assets || assets.length === 0) return showAlert("알림", "등록된 고정자산이 없습니다.");
 
             let entries = [];
-            const dateStr = `${thisYear}-12-31`;
+            const dateStr = `${thisYear}-12-31`; // 결산일
+
             assets.forEach(a => {
-                const cost = Number(a.acquisition_cost);
-                const life = Number(a.useful_life);
+                const cost = Number(a.acquisition_cost); // 취득원가
+                const life = Number(a.useful_life);      // 내용연수 (년)
                 const buyDate = new Date(a.acquisition_date);
-                if(cost > 0 && life > 0 && buyDate.getFullYear() <= thisYear && (buyDate.getFullYear() + life) > thisYear) {
+                const buyYear = buyDate.getFullYear();
+
+                // 유효성 체크: 금액과 수명이 있고, 취득일이 올해 이전이거나 같고, 상각 기간이 아직 남았을 때
+                // (취득년도 + 내용연수)가 현재년도보다 커야 잔존 내용연수가 있는 것임
+                if (cost > 0 && life > 0 && buyYear <= thisYear && (buyYear + life) > thisYear) {
+                    
+                    // 1년치 기본 상각액 (정액법)
                     let yearDep = Math.floor(cost / life);
-                    if(buyDate.getFullYear() === thisYear) {
+
+                    // ★ 올해 취득한 자산이면 월할 계산
+                    if (buyYear === thisYear) {
+                        // getMonth()는 0(1월)~11(12월)을 반환함
+                        // 예: 1월 취득(0) -> 12개월 사용 / 12월 취득(11) -> 1개월 사용
                         const monthsUsed = 12 - buyDate.getMonth();
                         yearDep = Math.floor(yearDep * (monthsUsed / 12));
                     }
-                    if(yearDep > 0) {
+                    
+                    // 10원 단위 절사 (선택사항, 필요 없으면 제거 가능)
+                    yearDep = Math.floor(yearDep / 10) * 10;
+
+                    if (yearDep > 0) {
                         const desc = `${descCheck} (${a.asset_name})`;
-                        entries.push({Date: dateStr, Type: '비용', Account: '감가상각비', Description: desc, Debit: yearDep, Credit: 0, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
-                        entries.push({Date: dateStr, Type: '자산', Account: '감가상각누계액', Description: desc, Debit: 0, Credit: yearDep, RelatedID: `DEP-${a.asset_code}`, Project: a.project || '본사', Operator: writer});
+                        
+                        // 분개 생성
+                        // (차) 감가상각비 XXX
+                        entries.push({
+                            Date: dateStr, 
+                            Type: '비용', 
+                            Account: '감가상각비', 
+                            Description: desc, 
+                            Debit: yearDep, 
+                            Credit: 0, 
+                            RelatedID: `DEP-${a.asset_code}`, 
+                            Project: a.project || '본사', 
+                            Operator: writer
+                        });
+                        
+                        // (대) 감가상각누계액 XXX
+                        entries.push({
+                            Date: dateStr, 
+                            Type: '자산', 
+                            Account: '감가상각누계액', 
+                            Description: desc, 
+                            Debit: 0, 
+                            Credit: yearDep, 
+                            RelatedID: `DEP-${a.asset_code}`, 
+                            Project: a.project || '본사', 
+                            Operator: writer
+                        });
                     }
                 }
             });
 
-            if(entries.length > 0) {
-                await _supabase.from('ac_journal').insert(entries);
-                showAlert("성공", `${entries.length/2}건 처리 완료`); refreshDashboard();
-            } else { showAlert("알림", "처리할 대상이 없습니다."); }
+            if (entries.length > 0) {
+                const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+                if (insertError) {
+                    showAlert("오류", "저장 중 문제가 발생했습니다: " + insertError.message);
+                } else {
+                    showAlert("성공", `${entries.length / 2}건의 자산에 대해 감가상각 처리를 완료했습니다.`);
+                    refreshDashboard();
+                }
+            } else {
+                showAlert("알림", "올해 상각 대상 자산이 없거나 이미 내용연수가 만료되었습니다.");
+            }
         });
     }
     // (6) 연말결산
