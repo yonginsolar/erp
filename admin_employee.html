@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <style>
     body { background-color: #f0f2f5; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; padding: 20px; }
@@ -37,6 +38,7 @@
       <button class="btn btn-light btn-sm btn-rounded me-1" onclick="location.href='index.html'">🏠 홈으로</button>
       <button class="btn btn-outline-secondary btn-sm btn-rounded me-1" onclick="openSettings()">⚙️ 설정 관리</button>
       <button class="btn btn-outline-dark btn-sm btn-rounded me-1" onclick="openLedgerModal()">📊 급여대장</button>
+      <button class="btn btn-outline-primary btn-sm btn-rounded me-1" onclick="openStatsDashboard()">📈 통계 대시보드</button>
       <button class="btn btn-primary btn-sm btn-rounded shadow-sm" onclick="openInviteModal()">✨ 신규 등록</button>
     </div>
   </div>
@@ -211,7 +213,112 @@
 <div class="modal fade" id="resignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 퇴사 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">퇴사일자 (마지막 근무일)</label><input type="date" id="inputResignDate" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-danger btn-sm w-100" onclick="confirmResign()">퇴사 확정</button></div></div></div></div>
 <div class="modal fade" id="adminCertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📄 재직증명서 발급</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">발급 용도</label><select id="adminCertPurpose" class="form-select form-select-sm" onchange="toggleAdminEtc()"><option value="관공서 제출용">관공서 제출용</option><option value="금융기관 제출용">금융기관 제출용</option><option value="기타">기타 (직접 입력)</option></select><input type="text" id="adminCertEtc" class="form-control form-control-sm mt-2" placeholder="직접 입력" style="display:none;"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="reqIssueCert()">발급 및 인쇄</button></div></div></div></div>
 <div class="modal fade" id="ledgerModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📊 급여대장 출력</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">대상 연월</label><input type="month" id="ledgerMonth" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="printLedger()">대장 출력 (A4 가로)</button></div></div></div></div>
+<div class="modal fade" id="statsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">📈 경영 지원 대시보드</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <ul class="nav nav-pills nav-fill mb-3 bg-white p-2 rounded border" id="statsTab" role="tablist">
+                    <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#statEff">⏱️ 결재 효율성</button></li>
+                    <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#statReject">🛡️ 반려/건전성</button></li>
+                    <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#statFin">💰 자금 흐름</button></li>
+                </ul>
 
+                <div class="tab-content">
+                    
+                    <div class="tab-pane fade show active" id="statEff">
+                        <div class="row g-3">
+                            <div class="col-lg-8">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-secondary mb-3">월별 평균 결재 소요시간 (단위: 시간)</h6>
+                                        <div style="height: 300px;"><canvas id="chartTime"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="card border-0 shadow-sm h-100 bg-primary text-white">
+                                    <div class="card-body d-flex flex-column justify-content-center text-center">
+                                        <h6 class="opacity-75">이번 달 평균 소요</h6>
+                                        <h1 class="fw-bold display-4 mb-0" id="valAvgTime">-</h1>
+                                        <small class="opacity-75 mt-2">기안 ~ 최종승인까지</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-header bg-white fw-bold">📋 병목 구간 분석 (결재가 늦은 순위)</div>
+                                    <div class="card-body p-0 table-responsive">
+                                        <table class="table table-hover mb-0 text-center small">
+                                            <thead class="table-light"><tr><th>순위</th><th>결재자</th><th>평균 반응시간</th><th>처리 건수</th></tr></thead>
+                                            <tbody id="tblSlowApprover"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="statReject">
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-secondary mb-3">반려 사유 키워드 (Top 5)</h6>
+                                        <div style="height: 250px;"><canvas id="chartRejectReason"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-secondary mb-3">최다 반려자 (엄격한 관리자)</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-borderless align-middle">
+                                                <thead class="text-muted border-bottom"><tr><th>이름</th><th>반려 횟수</th><th>비율</th></tr></thead>
+                                                <tbody id="tblRejectKing"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="statFin">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-secondary mb-3">월별 지출 추이 (인건비 vs 일반지출)</h6>
+                                        <div style="height: 300px;"><canvas id="chartFinance"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-header bg-white fw-bold">📊 상세 지출 내역 (백데이터)</div>
+                                    <div class="card-body p-0 table-responsive">
+                                        <table class="table table-sm table-hover mb-0 text-center small">
+                                            <thead class="table-light"><tr><th>귀속월</th><th>인건비 합계</th><th>일반지출 합계</th><th>총 지출</th><th>비중(인건비)</th></tr></thead>
+                                            <tbody id="tblFinanceBack"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div> <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary btn-rounded" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
@@ -731,6 +838,247 @@ function printDocument(data) {
     
     win.document.write(html);
     win.document.close();
+}
+  // =========================================================
+// [통계 대시보드 로직] - 10년차 시니어 개발자 작성
+// =========================================================
+
+let statsModalInstance;
+let charts = {}; // 차트 객체들을 담아둘 변수 (중복 생성 방지용)
+
+// 1. 대시보드 열기 및 데이터 로드 메인 함수
+async function openStatsDashboard() {
+    if(!statsModalInstance) statsModalInstance = new bootstrap.Modal(document.getElementById('statsModal'));
+    statsModalInstance.show();
+
+    // 로딩 표시 (간략히)
+    document.getElementById("valAvgTime").innerText = "계산 중...";
+
+    // [데이터 확보] 전자결재(지출 포함) & 급여대장 동시에 조회 (병렬 처리)
+    // 최근 1년치 데이터만 조회하여 성능 최적화
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const dateStr = oneYearAgo.toISOString();
+
+    const [approvalRes, salaryRes] = await Promise.all([
+        _supabase.from('ref_approval').select('*').gte('created_at', dateStr).order('created_at', {ascending: true}),
+        _supabase.from('hr_salary').select('*').gte('created_at', dateStr).order('year_month', {ascending: true})
+    ]);
+
+    if(approvalRes.error || salaryRes.error) return showAlert("데이터 로드 실패");
+
+    const appList = approvalRes.data || [];
+    const salaryList = salaryRes.data || [];
+
+    // 2. 각 섹션별 분석 및 렌더링 실행
+    renderEfficiencyStats(appList);
+    renderRejectionStats(appList);
+    renderFinanceStats(appList, salaryList);
+}
+
+// ---------------------------------------------------------
+// [분석 1] 결재 효율성 (소요시간)
+// ---------------------------------------------------------
+function renderEfficiencyStats(list) {
+    // 1) 데이터 가공
+    let monthlyData = {}; // 월별 {총시간, 건수}
+    let approverStats = {}; // 결재자별 {총시간, 건수}
+
+    list.forEach(doc => {
+        if(doc.status !== '완료') return; // 완료된 건만 분석
+        
+        // JSON 파싱: approval_line 확인
+        if(!doc.approval_line || !Array.isArray(doc.approval_line)) return;
+
+        // 최종 승인자 찾기 (status가 '승인'인 마지막 사람)
+        // filter를 쓰는 이유: 중간에 '참조'나 '대기'가 섞일 수 있으므로 확실한 승인자만 추출
+        const approvers = doc.approval_line.filter(l => l.status === '승인' && l.processed_at);
+        if(approvers.length === 0) return;
+
+        const lastApprover = approvers[approvers.length - 1];
+        
+        const start = new Date(doc.created_at);
+        const end = new Date(lastApprover.processed_at);
+        const diffHours = (end - start) / (1000 * 60 * 60); // 시간 단위 변환
+
+        // 월별 집계
+        const monthKey = doc.created_at.slice(0, 7); // YYYY-MM
+        if(!monthlyData[monthKey]) monthlyData[monthKey] = { sum: 0, count: 0 };
+        monthlyData[monthKey].sum += diffHours;
+        monthlyData[monthKey].count++;
+
+        // 결재자별 집계 (개인별 평균 시간)
+        approvers.forEach(who => {
+            if(!who.processed_at) return;
+            // 결재자가 받은 시점부터 처리한 시점까지 알기는 어려우므로(도착시간 데이터 부재),
+            // 여기서는 '전체 리드타임'에 대한 기여도로 단순화하지 않고
+            // "최종 승인자" 기준이 아닌, 모든 승인자의 이력을 카운트합니다.
+            // *정확도 향상: 본인이 승인한 건수 카운트
+            if(!approverStats[who.name]) approverStats[who.name] = { sum: 0, count: 0 };
+            // 여기선 단순히 본인이 포함된 문서의 전체 리드타임을 넣기보다, 처리 건수 위주로 봅니다.
+            // 하지만 '병목'을 찾으려면 processed_at이 중요하므로, 
+            // 여기서는 심플하게 '내가 결재한 문서들의 처리시간'을 일단 누적합니다.
+            // (더 정밀한 분석은 '도착일시' 칼럼이 필요함)
+            approverStats[who.name].sum += diffHours; 
+            approverStats[who.name].count++;
+        });
+    });
+
+    // 2) 차트 데이터 준비
+    const labels = Object.keys(monthlyData).sort();
+    const values = labels.map(m => (monthlyData[m].sum / monthlyData[m].count).toFixed(1));
+
+    // 이번 달 평균 표시
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const currData = monthlyData[thisMonth];
+    document.getElementById("valAvgTime").innerText = currData ? (currData.sum / currData.count).toFixed(1) + "시간" : "-";
+
+    // 3) 차트 그리기
+    drawChart('chartTime', 'line', {
+        labels: labels,
+        datasets: [{
+            label: '평균 소요시간 (시간)',
+            data: values,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            tension: 0.3,
+            fill: true
+        }]
+    });
+
+    // 4) 백데이터 테이블 (결재가 늦은 순위 - 평균값이 높은 순)
+    // *정확한 병목 분석을 위해선 '도착->승인' 갭이 필요하지만, 현재 데이터로는 '전체 리드타임' 평균으로 대체
+    const rank = Object.keys(approverStats).map(name => ({
+        name: name,
+        avg: (approverStats[name].sum / approverStats[name].count).toFixed(1),
+        count: approverStats[name].count
+    })).sort((a, b) => b.avg - a.avg).slice(0, 5); // Top 5
+
+    document.getElementById("tblSlowApprover").innerHTML = rank.map((r, i) => 
+        `<tr><td>${i+1}</td><td class="fw-bold">${r.name}</td><td>${r.avg}시간</td><td>${r.count}건</td></tr>`
+    ).join("");
+}
+
+// ---------------------------------------------------------
+// [분석 2] 반려 현황 (사유 분석)
+// ---------------------------------------------------------
+function renderRejectionStats(list) {
+    let rejectReasons = {};
+    let rejectors = {};
+
+    list.forEach(doc => {
+        if(doc.status !== '반려') return;
+
+        // JSON 파싱
+        if(!doc.approval_line || !Array.isArray(doc.approval_line)) return;
+        
+        // 누가 반려했는지 찾기
+        const rejecterObj = doc.approval_line.find(l => l.status === '반려');
+        if(rejecterObj) {
+            // 반려자 카운트
+            rejectors[rejecterObj.name] = (rejectors[rejecterObj.name] || 0) + 1;
+
+            // 사유 키워드 추출 (간단한 공백 분리)
+            const comment = rejecterObj.comment || "사유없음";
+            // 간단하게 전체 문장을 카운트하거나, 핵심 단어만 추출
+            // 여기서는 '사유 내용' 자체를 그룹화합니다. (너무 길면 앞 10글자만)
+            const key = comment.length > 10 ? comment.slice(0, 10) + "..." : comment;
+            rejectReasons[key] = (rejectReasons[key] || 0) + 1;
+        }
+    });
+
+    // 1) 반려 사유 차트 (도넛)
+    const reasonLabels = Object.keys(rejectReasons).sort((a, b) => rejectReasons[b] - rejectReasons[a]).slice(0, 5);
+    const reasonValues = reasonLabels.map(k => rejectReasons[k]);
+
+    drawChart('chartRejectReason', 'doughnut', {
+        labels: reasonLabels,
+        datasets: [{
+            data: reasonValues,
+            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff']
+        }]
+    });
+
+    // 2) 반려자 랭킹 테이블
+    const sortedRejectors = Object.keys(rejectors).map(name => ({ name, count: rejectors[name] }))
+        .sort((a, b) => b.count - a.count).slice(0, 5);
+
+    document.getElementById("tblRejectKing").innerHTML = sortedRejectors.map(r => 
+        `<tr><td class="fw-bold">${r.name}</td><td>${r.count}건</td><td><div class="progress" style="height: 6px;"><div class="progress-bar bg-danger" style="width: ${Math.min(r.count*10, 100)}%"></div></div></td></tr>`
+    ).join("");
+}
+
+// ---------------------------------------------------------
+// [분석 3] 자금 흐름 (인건비 vs 지출결의)
+// ---------------------------------------------------------
+function renderFinanceStats(appList, salaryList) {
+    let financeData = {}; // Key: YYYY-MM, Value: { labor: 0, expense: 0 }
+
+    // 1) 인건비 집계 (hr_salary)
+    salaryList.forEach(s => {
+        const ym = s.year_month; // YYYY-MM
+        if(!financeData[ym]) financeData[ym] = { labor: 0, expense: 0 };
+        financeData[ym].labor += Number(s.pay_total); // 지급 총액 기준
+    });
+
+    // 2) 일반지출 집계 (ref_approval)
+    appList.forEach(doc => {
+        if(doc.status !== '완료') return;
+        // doc_type에 '지출'이 포함된 것만 (휴가 등 제외)
+        if(doc.doc_type && doc.doc_type.includes('지출')) {
+            const ym = doc.created_at.slice(0, 7);
+            if(!financeData[ym]) financeData[ym] = { labor: 0, expense: 0 };
+            financeData[ym].expense += Number(doc.amount);
+        }
+    });
+
+    // 정렬 (최근 6개월)
+    const keys = Object.keys(financeData).sort().slice(-6); 
+    const laborArr = keys.map(k => financeData[k].labor);
+    const expArr = keys.map(k => financeData[k].expense);
+
+    // 3) 차트 그리기 (스택 막대)
+    drawChart('chartFinance', 'bar', {
+        labels: keys,
+        datasets: [
+            { label: '인건비', data: laborArr, backgroundColor: '#4bc0c0', stack: 'Stack 0' },
+            { label: '일반지출', data: expArr, backgroundColor: '#ff9f40', stack: 'Stack 0' }
+        ]
+    });
+
+    // 4) 백데이터 테이블
+    document.getElementById("tblFinanceBack").innerHTML = keys.map(k => {
+        const l = financeData[k].labor;
+        const e = financeData[k].expense;
+        const total = l + e;
+        const ratio = total > 0 ? ((l / total) * 100).toFixed(1) : 0;
+        return `<tr><td>${k}</td><td>${l.toLocaleString()}</td><td>${e.toLocaleString()}</td><td class="fw-bold">${total.toLocaleString()}</td><td class="text-primary">${ratio}%</td></tr>`;
+    }).join("");
+}
+
+// [공통] 차트 그리기 헬퍼 함수
+function drawChart(canvasId, type, dataConfig) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // 기존 차트가 있으면 삭제 (중복 겹침 방지)
+    if(charts[canvasId]) {
+        charts[canvasId].destroy();
+    }
+
+    charts[canvasId] = new Chart(ctx, {
+        type: type,
+        data: dataConfig,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: type === 'bar' || type === 'line' ? {
+                y: { beginAtZero: true }
+            } : {}
+        }
+    });
 }
 </script>
 </body>
