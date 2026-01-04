@@ -233,7 +233,37 @@
     <label class="small text-muted mb-1">중분류</label><select class="form-select mb-2" id="addCategorySelect"></select><div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="chkManualCat" onchange="toggleManualCat()"><label class="form-check-label small" for="chkManualCat">직접 입력</label></div><input type="text" class="form-control mb-3 hidden" id="manualCatInput" placeholder="새 중분류명 입력">
     <label class="small text-muted mb-1">사용처</label><select class="form-select mb-3" id="addUsageSelect"><option value="전체">전체</option><option value="본사">본사</option><option value="1호기">1호기</option><option value="2호기">2호기</option></select>
     <label class="small text-muted mb-1">새 항목명</label><input type="text" class="form-control mb-3" id="addNewItemName" placeholder="예: 야근식대">
-    <div class="form-check p-2 border rounded bg-light"><input class="form-check-input ms-0 me-2" type="checkbox" id="addTaxFreeCheck"><label class="form-check-label fw-bold" for="addTaxFreeCheck">면세 항목</label></div>
+<div class="mb-3">
+    <label class="form-label d-block fw-bold">항목 속성 (다중 선택 가능)</label>
+    <div class="border p-3 rounded bg-light">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input check-attr" type="checkbox" id="attrTaxFree" value="tax_free">
+            <label class="form-check-label" for="attrTaxFree">면세(부가세 없음)</label>
+        </div>
+        <hr class="my-2">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input check-attr" type="checkbox" id="attrLabor33" value="labor_3.3" onchange="toggleLabor(this)">
+            <label class="form-check-label" for="attrLabor33">인건비(3.3%)</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input check-attr" type="checkbox" id="attrLabor88" value="labor_8.8" onchange="toggleLabor(this)">
+            <label class="form-check-label" for="attrLabor88">인건비(8.8%)</label>
+        </div>
+        <hr class="my-2">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input check-attr" type="checkbox" id="attrInterest" value="interest">
+            <label class="form-check-label" for="attrInterest">이자(수익/비용)</label>
+        </div>
+    </div>
+</div>
+
+<script>
+// 인건비 3.3%와 8.8%가 동시에 선택되지 않도록 제어하는 헬퍼 함수
+function toggleLabor(target) {
+    if (target.id === 'attrLabor33' && target.checked) document.getElementById('attrLabor88').checked = false;
+    if (target.id === 'attrLabor88' && target.checked) document.getElementById('attrLabor33').checked = false;
+}
+</script>
 </div><div class="modal-footer"><button class="btn btn-primary w-100" onclick="confAdd()">추가하기</button></div></div></div></div>
 
 <div class="modal fade" id="reportModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">보고서 미리보기</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body bg-white" id="reportContent"></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button><button class="btn btn-primary" onclick="realPrint()">🖨️ 인쇄</button></div></div></div></div>
