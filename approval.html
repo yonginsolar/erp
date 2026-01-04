@@ -96,6 +96,16 @@
             </div>
         </div>
 
+        <div class="col-12 mb-3 hidden" id="divRelDoc">
+          <label class="small text-muted fw-bold">관련 근거 (품의서)</label>
+          <div class="card p-3 border-0 bg-light">
+             <div class="d-flex align-items-center justify-content-between">
+                 <span id="relDocName" class="text-muted small">선택된 관련 문서가 없습니다.</span>
+                 <button type="button" class="btn btn-sm btn-outline-dark" onclick="openRelSearch()">🔍 문서 찾기</button>
+             </div>
+             <input type="hidden" id="relDocId">
+          </div>
+        </div>
         <div class="col-12" id="divAmount">
           <label class="small text-muted" id="amountLabel">금액 (원)</label>
           <input type="number" class="form-control" id="appAmount" placeholder="0">
@@ -186,8 +196,10 @@
 
 <div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
+<div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">📄 관련 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
 
-<script>
+  <script>
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -272,23 +284,29 @@ function switchTab(tab) {
 }
 
 // [수정] 카테고리 변경 핸들러 (반차 UI 제어 포함)
+// [수정] 카테고리 변경 핸들러 (관련 문서 UI 제어 추가)
 function handleCategoryChange() {
     const type = document.getElementById("appCategory").value;
     const desc = document.getElementById("appDesc");
     const amtLabel = document.getElementById("amountLabel");
     const amountInput = document.getElementById("appAmount");
     const fileHelp = document.getElementById("fileHelp");
+    
+    // 섹션들
     const divLeave = document.getElementById("divLeaveSection");
     const divLeaveType = document.getElementById("divLeaveType");
     const divDep = document.getElementById("divDependentOption");
     const divAmt = document.getElementById("divAmount");
+    const divRel = document.getElementById("divRelDoc"); // [New]
 
-    // 초기화
+    // 전체 초기화
     divLeave.classList.add("hidden");
     divLeaveType.classList.add("hidden");
     divDep.classList.add("hidden");
+    divRel.classList.add("hidden"); // [New]
     divAmt.classList.remove("hidden");
     fileHelp.classList.add("hidden");
+    
     amtLabel.innerText = "금액 (원)";
     amountInput.placeholder = "0";
     
@@ -302,7 +320,6 @@ function handleCategoryChange() {
         divAmt.classList.add("hidden");
         desc.value = "위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.";
         
-        // 반차/생일반차 UI 제어
         const lType = document.getElementById("leaveTypeSelect").value;
         if(lType === '반차' || lType === '생일반차') {
             document.getElementById("dateRangeArea").classList.add("hidden");
@@ -316,9 +333,12 @@ function handleCategoryChange() {
         amountInput.value = "1";
         fileHelp.classList.remove("hidden");
         updateDepTemplate();
-    } 
+    }
+    else if (type === '지출결의') { // [New] 지출결의일 때 관련문서 UI 오픈
+        divRel.classList.remove("hidden");
+        if(!desc.value) desc.value = "아래와 같이 지출을 결의하오니 승인 바랍니다.";
+    }
     else {
-        // 일반, 지출결의
         if(desc.value.includes("휴가를 신청") || desc.value.includes("부양가족")) desc.value = "";
     }
 }
@@ -549,6 +569,7 @@ async function handleDraftSubmit(e) {
         file_links: uploadedUrls, 
         current_approver: finalApprovers[0].emp_id,
         status: initialStatus, // 가승인 or 진행중
+        related_doc_id: relatedDocId, // [New]
         created_at: new Date()
     });
 
@@ -639,34 +660,137 @@ function filterHistory() {
 }
 
 // [수정] 문서 렌더링 (가승인 버튼 포함)
+// [수정] 문서 렌더링 (관련 문서 링크 버튼 추가)
 function renderDocs(target, list, isTodo) {
     target.innerHTML = "";
     if(!list || list.length===0) { target.innerHTML = '<div class="p-3 text-center text-muted">없음</div>'; return; }
     list.forEach(doc => {
         const lineHtml = doc.approval_line.map(s => `<span class="small me-2 ${s.status==='승인'?'text-success':(s.status==='반려'?'text-danger':'text-muted')}">${s.status==='승인'?'✅':(s.status==='반려'?'⛔':'⬜')} ${s.name}</span>`).join("");
         
+        // [New] 관련 문서 링크 버튼 생성
+        let relBtn = "";
+        if (doc.related_doc_id) {
+            relBtn = `<button class="btn btn-sm btn-outline-info ms-2" style="font-size: 0.75rem;" onclick="openRelView(${doc.related_doc_id})">🔗 근거문서 보기</button>`;
+        }
+
         let btnHtml = "";
         if (isTodo) {
             btnHtml = `<div class="mt-2 text-end"><button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>`;
         } else {
-            // [재상신 버튼] 가승인 상태 + 본인일 때
             if (doc.status === '가승인' && doc.drafter_id === myInfo.emp_id) {
-                btnHtml = `
-                    <div class="mt-2 text-end">
-                        <span class="badge bg-warning text-dark me-2">⚠️ 증빙제출 필요</span>
-                        <button class="btn btn-sm btn-primary me-1" onclick="procUserAction(${doc.id}, '증빙제출')">📁 증빙제출</button>
-                        <button class="btn btn-sm btn-secondary" onclick="procUserAction(${doc.id}, '취소')">🗑️ 취소</button>
-                    </div>`;
+                btnHtml = `<div class="mt-2 text-end"><span class="badge bg-warning text-dark me-2">⚠️ 증빙제출 필요</span><button class="btn btn-sm btn-primary me-1" onclick="procUserAction(${doc.id}, '증빙제출')">📁 증빙제출</button><button class="btn btn-sm btn-secondary" onclick="procUserAction(${doc.id}, '취소')">🗑️ 취소</button></div>`;
             } else {
                 let badge = doc.status==='완료'?'bg-success':(doc.status==='반려'||doc.status==='결재취소'?'bg-danger':'bg-warning');
                 btnHtml = `<div class="mt-2 text-end"><span class="badge ${badge}">${doc.status}</span></div>`;
             }
         }
         
-        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><span class="badge bg-primary">${doc.doc_type}</span><small class="text-muted">${doc.created_at.slice(0,10)}</small></div><h6 class="fw-bold">${doc.title}</h6><div class="small mb-2">${lineHtml}</div>${btnHtml}</div>`;
+        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${doc.doc_type}</span>${relBtn}</div><small class="text-muted">${doc.created_at.slice(0,10)}</small></div><h6 class="fw-bold">${doc.title}</h6><div class="small mb-2">${lineHtml}</div>${btnHtml}</div>`;
     });
 }
 function updateFileList() { document.getElementById("fileListArea").innerHTML = Array.from(document.getElementById("attachFile").files).map(f => `<div class="file-item">📎 ${f.name}</div>`).join(""); }
-</script>
+
+    // --- [신규 기능] 관련 문서 검색 및 보기 ---
+
+let relSearchModal, relViewModal;
+let currentViewingDocId = null;
+
+// 모달 초기화 (onload 밖에서도 호출 가능하도록)
+document.addEventListener('DOMContentLoaded', () => {
+    relSearchModal = new bootstrap.Modal(document.getElementById('relSearchModal'));
+    relViewModal = new bootstrap.Modal(document.getElementById('relViewModal'));
+});
+
+// 1. 검색 모달 열기
+function openRelSearch() {
+    document.getElementById("relKeyword").value = "";
+    document.getElementById("relResultList").innerHTML = "";
+    relSearchModal.show();
+    setTimeout(()=> document.getElementById("relKeyword").focus(), 500);
+}
+
+// 2. 검색 실행 (완료된 '일반품의' & 같은 부서)
+async function runRelSearch() {
+    const key = document.getElementById("relKeyword").value.trim();
+    const listEl = document.getElementById("relResultList");
+    listEl.innerHTML = '<div class="p-3 text-center">검색 중...</div>';
+
+    // 내 부서 찾기 (ref_employees 이용 안 하고 allUsers에서 찾음)
+    const myDept = myInfo.department;
+
+    // 쿼리: status=완료, doc_type=일반품의
+    let query = _supabase.from('ref_approval')
+        .select('*')
+        .eq('status', '완료')
+        .eq('doc_type', '일반품의') // 품의서만 검색
+        .order('created_at', {ascending: false})
+        .limit(20);
+
+    if (key) query = query.or(`title.ilike.%${key}%,drafter_name.ilike.%${key}%`);
+
+    const { data, error } = await query;
+    if (error) { listEl.innerHTML = '오류: ' + error.message; return; }
+
+    // 부서 필터링 (클라이언트 사이드)
+    // allUsers 배열을 활용해 작성자의 부서를 확인
+    const filtered = data.filter(doc => {
+        const drafter = allUsers.find(u => u.emp_id === doc.drafter_id);
+        // 작성자가 없거나(퇴사), 부서가 같거나, 내가 관리자면 통과
+        return !drafter || drafter.department === myDept || myInfo.role === 'admin';
+    });
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="p-3 text-center text-muted">검색 결과가 없습니다. (완료된 품의서만 조회됨)</div>';
+        return;
+    }
+
+    listEl.innerHTML = "";
+    filtered.forEach(doc => {
+        const item = document.createElement("a");
+        item.className = "list-group-item list-group-item-action";
+        item.style.cursor = "pointer";
+        item.innerHTML = `<div class="d-flex justify-content-between"><span class="fw-bold">${doc.title}</span><small>${doc.created_at.slice(0,10)}</small></div><small class="text-muted">${doc.drafter_name} | ${Number(doc.amount).toLocaleString()}원</small>`;
+        item.onclick = () => selectRelDoc(doc);
+        listEl.appendChild(item);
+    });
+}
+
+// 3. 문서 선택
+function selectRelDoc(doc) {
+    document.getElementById("relDocId").value = doc.id;
+    document.getElementById("relDocName").innerHTML = `<span class="badge bg-success me-2">연동됨</span><b>${doc.title}</b> (${doc.drafter_name})`;
+    relSearchModal.hide();
+}
+
+// 4. 관련 문서 내용 보기 (모달)
+async function openRelView(docId) {
+    currentViewingDocId = docId;
+    const contentEl = document.getElementById("relViewContent");
+    contentEl.innerHTML = "Loading...";
+    relViewModal.show();
+
+    const { data, error } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
+    if (error || !data) { contentEl.innerHTML = "문서를 불러올 수 없습니다."; return; }
+
+    // 보기 전용 템플릿 렌더링
+    const lines = data.approval_line.map(l => `${l.name}(${l.status})`).join(" → ");
+    contentEl.innerHTML = `
+        <h4 class="fw-bold mb-3">${data.title}</h4>
+        <div class="mb-3 text-muted small">작성자: ${data.drafter_name} | 기안일: ${data.created_at.slice(0,10)} | 결재선: ${lines}</div>
+        <hr>
+        <div class="p-3 bg-light rounded" style="white-space: pre-wrap; min-height: 200px;">${data.content}</div>
+        <div class="mt-3 text-end fw-bold">금액: ${Number(data.amount).toLocaleString()}원</div>
+    `;
+}
+
+// 5. 새 창으로 보기
+function openRelNewTab() {
+    if (!currentViewingDocId) return;
+    // 실제로는 별도 뷰어 페이지가 필요하겠지만, 여기서는 모달 내용을 새 창에 씀
+    const w = window.open("", "_blank");
+    w.document.write(`<html><head><title>문서 보기</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="p-4">${document.getElementById("relViewContent").innerHTML}</body></html>`);
+}
+  
+  </script>
 </body>
 </html>
