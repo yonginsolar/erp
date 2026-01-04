@@ -425,40 +425,50 @@ function openSelModal() {
 }
 
 // [수정] 계정과목 검색 필터 (Usage 연동)
+// [수정] 프로젝트(Usage) 필터링이 추가된 계정과목 검색 함수
 function filterAccounts() {
     const k = document.getElementById("accountSearchInput").value.trim();
     const type = document.querySelector('input[name="inputType"]:checked').value;
-    const currentProject = document.getElementById("projectSelect").value || "본사";
+    
+    // [추가] 현재 선택된 프로젝트 값을 가져옵니다. (본사 vs 발전소 구분용)
+    const currentProject = document.getElementById("projectSelect").value; 
     const list = document.getElementById("accountList");
     
     list.innerHTML = "";
     
-    // 필터 조건: 
-    // 1. 계정 유형(Type) 일치
-    // 2. 검색어(k) 포함 (항목명 또는 중분류)
-    // 3. [Usage] '전체' 이거나, 현재 선택된 프로젝트와 일치하는 경우
     const filtered = mData.filter(m => {
-        // DB 칼럼명 대소문자 주의 (Supabase 설정에 따라 다를 수 있으나 보통 그대로 옴)
-        // 안전하게 m.Type, m.Usage 등 대소문자 확인하여 접근
         const mType = m.Type || m.type;
         const mItem = m.Item || m.item;
         const mStandard = m.Standard || m.standard;
-        const mUsage = m.Usage || m.usage || "전체"; // 없으면 전체로 간주
+        const mUsage = m.Usage || m.usage || "전체"; // Usage 값이 없으면 '전체'로 간주
 
+        // 1. 계정 유형(매출/비용/자산) 및 키워드 매칭
         const typeMatch = (mType === type);
         const keywordMatch = (mItem.includes(k) || mStandard.includes(k));
-        const usageMatch = (mUsage === "전체" || mUsage === currentProject);
+
+        // 2. [핵심] 프로젝트별 Usage 필터링 논리
+        let usageMatch = false;
+        if (currentProject === "본사") {
+            // 본사 선택 시: Usage가 '전체' 또는 '본사'인 것만
+            usageMatch = (mUsage === "전체" || mUsage === "본사");
+        } else {
+            // 본사가 아닌(발전소 등) 선택 시: Usage가 '전체' 또는 '발전소'인 것만
+            usageMatch = (mUsage === "전체" || mUsage === "발전소");
+        }
 
         return typeMatch && keywordMatch && usageMatch;
     });
     
-    if(filtered.length === 0) { list.innerHTML = "<div class='p-3 text-center text-muted'>검색 결과가 없습니다.</div>"; return; }
+    if(filtered.length === 0) { 
+        list.innerHTML = "<div class='p-3 text-center text-muted'>검색 결과가 없습니다.</div>"; 
+        return; 
+    }
 
+    // 화면에 리스트 그리기
     filtered.forEach(acc => {
         const d = document.createElement("div");
         d.className = "list-group-item list-group-item-action p-2 ps-3 border-0 border-bottom search-list-item";
         
-        // 면세 여부 및 특수코드 확인 (DB 칼럼명: Tax_Free, SpecialType)
         const isTaxFree = acc.Tax_Free || acc.tax_free; 
         const specialType = acc.SpecialType || acc.specialtype;
         
@@ -471,10 +481,11 @@ function filterAccounts() {
             document.getElementById("displayAccount").value = acc.Item;
             document.getElementById("hiddenItem").value = acc.Item;
             document.getElementById("hiddenStandard").value = acc.Standard;
-            document.getElementById("hiddenCode").value = acc.Code || ""; // 코드
-            document.getElementById("isTaxFree").value = isTaxFree; // 면세여부 저장
-            document.getElementById("specialMode").value = specialType || ""; // 특수코드 저장
+            document.getElementById("hiddenCode").value = acc.Code || acc.code || ""; 
+            document.getElementById("isTaxFree").value = isTaxFree; 
+            document.getElementById("specialMode").value = specialType || ""; 
             
+            // 특수 UI 업데이트 함수 호출
             updateDynamicUI(acc.Item, acc.Type, specialType, isTaxFree);
             selectModal.hide();
         };
