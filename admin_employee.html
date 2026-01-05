@@ -81,9 +81,10 @@
         <div class="info-card">
           <div class="section-title">👤 기본 인적사항</div>
           <div class="row g-3">
-            <div class="col-md-4"><label class="small text-muted">이름</label><div class="view-mode fw-bold" id="viewName">-</div><input type="text" id="editName" class="form-control edit-mode"></div>
-            <div class="col-md-4"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
-            <div class="col-md-4"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
+            <div class="col-md-3"><label class="small text-muted">이름</label><div class="view-mode fw-bold" id="viewName">-</div><input type="text" id="editName" class="form-control edit-mode"></div>
+            <div class="col-md-3"><label class="small text-muted fw-bold text-primary">조합원 번호</label><div class="view-mode" id="viewMemberId">-</div><input type="text" id="editMemberId" class="form-control edit-mode" placeholder="숫자 입력"></div>
+            <div class="col-md-3"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
+            <div class="col-md-3"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
             <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
               <div class="edit-mode"><div class="input-group mb-1"><input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly><button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button></div><input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소"></div>
             </div>
@@ -398,7 +399,8 @@ async function openDetail(u) {
     currentEmpHireDate = u.hire_date;
     currentEmpResignDate = u.resign_date;
 
-    document.getElementById("detailName").innerText = u.emp_name; document.getElementById("detailId").innerText = u.emp_id;
+    document.getElementById("detailName").innerText = u.emp_name; ocument.getElementById("viewMemberId").innerText = u.member_id || "-";
+    document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = u.emp_id;
     document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
     document.getElementById("editAddress").value = u.address || ""; document.getElementById("editAddressDetail").value = ""; 
@@ -434,16 +436,59 @@ function toggleEditMode(isEdit) { const c = document.getElementById("infoContain
 function toggleSalaryVisibility() { const el = document.getElementById("viewSalary"); el.innerText = el.innerText === "******" ? el.dataset.real : "******"; }
 
 async function saveBasicInfo() { 
-    const name = document.getElementById("editName").value; const phone = document.getElementById("editPhone").value; const email = document.getElementById("editEmail").value; 
-    let fullAddress = document.getElementById("editAddress").value; const detail = document.getElementById("editAddressDetail").value; if(detail) fullAddress += " " + detail;
-    const hireDate = document.getElementById("editHireDate").value; const sal = Number(document.getElementById("editSalary").value); const date = document.getElementById("salaryApplyDate").value; 
-    const updates = { emp_name: name, phone: phone, email: email, address: fullAddress, hire_date: hireDate, base_salary: sal, salary_apply_date: date }; 
+    // 1. 값 가져오기
+    const name = document.getElementById("editName").value; 
+    const memberId = document.getElementById("editMemberId").value; // [추가됨]
+    const phone = document.getElementById("editPhone").value; 
+    const email = document.getElementById("editEmail").value; 
+    
+    let fullAddress = document.getElementById("editAddress").value; 
+    const detail = document.getElementById("editAddressDetail").value; 
+    if(detail) fullAddress += " " + detail;
+
+    const hireDate = document.getElementById("editHireDate").value; 
+    const sal = Number(document.getElementById("editSalary").value); 
+    const date = document.getElementById("salaryApplyDate").value; 
+
+    // 2. 업데이트 객체 생성 (빈 값이면 null 처리)
+    const updates = { 
+        emp_name: name, 
+        member_id: memberId ? Number(memberId) : null, // [추가됨] 숫자 변환
+        phone: phone, 
+        email: email, 
+        address: fullAddress, 
+        hire_date: hireDate, 
+        base_salary: sal, 
+        salary_apply_date: date 
+    }; 
+
+    // 3. DB 업데이트 시도
     const { error } = await _supabase.from('ref_employees').update(updates).eq('emp_id', currentEmpId); 
+    
+    // [중요] 에러 발생 시 여기서 중단 (화면 업데이트 안 함)
     if(error) return showAlert("저장 실패: " + error.message); 
-    if (sal !== currentAnnualSalary) { await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); } 
-    currentAnnualSalary = sal; currentEmpHireDate = hireDate;
-    document.getElementById("viewName").innerText = name; document.getElementById("viewPhone").innerText = phone; document.getElementById("viewEmail").innerText = email; document.getElementById("viewAddress").innerText = fullAddress; document.getElementById("viewHireDate").innerText = hireDate; document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; document.getElementById("viewSalaryDate").innerText = date; 
-    toggleEditMode(false); showAlert("저장되었습니다."); 
+
+    // 4. 연봉 이력 관리 (변경 시에만)
+    if (sal !== currentAnnualSalary) { 
+        await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); 
+    } 
+
+    // 5. 전역 변수 업데이트
+    currentAnnualSalary = sal; 
+    currentEmpHireDate = hireDate;
+
+    // 6. [UI 업데이트] DB 저장이 성공했으므로 이제 화면을 갱신함
+    document.getElementById("viewName").innerText = name; 
+    document.getElementById("viewMemberId").innerText = memberId || "-"; // [위치 이동됨] 안전하게 여기서 변경
+    document.getElementById("viewPhone").innerText = phone; 
+    document.getElementById("viewEmail").innerText = email; 
+    document.getElementById("viewAddress").innerText = fullAddress; 
+    document.getElementById("viewHireDate").innerText = hireDate; 
+    document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; 
+    document.getElementById("viewSalaryDate").innerText = date; 
+
+    toggleEditMode(false); 
+    showAlert("저장되었습니다."); 
 }
 
 async function saveRRN() { const f = document.getElementById("rrnFront").value; const b = document.getElementById("rrnBack").value; if((f+b).length !== 13) return showAlert("13자리를 입력하세요."); const { error } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f+"-"+b }); if(error) showAlert("실패: "+error.message); else { showAlert("암호화되어 저장되었습니다."); const { data: bd } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId }); document.getElementById("viewBirth").innerText = bd || f; document.getElementById("rrnFront").value=""; document.getElementById("rrnBack").value=""; toggleEditMode(false); } }
