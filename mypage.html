@@ -75,6 +75,10 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 </div>
 <div class="row g-3">
 <div class="col-md-6"><label class="small text-muted">이름</label><input type="text" id="myName" class="form-control bg-light" readonly></div>
+  <div class="col-md-6">
+        <label class="small text-muted fw-bold text-primary">조합원 번호</label>
+        <input type="number" id="myMemberId" class="form-control readonly-field" placeholder="조합원 번호 (숫자)">
+    </div>
 <div class="col-md-6"><label class="small text-muted">부양가족 (전자결재)</label><input type="number" id="myDependents" class="form-control bg-light" readonly placeholder="0"></div>
 <div class="col-md-6"><label class="small text-muted">전화번호</label><input type="text" id="myPhone" class="form-control readonly-field" maxlength="13" oninput="autoHyphen(this)"></div>
 <div class="col-md-6"><label class="small text-muted">이메일</label><input type="email" id="myEmail" class="form-control readonly-field"></div>
@@ -186,13 +190,81 @@ function showAlert(m){document.getElementById("alertBody").innerHTML=m;alertModa
 function autoHyphen(t){t.value=t.value.replace(/[^0-9]/g,'').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g,"$1-$2-$3").replace(/(\-{1,2})$/g,"")}
 function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.userSelectedType==='R'?d.roadAddress:d.jibunAddress;if(d.buildingName)a+=' ('+d.buildingName+')';document.getElementById("myAddress").value=a}}).open()}
 async function loadCompanyInfo(){const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
-async function loadProfile(){const{data}=await _supabase.from('ref_employees').select('*').eq('emp_id',myInfo.emp_id).single();if(data){myInfo=data;localStorage.setItem('erp_user',JSON.stringify(data))}document.getElementById("dspName").innerText=myInfo.emp_name;document.getElementById("dspRank").innerText=myInfo.position;document.getElementById("dspDept").innerText=myInfo.department;document.getElementById("dspJoin").innerText=myInfo.hire_date||'-';document.getElementById("myName").value=myInfo.emp_name;document.getElementById("myDependents").value=myInfo.dependents||0;document.getElementById("myPhone").value=myInfo.phone||"";document.getElementById("myEmail").value=myInfo.email||"";document.getElementById("myAddress").value=myInfo.address||"";document.getElementById("myBank").value=myInfo.bank_name||"";document.getElementById("myAccount").value=myInfo.account_number||"";const btn=document.getElementById("btnContract");if(myInfo.contract_url){let u=myInfo.contract_url.startsWith('http')?myInfo.contract_url:null;if(!u){const{data:d}=await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url,3600);if(d)u=d.signedUrl}if(u){btn.disabled=false;btn.className="btn btn-outline-primary fw-bold";btn.innerText="📄 계약서 보기";btn.onclick=()=>window.open(u)}}}
+async function loadProfile() {
+    const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
+    if (data) {
+        myInfo = data;
+        localStorage.setItem('erp_user', JSON.stringify(data));
+    }
+    
+    // 표시 전용 텍스트
+    document.getElementById("dspName").innerText = myInfo.emp_name;
+    document.getElementById("dspRank").innerText = myInfo.position;
+    document.getElementById("dspDept").innerText = myInfo.department;
+    document.getElementById("dspJoin").innerText = myInfo.hire_date || '-';
+    
+    // 입력 폼 값 채우기
+    document.getElementById("myName").value = myInfo.emp_name;
+    document.getElementById("myMemberId").value = myInfo.member_id || ""; // [추가]
+    document.getElementById("myDependents").value = myInfo.dependents || 0;
+    document.getElementById("myPhone").value = myInfo.phone || "";
+    document.getElementById("myEmail").value = myInfo.email || "";
+    document.getElementById("myAddress").value = myInfo.address || "";
+    document.getElementById("myBank").value = myInfo.bank_name || "";
+    document.getElementById("myAccount").value = myInfo.account_number || "";
+
+    // 계약서 버튼 처리
+    const btn = document.getElementById("btnContract");
+    if (myInfo.contract_url) {
+        let u = myInfo.contract_url.startsWith('http') ? myInfo.contract_url : null;
+        if (!u) {
+            const { data: d } = await _supabase.storage.from('contracts').createSignedUrl(myInfo.contract_url, 3600);
+            if (d) u = d.signedUrl;
+        }
+        if (u) {
+            btn.disabled = false;
+            btn.className = "btn btn-outline-primary fw-bold";
+            btn.innerText = "📄 계약서 보기";
+            btn.onclick = () => window.open(u);
+        }
+    }
+}
 function toggleEditMode(e){const f=document.querySelectorAll('.readonly-field');f.forEach(x=>{if(e){x.classList.remove('readonly-field');x.classList.add('editable-field');x.readOnly=false}else{x.classList.add('readonly-field');x.classList.remove('editable-field');x.readOnly=true}});document.getElementById("btnEditInfo").classList.toggle('hidden',e);document.getElementById("btnCancelInfo").classList.toggle('hidden',!e);document.getElementById("btnSaveInfo").classList.toggle('hidden',!e);document.getElementById("btnAddrSearch").classList.toggle('hidden',!e);document.getElementById("btnAddEm").classList.toggle('hidden',!e);if(!e){loadProfile();loadEmergencyList()}}
-async function updateInfo(){
-openConfirmModal("정보를 저장하시겠습니까?", async function(){const u={phone:document.getElementById("myPhone").value,email:document.getElementById("myEmail").value,address:document.getElementById("myAddress").value,bank_name:document.getElementById("myBank").value,account_number:document.getElementById("myAccount").value};
-const{error}=await _supabase.from('ref_employees').update(u).eq('emp_id',myInfo.emp_id);if(error){showAlert("저장 실패: "+error.message);return}await _supabase.from('ref_emergency_contacts').delete().eq('emp_id',myInfo.emp_id);if(tempEmergencyList.length>0){const i=tempEmergencyList.map(x=>({emp_id:myInfo.emp_id,contact_name:x.contact_name,relation:x.relation,phone:x.phone}));await _supabase.from('ref_emergency_contacts').insert(i)}
-showAlert("저장되었습니다.");toggleEditMode(false);
-});
+async function updateInfo() {
+    openConfirmModal("정보를 저장하시겠습니까?", async function() {
+        const mid = document.getElementById("myMemberId").value; // [추가] 값 가져오기
+        
+        const u = {
+            member_id: mid ? Number(mid) : null, // [추가] 숫자 변환
+            phone: document.getElementById("myPhone").value,
+            email: document.getElementById("myEmail").value,
+            address: document.getElementById("myAddress").value,
+            bank_name: document.getElementById("myBank").value,
+            account_number: document.getElementById("myAccount").value
+        };
+
+        const { error } = await _supabase.from('ref_employees').update(u).eq('emp_id', myInfo.emp_id);
+        
+        if (error) {
+            showAlert("저장 실패: " + error.message);
+            return;
+        }
+
+        // 비상연락망 저장 로직 (기존 유지)
+        await _supabase.from('ref_emergency_contacts').delete().eq('emp_id', myInfo.emp_id);
+        if (tempEmergencyList.length > 0) {
+            const i = tempEmergencyList.map(x => ({
+                emp_id: myInfo.emp_id,
+                contact_name: x.contact_name,
+                relation: x.relation,
+                phone: x.phone
+            }));
+            await _supabase.from('ref_emergency_contacts').insert(i);
+        }
+
+        showAlert("저장되었습니다.");
+        toggleEditMode(false);
+    });
 }
 async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
 function renderEmergencyTable(){const b=document.getElementById("emergencyListBody");b.innerHTML="";const e=!document.getElementById("btnSaveInfo").classList.contains('hidden');tempEmergencyList.forEach((r,i)=>{b.innerHTML+=`<tr><td>${r.contact_name}</td><td>${r.relation}</td><td>${r.phone}</td><td>${e?`<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${i})">×</button>`:''}</td></tr>`})}
