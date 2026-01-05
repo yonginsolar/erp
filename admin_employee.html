@@ -82,7 +82,11 @@
           <div class="section-title">👤 기본 인적사항</div>
           <div class="row g-3">
             <div class="col-md-3"><label class="small text-muted">이름</label><div class="view-mode fw-bold" id="viewName">-</div><input type="text" id="editName" class="form-control edit-mode"></div>
-            <div class="col-md-3"><label class="small text-muted fw-bold text-primary">조합원 번호</label><div class="view-mode" id="viewMemberId">-</div><input type="text" id="editMemberId" class="form-control edit-mode" placeholder="숫자 입력"></div>
+<div class="col-md-3">
+    <label class="small text-muted fw-bold text-primary">조합원 번호</label>
+    <div class="view-mode" id="viewMemberId">-</div>
+    <input type="text" id="editMemberId" class="form-control edit-mode" placeholder="2025-00-0000" oninput="autoHyphenMemberId(this)">
+</div>
             <div class="col-md-3"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
             <div class="col-md-3"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
             <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
@@ -399,7 +403,7 @@ async function openDetail(u) {
     currentEmpHireDate = u.hire_date;
     currentEmpResignDate = u.resign_date;
 
-    document.getElementById("detailName").innerText = u.emp_name; ocument.getElementById("viewMemberId").innerText = u.member_id || "-";
+    document.getElementById("detailName").innerText = u.emp_name; document.getElementById("viewMemberId").innerText = u.member_id || "-";
     document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = u.emp_id;
     document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
@@ -1124,6 +1128,18 @@ function drawChart(canvasId, type, dataConfig) {
             } : {}
         }
     });
+}
+  // [공통] 조합원 번호 입력 시 자동 하이픈 (2025-24-0002)
+function autoHyphenMemberId(target) {
+    let val = target.value.replace(/[^0-9]/g, ''); // 숫자 외 제거
+    if (val.length > 10) val = val.substring(0, 10); // 최대 10자리 제한
+
+    if (val.length > 6) {
+        val = val.replace(/(\d{4})(\d{2})(\d{1,4})/, '$1-$2-$3');
+    } else if (val.length > 4) {
+        val = val.replace(/(\d{4})(\d{1,2})/, '$1-$2');
+    }
+    target.value = val;
 }
 </script>
 </body>
