@@ -1,199 +1,189 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>협동조합 ERP (메인)</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  
-  <style>
-    body { 
-        background-color: #f8f9fa; 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: center; 
-        min-height: 100vh; 
-        margin: 0; 
-        padding: 20px; 
-    }
-    .main-card { width: 100%; max-width: 400px; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
-    .btn-menu { text-align: left; padding: 15px; margin-bottom: 10px; transition: transform 0.2s; border: 1px solid #eee; }
-    .btn-menu:hover { transform: translateY(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); background-color: #f8f9fa; }
-    .hidden { display: none !important; }
-    .profile-box { background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: left; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>협동조합 ERP (메인)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    body { 
+        background-color: #f8f9fa; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 100vh; 
+        margin: 0; 
+        padding: 20px; 
+    }
+    .main-card { width: 100%; max-width: 400px; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
+    .btn-menu { text-align: left; padding: 15px; margin-bottom: 10px; transition: transform 0.2s; border: 1px solid #eee; }
+    .btn-menu:hover { transform: translateY(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); background-color: #f8f9fa; }
+    .hidden { display: none !important; }
+    .profile-box { background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: left; }
+  </style>
 </head>
 <body>
 
-  <div class="main-card">
-    <h3 class="fw-bold mb-4">⚡ 협동조합 ERP</h3>
+  <div class="main-card">
+    <h3 class="fw-bold mb-4">⚡ 협동조합 ERP</h3>
 
-    <div id="loadingScreen">
-      <div class="spinner-border text-primary mb-3" role="status"></div>
-      <p class="text-muted small">접속 정보를 확인 중입니다...</p>
-    </div>
-    
-    <div id="loginForm" class="hidden">
-      <p class="text-muted mb-4 small">
-        등록된 이메일로 간편하게 로그인하세요.<br>
-        (링크 클릭 시 자동 접속)
-      </p>
+    <div id="loadingScreen">
+      <div class="spinner-border text-primary mb-3" role="status"></div>
+      <p class="text-muted small">접속 정보를 확인 중입니다...</p>
+    </div>
+    
+    <div id="loginForm" class="hidden">
+      <p class="text-muted mb-4 small">
+        등록된 이메일로 간편하게 로그인하세요.<br>
+        (링크 클릭 시 자동 접속)
+      </p>
 
-      <div class="mb-3 text-start">
-        <label class="form-label">이메일 주소</label>
-        <input type="email" class="form-control" id="emailInput" placeholder="name@coop.com">
-      </div>
+      <div class="mb-3 text-start">
+        <label class="form-label">이메일 주소</label>
+        <input type="email" class="form-control" id="emailInput" placeholder="name@coop.com">
+      </div>
 
-      <button class="btn btn-primary w-100 py-2" id="btnSend" onclick="sendMagicLink()">
-        📧 로그인 링크 받기
-      </button>
-      
-      <div id="statusMsg" class="mt-3 text-success small" style="display:none;"></div>
-    </div>
+      <button class="btn btn-primary w-100 py-2" id="btnSend" onclick="sendMagicLink()">
+        📧 로그인 링크 받기
+      </button>
+      
+      <div id="statusMsg" class="mt-3 text-success small" style="display:none;"></div>
+    </div>
 
-    <div id="menuArea" class="hidden">
-      <div class="profile-box">
-        <h5 class="fw-bold mb-1" id="userName">홍길동 님</h5>
-        <span class="badge bg-primary" id="userTeam">기획팀</span>
-        <span class="text-muted small ms-1" id="userRank">과장</span>
-      </div>
-      
-      <div class="d-grid gap-2">
-        <button class="btn btn-white btn-menu" onclick="location.href='approval.html'">
-          📝 <strong>전자결재</strong>
-          <span class="d-block small text-muted">기안 작성 및 결재 처리</span>
-        </button>
+    <div id="menuArea" class="hidden">
+      <div class="profile-box">
+        <h5 class="fw-bold mb-1" id="userName">홍길동 님</h5>
+        <span class="badge bg-primary" id="userTeam">기획팀</span>
+        <span class="text-muted small ms-1" id="userRank">과장</span>
+      </div>
+      
+      <div class="d-grid gap-2">
+        <button class="btn btn-white btn-menu" onclick="location.href='approval.html'">
+          📝 <strong>전자결재</strong>
+          <span class="d-block small text-muted">기안 작성 및 결재 처리</span>
+        </button>
 
-        <button class="btn btn-white btn-menu" onclick="location.href='mypage.html'">
-          👤 <strong>마이페이지</strong>
-          <span class="d-block small text-muted">내 정보 및 휴가 관리</span>
-        </button>
-        
-        <button class="btn btn-white btn-menu hidden" id="btnAccounting" onclick="location.href='accounting.html'">
-          📒 <strong>회계관리</strong>
-          <span class="d-block small text-muted">지출 및 예산 관리</span>
-        </button>
-        
-        <button class="btn btn-white btn-menu hidden" id="btnAdmin" onclick="location.href='admin_employee.html'">
-          ⚙️ <strong>직원관리</strong>
-          <span class="d-block small text-muted">인사 및 급여 설정</span>
-        </button>
+        <button class="btn btn-white btn-menu" onclick="location.href='mypage.html'">
+          👤 <strong>마이페이지</strong>
+          <span class="d-block small text-muted">내 정보 및 휴가 관리</span>
+        </button>
+        
+        <button class="btn btn-white btn-menu hidden" id="btnAccounting" onclick="location.href='accounting.html'">
+          📒 <strong>회계관리</strong>
+          <span class="d-block small text-muted">지출 및 예산 관리</span>
+        </button>
+        
+        <button class="btn btn-white btn-menu hidden" id="btnAdmin" onclick="location.href='admin_employee.html'">
+          ⚙️ <strong>직원관리</strong>
+          <span class="d-block small text-muted">인사 및 급여 설정</span>
+        </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnMemberAdmin" onclick="location.href='admin_member.html'">
-          🌐 <strong>홈페이지 관리</strong>
-          <span class="d-block small text-muted">조합원 명부 및 입금 매칭</span>
-        </button>
+            🌐 <strong>홈페이지 관리</strong>
+            <span class="d-block small text-muted">조합원 명부 및 입금 매칭</span>
+        </button>
+      </div>
 
-      </div>
-
-      <button class="btn btn-link text-secondary btn-sm mt-4" onclick="logout()">로그아웃</button>
-    </div>
-  </div>
+      <button class="btn btn-link text-secondary btn-sm mt-4" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
 
 <div class="text-center mt-4 hidden" id="patchNoteArea">
-    <small class="text-muted" style="cursor: pointer; text-decoration: underline;" onclick="openPatchModal()">
-      Ver <span id="currentVersion">Loading...</span> (Release Notes)
-    </small>
-  </div>
+    <small class="text-muted" style="cursor: pointer; text-decoration: underline;" onclick="openPatchModal()">
+      Ver <span id="currentVersion">Loading...</span> (Release Notes)
+    </small>
+  </div>
 
 <script>
-const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
+const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const REDIRECT_URL = 'https://yonginsolar.github.io/erp/index.html'; 
+const REDIRECT_URL = 'https://yonginsolar.github.io/erp/index.html'; 
 
-// 로그인 관련 로직 (패치노트 제외한 나머지)
 window.onload = async function() {
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (session) { await loadUserInfo(session.user.email); } 
-    else { showScreen('loginForm'); }
-    
-    // [중요] patch_note.js가 로드된 후 실행되도록 둠 (patch_note.js 내부의 DOMContentLoaded가 처리함)
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (session) { await loadUserInfo(session.user.email); } 
+    else { showScreen('loginForm'); }
 };
 
 async function loadUserInfo(email) {
-    // 1. 직원 명부 조회 (RLS가 걸려 있어서 직원이 아니면 데이터가 안 보임)
-    const { data, error } = await _supabase
-        .from('ref_employees')
-        .select('*')
-        .eq('email', email)
-        .single();
+    const { data, error } = await _supabase
+        .from('ref_employees')
+        .select('*')
+        .eq('email', email)
+        .single();
 
-    // 2. [보안 체크] 데이터가 없거나 에러가 나면 직원이 아님 -> 즉시 추방
-    if (error || !data) {
-        console.warn("접근 권한 없음: 직원 명부에 없는 계정입니다.");
-        
-        // [규칙 준수] alert 대신 모달 사용
-        // (프로젝트에 사용 중인 모달 함수명을 사용하세요. 예: showModal, openAlertModal 등)
-        if (typeof openPatchModal === 'function') {
-            openPatchModal("접근 권한 없음", "귀하는 직원으로 등록되지 않았습니다. 로그아웃 합니다.");
-        } else {
-            // 모달 함수가 없을 경우를 대비한 비상용 콘솔 (개발 단계용)
-            console.error("모달 함수가 없습니다. 접근 거부 메시지를 표시할 수 없습니다.");
-        }
+    // [복구 완료] 국장님이 요청하신 모달/로그 처리 로직 그대로 복구
+    if (error || !data) {
+        console.warn("접근 권한 없음: 직원 명부에 없는 계정입니다.");
+        
+        // [규칙 준수] alert 대신 모달 사용
+        // (프로젝트에 사용 중인 모달 함수명을 사용하세요. 예: showModal, openAlertModal 등)
+        if (typeof openPatchModal === 'function') {
+            openPatchModal("접근 권한 없음", "귀하는 직원으로 등록되지 않았습니다. 로그아웃 합니다.");
+        } else {
+            // 모달 함수가 없을 경우를 대비한 비상용 콘솔 (개발 단계용)
+            console.error("모달 함수가 없습니다. 접근 거부 메시지를 표시할 수 없습니다.");
+        }
 
-        await _supabase.auth.signOut(); // 세션 종료
-        showScreen('loginForm'); // 로그인 화면으로 강제 이동
-        return;
-    }
+        await _supabase.auth.signOut(); 
+        showScreen('loginForm'); 
+        return;
+    }
 
-    // 3. 직원 정보 로컬 저장 (세션 유지용)
-    localStorage.setItem('erp_user', JSON.stringify(data));
+    localStorage.setItem('erp_user', JSON.stringify(data));
 
-    // 4. UI 업데이트 (Null 병합 연산자 ?? 사용으로 안전성 강화)
-    const elName = document.getElementById('userName');
-    const elTeam = document.getElementById('userTeam');
-    const elRank = document.getElementById('userRank');
+    const elName = document.getElementById('userName');
+    const elTeam = document.getElementById('userTeam');
+    const elRank = document.getElementById('userRank');
 
-    if (elName) elName.innerText = (data.emp_name || "직원") + " 님";
-    if (elTeam) elTeam.innerText = data.department || "-";
-    if (elRank) elRank.innerText = data.position || "";
+    if (elName) elName.innerText = (data.emp_name || "직원") + " 님";
+    if (elTeam) elTeam.innerText = data.department || "-";
+    if (elRank) elRank.innerText = data.position || "";
 
-    // 5. 권한별 버튼 노출 (직관적으로 정리)
-    const isAdmin = data.role === 'admin' || data.position === '국장';
-    const isManager = data.role === 'manager' || data.position === '이사';
+    // 권한 설정
+    const isAdmin = data.role === 'admin' || data.position === '국장';
+    const isManager = data.role === 'manager' || data.position === '이사';
 
-    // 회계 버튼: 관리자, 매니저, 국장, 이사
-    if (isAdmin || isManager) {
-        document.getElementById('btnAccounting')?.classList.remove('hidden');
-    }
+    if (isAdmin || isManager) {
+        document.getElementById('btnAccounting')?.classList.remove('hidden');
+    }
 
-    // 관리자 버튼: 어드민, 국장
-    if (isAdmin) {
-        document.getElementById('btnAdmin')?.classList.remove('hidden');
-        document.getElementById('btnMemberAdmin')?.classList.remove('hidden'); // [추가됨] 관리자면 홈페이지 관리 버튼 노출
-    }
+    if (isAdmin) {
+        document.getElementById('btnAdmin')?.classList.remove('hidden');       
+        document.getElementById('btnMemberAdmin')?.classList.remove('hidden'); 
+    }
 
-    // 6. 공통 UI 노출
-    document.getElementById('patchNoteArea')?.classList.remove('hidden');
-    showScreen('menuArea');
+    document.getElementById('patchNoteArea')?.classList.remove('hidden');
+    showScreen('menuArea');
 }
 
 function showScreen(id) {
-    document.getElementById('loadingScreen').classList.add('hidden');
-    document.getElementById('loginForm').classList.add('hidden');
-    document.getElementById('menuArea').classList.add('hidden');
-    document.getElementById(id).classList.remove('hidden');
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('menuArea').classList.add('hidden');
+    document.getElementById(id).classList.remove('hidden');
 }
 
 async function sendMagicLink() {
-    const email = document.getElementById('emailInput').value;
-    const btn = document.getElementById('btnSend');
-    const msg = document.getElementById('statusMsg');
-    if (!email) return alert("이메일을 입력해주세요.");
-    btn.disabled = true; btn.innerText = "전송 중...";
-    const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
-    if (error) { alert("전송 실패: " + error.message); btn.disabled = false; btn.innerText = "📧 로그인 링크 받기"; } 
-    else { btn.classList.add("hidden"); msg.style.display = "block"; msg.innerHTML = `<strong>📩 전송 완료!</strong><br>메일함 확인해주세요.`; }
+    const email = document.getElementById('emailInput').value;
+    const btn = document.getElementById('btnSend');
+    const msg = document.getElementById('statusMsg');
+    if (!email) return alert("이메일을 입력해주세요.");
+    btn.disabled = true; btn.innerText = "전송 중...";
+    const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
+    if (error) { alert("전송 실패: " + error.message); btn.disabled = false; btn.innerText = "📧 로그인 링크 받기"; } 
+    else { btn.classList.add("hidden"); msg.style.display = "block"; msg.innerHTML = `<strong>📩 전송 완료!</strong><br>메일함 확인해주세요.`; }
 }
 
 async function logout() {
-    if(confirm("로그아웃 하시겠습니까?")) {
-        await _supabase.auth.signOut(); localStorage.removeItem('erp_user'); location.reload();
-    }
+    if(confirm("로그아웃 하시겠습니까?")) {
+        await _supabase.auth.signOut(); localStorage.removeItem('erp_user'); location.reload();
+    }
 }
 </script>
 
