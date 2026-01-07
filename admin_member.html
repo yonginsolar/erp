@@ -178,24 +178,33 @@
 
     // [1] 시스템 접속 (키 입력 후 실행)
 // [수정된 접속 함수] 에러 원인을 자세히 알려줍니다.
+// [수정된 접속 함수] 기존 세션(일반 회원)의 방해를 완벽 차단합니다.
     async function initSystem() {
-        // 1. 공백 제거 (복사할 때 실수로 들어간 공백 삭제)
+        // 1. 공백 제거
         const key = document.getElementById('inputKey').value.trim();
         
         if(!key) return alert('키를 입력해주세요.');
-        
-        // 2. 키 형식 기초 검사
         if(key.length < 50) return alert('키가 너무 짧습니다. service_role 키가 맞나요?');
 
         try {
-            // 슈퍼베이스 접속 시도
-            _supabase = supabase.createClient(SUPABASE_URL, key);
+            // ★ [핵심 수정] 옵션 추가!
+            // 브라우저에 저장된 일반 회원 정보를 절대 가져오지 말라고 명령합니다.
+            _supabase = supabase.createClient(SUPABASE_URL, key, {
+                auth: {
+                    persistSession: false, // 로컬 스토리지에 저장하지 마!
+                    autoRefreshToken: false, // 토큰 갱신도 하지 마!
+                    detectSessionInUrl: false // 주소창도 보지 마!
+                },
+                global: {
+                    headers: { 'Authorization': `Bearer ${key}` } // 강제로 헤더에 키를 박아넣음
+                }
+            });
+
             ADMIN_KEY = key;
             
             showLoading(true);
 
-            // 3. 테스트 쿼리 변경 (가장 단순한 요청으로 권한 확인)
-            // coop_members 테이블에서 데이터 1개만 가져와 봅니다.
+            // 2. 테스트 쿼리 (가장 단순한 것으로)
             const { data, error } = await _supabase
                 .from('coop_members')
                 .select('id')
@@ -204,14 +213,14 @@
             showLoading(false);
 
             if(error) {
-                console.error("접속 에러 상세:", error); // F12 콘솔에도 출력
-                // 에러 메시지를 사용자에게 보여줌
-                alert('🚫 접속 실패!\n\n원인: ' + error.message + '\n\n(힌트: service_role 키가 맞는지, 테이블이 존재하는지 확인하세요)');
+                console.error("접속 에러:", error);
+                // 여전히 에러가 난다면, 그건 진짜 키가 틀린 겁니다.
+                alert('🚫 접속 실패!\n\n에러: ' + error.message + '\n\n(참고: Infinite recursion이 또 뜬다면, 브라우저 캐시를 완전히 비우고 다시 시도하세요)');
             } else {
-                // 성공!
+                // 성공
                 document.getElementById('login-gate').style.display = 'none';
                 document.getElementById('main-system').style.setProperty('display', 'flex', 'important');
-                fetchMembers(); // 데이터 로드 시작
+                fetchMembers(); 
             }
         } catch(e) {
             showLoading(false);
