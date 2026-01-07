@@ -177,32 +177,45 @@
     let allMembers = [];
 
     // [1] 시스템 접속 (키 입력 후 실행)
-    function initSystem() {
+// [수정된 접속 함수] 에러 원인을 자세히 알려줍니다.
+    async function initSystem() {
+        // 1. 공백 제거 (복사할 때 실수로 들어간 공백 삭제)
         const key = document.getElementById('inputKey').value.trim();
+        
         if(!key) return alert('키를 입력해주세요.');
-        if(key.length < 20) return alert('유효한 키가 아닙니다.');
+        
+        // 2. 키 형식 기초 검사
+        if(key.length < 50) return alert('키가 너무 짧습니다. service_role 키가 맞나요?');
 
-        // 슈퍼베이스 초기화
         try {
+            // 슈퍼베이스 접속 시도
             _supabase = supabase.createClient(SUPABASE_URL, key);
             ADMIN_KEY = key;
             
-            // 키가 맞는지 테스트 호출
             showLoading(true);
-            _supabase.from('coop_members').select('count', { count: 'exact', head: true })
-                .then(({ error }) => {
-                    showLoading(false);
-                    if(error) {
-                        alert('접속 실패: 키가 틀렸거나 권한이 없습니다.\n' + error.message);
-                    } else {
-                        // 성공 시 화면 전환
-                        document.getElementById('login-gate').style.display = 'none';
-                        document.getElementById('main-system').style.setProperty('display', 'flex', 'important');
-                        fetchMembers(); // 데이터 로드 시작
-                    }
-                });
+
+            // 3. 테스트 쿼리 변경 (가장 단순한 요청으로 권한 확인)
+            // coop_members 테이블에서 데이터 1개만 가져와 봅니다.
+            const { data, error } = await _supabase
+                .from('coop_members')
+                .select('id')
+                .limit(1);
+
+            showLoading(false);
+
+            if(error) {
+                console.error("접속 에러 상세:", error); // F12 콘솔에도 출력
+                // 에러 메시지를 사용자에게 보여줌
+                alert('🚫 접속 실패!\n\n원인: ' + error.message + '\n\n(힌트: service_role 키가 맞는지, 테이블이 존재하는지 확인하세요)');
+            } else {
+                // 성공!
+                document.getElementById('login-gate').style.display = 'none';
+                document.getElementById('main-system').style.setProperty('display', 'flex', 'important');
+                fetchMembers(); // 데이터 로드 시작
+            }
         } catch(e) {
-            alert('오류 발생: ' + e.message);
+            showLoading(false);
+            alert('💥 시스템 오류: ' + e.message);
         }
     }
 
