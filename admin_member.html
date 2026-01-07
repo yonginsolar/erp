@@ -34,6 +34,11 @@
         .hidden { display: none !important; }
         .table th { font-size: 13px; background-color: #f1f3f5; font-weight: 600; }
         .table td { font-size: 14px; vertical-align: middle; }
+        
+        /* 탭 내용 숨김 처리 */
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 
@@ -80,7 +85,7 @@
 
         <div class="main-content">
             
-            <div id="tab-members" class="tab-pane">
+            <div id="tab-members" class="tab-pane active">
                 <div class="content-header">
                     <h3>👥 조합원 통합 관리</h3>
                     <button class="btn btn-success btn-sm" onclick="openExcelModal()"><i class="bi bi-file-earmark-excel"></i> 엑셀 다운로드</button>
@@ -103,7 +108,7 @@
                 </div>
             </div>
 
-            <div id="tab-deposit" class="tab-pane hidden">
+            <div id="tab-deposit" class="tab-pane">
                 <div class="content-header"><h3>💰 입금 내역 매칭</h3></div>
                 <div class="alert alert-info small"><i class="bi bi-info-circle"></i> 은행 엑셀 파일을 업로드하면 약정금액과 비교하여 매칭합니다.</div>
                 <div class="row">
@@ -117,10 +122,10 @@
                 </div>
             </div>
 
-            <div id="tab-meetings" class="tab-pane hidden">
+            <div id="tab-meetings" class="tab-pane">
                 <div class="content-header">
                     <h3>📅 회의 및 의사록</h3>
-                    <button class="btn btn-primary btn-sm" onclick="openMeetingModal()"><i class="bi bi-plus-lg"></i> 신규 회의 등록</button>
+                    <button class="btn btn-primary btn-sm" onclick="alert('모달 추가 필요')"><i class="bi bi-plus-lg"></i> 신규 회의 등록</button>
                 </div>
                 <div class="card border-0 shadow-sm">
                     <div class="table-responsive">
@@ -132,10 +137,10 @@
                 </div>
             </div>
 
-            <div id="tab-notices" class="tab-pane hidden">
+            <div id="tab-notices" class="tab-pane">
                 <div class="content-header">
                     <h3>📢 공지사항 관리</h3>
-                    <button class="btn btn-primary btn-sm" onclick="openNoticeModal()"><i class="bi bi-pencil"></i> 공지 작성</button>
+                    <button class="btn btn-primary btn-sm" onclick="alert('모달 추가 필요')"><i class="bi bi-pencil"></i> 공지 작성</button>
                 </div>
                 <div class="card border-0 shadow-sm">
                     <div class="table-responsive">
@@ -147,33 +152,45 @@
                 </div>
             </div>
 
-            <div id="tab-site" class="tab-pane hidden">
+            <div id="tab-site" class="tab-pane">
                 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
                 
                 <ul class="nav nav-tabs mb-4">
-                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sub-plants" onclick="fetchPlants()">발전소 현황</a></li>
-                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="fetchHistory()">연혁 (History)</a></li>
-                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-partners" onclick="fetchPartners()">협력 단체</a></li>
-                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-faq" onclick="fetchFaqs()">FAQ</a></li>
+                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sub-plants" onclick="setTimeout(fetchPlants,100)">발전소 현황</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">연혁 (History)</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-partners" onclick="setTimeout(fetchPartners,100)">협력 단체</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-faq" onclick="setTimeout(fetchFaqs,100)">FAQ</a></li>
                 </ul>
 
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="sub-plants">
-                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="openPlantModal()">+ 발전소 추가</button></div>
+                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="alert('모달 추가 필요')">+ 발전소 추가</button></div>
                         <table class="table table-bordered bg-white">
                             <thead><tr><th>순서</th><th>발전소명</th><th>용량</th><th>상태</th><th>관리</th></tr></thead>
                             <tbody id="plantListBody"></tbody>
                         </table>
                     </div>
                     <div class="tab-pane fade" id="sub-history">
-                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="openHistoryModal()">+ 연혁 추가</button></div>
+                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="alert('모달 추가 필요')">+ 연혁 추가</button></div>
                         <table class="table table-bordered bg-white">
                             <thead><tr><th>날짜</th><th>제목</th><th>내용</th><th>관리</th></tr></thead>
                             <tbody id="historyListBody"></tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="sub-partners"><p class="text-muted p-3">협력단체 목록이 여기에 표시됩니다.</p></div>
-                    <div class="tab-pane fade" id="sub-faq"><p class="text-muted p-3">FAQ 목록이 여기에 표시됩니다.</p></div>
+                    <div class="tab-pane fade" id="sub-partners">
+                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="alert('모달 추가 필요')">+ 단체 추가</button></div>
+                        <table class="table table-bordered bg-white">
+                            <thead><tr><th>순서</th><th>단체명</th><th>링크</th><th>관리</th></tr></thead>
+                            <tbody id="partnerListBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="tab-pane fade" id="sub-faq">
+                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="alert('모달 추가 필요')">+ FAQ 추가</button></div>
+                        <table class="table table-bordered bg-white">
+                            <thead><tr><th>순서</th><th>질문</th><th>관리</th></tr></thead>
+                            <tbody id="faqListBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -233,9 +250,17 @@
         async function sendLoginLink() {
             const email = document.getElementById('adminEmail').value;
             if(!email) return alert('이메일을 입력하세요.');
+            const btn = document.getElementById('btnLogin');
+            btn.disabled = true; btn.innerText = "전송중...";
+            
             const { error } = await _supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
-            if(error) alert(error.message);
-            else document.getElementById('loginMsg').innerText = "이메일을 확인하세요!", document.getElementById('loginMsg').style.display='block';
+            
+            if(error) { alert(error.message); btn.disabled = false; btn.innerText = "로그인 링크 받기"; }
+            else { 
+                document.getElementById('loginMsg').innerText = "이메일을 확인하세요! (스팸함도 확인)"; 
+                document.getElementById('loginMsg').style.display='block';
+                btn.classList.add('hidden');
+            }
         }
 
         // [기능 1] 조합원 목록 조회
@@ -245,35 +270,41 @@
             let query = _supabase.from('coop_members').select('*').order('created_at', {ascending:false});
             if(keyword) query = query.or(`name.ilike.%${keyword}%,phone.ilike.%${keyword}%`);
             
-            // 1. 회원 정보
             const { data: members, error } = await query;
-            if(error) { showLoading(false); console.error(error); return alert('회원 로드 실패: ' + error.message); }
+            if(error) { showLoading(false); return console.error(error); }
 
-            // 2. 납입금 정보 (관리자 권한으로 조회)
+            // 납입금 정보
             const { data: payments } = await _supabase.from('view_member_payments_total').select('*');
-            
             showLoading(false);
             
             const tbody = document.getElementById('memberListBody');
             tbody.innerHTML = '';
+            if(!members || members.length===0) { tbody.innerHTML='<tr><td colspan="8" class="text-center py-4">데이터 없음</td></tr>'; return; }
             
             members.forEach((m, idx) => {
                 const pay = payments ? (payments.find(p => p.member_uuid === m.id)?.total_amount || 0) : 0;
-                // 주민번호 포맷팅 (생략: 기존 코드와 동일 로직 적용)
+                
+                // 주민번호 디스플레이 처리 (간략 버전)
+                let rrnShow = m.rrn_display || '-';
+                if(m.member_type!=='단체' && rrnShow.length > 6) {
+                    const y = rrnShow.charAt(7)==='1'||rrnShow.charAt(7)==='2' ? '19':'20';
+                    rrnShow = `${y}${rrnShow.substring(0,2)}.${rrnShow.substring(2,4)}.${rrnShow.substring(4,6)}`;
+                }
+
                 tbody.innerHTML += `<tr>
                     <td>${members.length - idx}</td>
                     <td><span class="badge bg-light text-dark border">${m.member_type}</span></td>
                     <td>${m.name}<br><small class="text-muted">${m.member_id||''}</small></td>
-                    <td>${m.rrn_display || '-'}</td>
+                    <td>${rrnShow}</td>
                     <td>${m.phone}</td>
                     <td class="fw-bold text-primary">${pay.toLocaleString()}원</td>
                     <td>${m.status}</td>
-                    <td><button class="btn btn-sm btn-outline-secondary">관리</button></td>
+                    <td><button class="btn btn-sm btn-outline-secondary" onclick="alert('수정 모달 준비중')">관리</button></td>
                 </tr>`;
             });
         }
 
-        // [기능 3] 회의록 조회 (예시)
+        // [기능 3] 회의록 조회
         async function fetchMeetings() {
             const { data } = await _supabase.from('coop_meetings').select('*').order('meeting_date', {ascending:false});
             const tbody = document.getElementById('meetingListBody');
@@ -281,9 +312,10 @@
             if(data) data.forEach(m => {
                 tbody.innerHTML += `<tr><td>${m.meeting_date}</td><td>${m.category}</td><td>${m.title}</td><td>${m.status}</td><td><button class="btn btn-sm btn-light">수정</button></td></tr>`;
             });
+            if(!data || data.length===0) tbody.innerHTML='<tr><td colspan="5" class="text-center py-3">등록된 회의가 없습니다.</td></tr>';
         }
         
-        // [기능 4] 공지사항 조회 (예시)
+        // [기능 4] 공지사항 조회
         async function fetchNotices() {
             const { data } = await _supabase.from('coop_notices').select('*').order('created_at', {ascending:false});
             const tbody = document.getElementById('noticeListBody');
@@ -291,47 +323,62 @@
             if(data) data.forEach(n => {
                 tbody.innerHTML += `<tr><td>${n.created_at.split('T')[0]}</td><td>${n.category}</td><td>${n.title}</td><td>${n.is_popup?'Y':'-'}</td><td>${n.status}</td><td><button class="btn btn-sm btn-light">수정</button></td></tr>`;
             });
+            if(!data || data.length===0) tbody.innerHTML='<tr><td colspan="6" class="text-center py-3">등록된 글이 없습니다.</td></tr>';
         }
 
-        // [기능 5] 발전소 조회 (홈페이지 관리)
+        // [기능 5] 발전소/연혁/파트너/FAQ
         async function fetchPlants() {
             const { data } = await _supabase.from('site_power_plants').select('*').order('display_order');
-            const tbody = document.getElementById('plantListBody');
-            tbody.innerHTML = '';
-            if(data) data.forEach(p => {
-                tbody.innerHTML += `<tr><td>${p.display_order}</td><td>${p.name}</td><td>${p.capacity}kW</td><td>${p.status}</td><td><button class="btn btn-sm btn-light">수정</button></td></tr>`;
-            });
+            renderTable('plantListBody', data, (p) => `<td>${p.display_order}</td><td>${p.name}</td><td>${p.capacity}kW</td><td>${p.status}</td>`);
         }
-        
-        // [기능 5-2] 연혁 조회
         async function fetchHistory() {
             const { data } = await _supabase.from('site_documents').select('*').eq('category','history').order('event_date', {ascending:false});
-            const tbody = document.getElementById('historyListBody');
+            renderTable('historyListBody', data, (h) => `<td>${h.event_date}</td><td>${h.title}</td><td>${h.content||''}</td>`);
+        }
+        async function fetchPartners() {
+            const { data } = await _supabase.from('site_partners').select('*').order('display_order');
+            renderTable('partnerListBody', data, (p) => `<td>${p.display_order}</td><td>${p.name}</td><td>${p.link_url||'-'}</td>`);
+        }
+        async function fetchFaqs() {
+            const { data } = await _supabase.from('site_faqs').select('*').order('display_order');
+            renderTable('faqListBody', data, (f) => `<td>${f.display_order}</td><td>${f.question}</td>`);
+        }
+
+        // 테이블 렌더링 헬퍼
+        function renderTable(bodyId, data, rowFn) {
+            const tbody = document.getElementById(bodyId);
             tbody.innerHTML = '';
-            if(data) data.forEach(h => {
-                tbody.innerHTML += `<tr><td>${h.event_date}</td><td>${h.title}</td><td>${h.content||''}</td><td><button class="btn btn-sm btn-light">수정</button></td></tr>`;
+            if(!data || data.length===0) { tbody.innerHTML='<tr><td colspan="5" class="text-center py-3">데이터가 없습니다.</td></tr>'; return; }
+            data.forEach(item => {
+                tbody.innerHTML += `<tr>${rowFn(item)}<td><button class="btn btn-sm btn-light" onclick="alert('수정 모달 준비중')">수정</button></td></tr>`;
             });
         }
 
         // 탭 전환
         function switchTab(tabId) {
-            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
-            document.getElementById('tab-'+tabId).classList.remove('hidden');
-            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-'+tabId).classList.add('active');
             
-            // 탭별 데이터 로드
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            // 사이드바 메뉴 활성화 (단순화를 위해 현재 클릭된 요소만 active)
+            const clicked = event.target.closest('.nav-link');
+            if(clicked) clicked.classList.add('active');
+            
             if(tabId === 'meetings') fetchMeetings();
             if(tabId === 'notices') fetchNotices();
-            if(tabId === 'site') fetchPlants(); 
+            if(tabId === 'site') { 
+                // 서브탭 초기화 (발전소 탭 클릭 효과)
+                const firstSubTab = document.querySelector('a[href="#sub-plants"]');
+                if(firstSubTab) firstSubTab.click(); 
+            }
         }
 
         function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
         function logout() { _supabase.auth.signOut().then(() => location.href='index.html'); }
         
-        // (모달 열기 함수들은 공간상 생략했으나, 필요시 추가 가능)
+        // 엑셀 관련 (기존 로직 유지)
         function openExcelModal() { new bootstrap.Modal(document.getElementById('excelModal')).show(); }
-        function downloadExcel() { alert('엑셀 다운로드 로직은 이전과 동일합니다.'); }
+        function downloadExcel() { alert('엑셀 다운로드 기능은 이전 버전 코드의 로직을 그대로 사용하면 됩니다.'); }
 
     </script>
 </body>
