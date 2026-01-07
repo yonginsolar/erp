@@ -260,7 +260,7 @@
         } else {
             alert('접근 거부: 관리자 권한이 없습니다.');
             _supabase.auth.signOut();
-            location.reload();
+            location.href = 'index.html';
         }
     }
 
