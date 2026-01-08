@@ -991,36 +991,8 @@ function switchTab(t) {
             }
         }
         
-        // [보조 함수] About 본문 미리보기 업데이트
-        function updateAboutPreview() {
-            const rawContent = document.getElementById('admin-about-content').value;
-            // 줄바꿈(\n)을 <br>로 바꿔서 보여줘야 실제와 비슷함
-            // 단, 사용자가 직접 <br>을 썼을 수도 있으니 단순 텍스트만 처리
-            const previewHtml = rawContent.replace(/\n/g, '<br>'); 
-            document.getElementById('about-preview-area').innerHTML = rawContent ? rawContent : '<span class="text-muted">내용이 없습니다.</span>';
-        }
 
-        async function saveAboutSettings() {
-            const updates = {
-                p_title: document.getElementById('admin-about-title').value,
-                p_subtitle: document.getElementById('admin-about-subtitle').value,
-                p_content: document.getElementById('admin-about-content').value,
-                p_list_items: document.getElementById('admin-about-list').value,
-                p_image_url: document.getElementById('admin-about-img').value
-            };
 
-            showLoading(true);
-            const { error } = await _supabase.rpc('upsert_about_secure', updates);
-            showLoading(false);
-
-            if(error) alert('저장 실패: ' + error.message);
-            else {
-                // 성공 모달 (간단히 alert 대신 커스텀 모달 사용 가능하나, 일단 시스템 알림)
-                // 국장님 요청대로 모달로 띄울까요? 이번엔 간단히 저장 완료 메시지만 띄웁니다.
-                // (기존 패턴 유지)
-                alert('저장되었습니다.'); 
-            }
-        }
         // [보조 함수] 전체 미리보기 업데이트 (탭 누를 때 실행됨)
         function updateTotalPreview() {
             // 1. 입력값 가져오기
