@@ -185,54 +185,84 @@
 
                     
 <div class="tab-pane fade" id="sub-about">
-        <div class="card p-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4">📝 소개 섹션 수정</h5>
+        <div class="card p-0 border-0 shadow-sm">
             
-            <div class="mb-3">
-                <label class="form-label fw-bold">1. 메인 제목</label>
-                <input type="text" id="admin-about-title" class="form-control fw-bold" placeholder="예: 우리는 햇빛으로 가치를 만듭니다">
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-bold">2. 부제목 (이탤릭체)</label>
-                <input type="text" id="admin-about-subtitle" class="form-control text-muted" placeholder="짧은 강조 문구">
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-bold">3. 체크리스트 (엔터로 구분)</label>
-                <textarea id="admin-about-list" class="form-control" rows="3" placeholder="한 줄에 하나씩 입력"></textarea>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-bold">4. 본문 내용 (HTML 허용)</label>
-                
-                <ul class="nav nav-tabs" id="aboutContentTab">
+            <div class="card-header bg-white border-bottom-0 pt-3 ps-3">
+                <ul class="nav nav-tabs card-header-tabs" id="aboutTab" role="tablist">
                     <li class="nav-item">
-                        <button class="nav-link active small py-1" data-bs-toggle="tab" data-bs-target="#edit-mode" type="button">✏️ 작성하기</button>
+                        <button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#about-edit-tab" type="button">
+                            ✏️ 편집 모드
+                        </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link small py-1" data-bs-toggle="tab" data-bs-target="#preview-mode" type="button" onclick="updateAboutPreview()">👀 미리보기</button>
+                        <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#about-preview-tab" type="button" onclick="updateTotalPreview()">
+                            👀 전체 미리보기
+                        </button>
                     </li>
                 </ul>
-                
-                <div class="tab-content border border-top-0 p-3 bg-white" style="border-radius: 0 0 5px 5px;">
-                    <div class="tab-pane fade show active" id="edit-mode">
-                        <textarea id="admin-about-content" class="form-control border-0 p-0" rows="6" placeholder="내용을 입력하세요. <b>굵게</b>, <br>줄바꿈 등 HTML 태그 사용 가능"></textarea>
-                    </div>
-                    <div class="tab-pane fade" id="preview-mode">
-                        <div id="about-preview-area" class="p-2" style="background:#f8f9fa; min-height:150px; border-radius:4px;">
+            </div>
+
+            <div class="card-body">
+                <div class="tab-content">
+                    
+                    <div class="tab-pane fade show active" id="about-edit-tab">
+                        <div class="alert alert-light small mb-3 border">
+                            <i class="bi bi-info-circle"></i> 모든 항목에 <b>HTML 태그</b>(&lt;span style="color:red"&gt; 등)를 사용할 수 있습니다.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">1. 메인 제목</label>
+                            <input type="text" id="admin-about-title" class="form-control" placeholder="예: 우리는 <span class='text-primary'>햇빛</span>으로 가치를 만듭니다">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">2. 부제목</label>
+                            <input type="text" id="admin-about-subtitle" class="form-control" placeholder="예: <i>지속 가능한 미래</i>를 위한 선택">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">3. 체크리스트 (HTML 또는 텍스트)</label>
+                                <textarea id="admin-about-list" class="form-control" rows="6" placeholder="[방법 A] 그냥 줄바꿈으로 입력 (자동 아이콘)&#13;&#10;항목1&#13;&#10;항목2&#13;&#10;&#13;&#10;[방법 B] HTML 직접 입력&#13;&#10;<li><i class='bi bi-star'></i> 특별한 항목</li>"></textarea>
                             </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">4. 본문 내용</label>
+                                <textarea id="admin-about-content" class="form-control" rows="6" placeholder="내용을 자유롭게 입력하세요."></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">5. 사진 URL</label>
+                            <input type="text" id="admin-about-img" class="form-control" placeholder="assets/img/about.jpg">
+                        </div>
+
+                        <div class="text-end mt-3">
+                            <button class="btn btn-primary px-4" onclick="saveAboutSettings()">저장하기</button>
+                        </div>
                     </div>
+
+                    <div class="tab-pane fade" id="about-preview-tab">
+                        <div class="border rounded p-4 bg-light">
+                            <div class="row align-items-center bg-white p-3 shadow-sm rounded">
+                                <div class="col-lg-6">
+                                    <h3 id="prev-title" class="fw-bold mb-2">제목 미리보기</h3>
+                                    <p id="prev-subtitle" class="fst-italic text-muted mb-3">부제목 미리보기</p>
+                                    <ul id="prev-list" class="list-unstyled mb-3">
+                                        <li>리스트 미리보기</li>
+                                    </ul>
+                                    <p id="prev-content">본문 미리보기</p>
+                                </div>
+                                <div class="col-lg-6 text-center">
+                                    <img id="prev-img" src="" class="img-fluid rounded" style="max-height:300px; object-fit:cover;" onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+                                </div>
+                            </div>
+                            <div class="text-center mt-3">
+                                <small class="text-muted">* 실제 홈페이지에서는 폰트나 간격이 조금 다를 수 있습니다.</small>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-bold">5. 사진 URL (오른쪽 배치)</label>
-                <input type="text" id="admin-about-img" class="form-control" placeholder="assets/img/about.jpg">
-            </div>
-            
-            <div class="text-end mt-4">
-                <button class="btn btn-primary px-4" onclick="saveAboutSettings()">저장하기</button>
             </div>
         </div>
     </div>
@@ -990,6 +1020,36 @@ function switchTab(t) {
                 // (기존 패턴 유지)
                 alert('저장되었습니다.'); 
             }
+        }
+        // [보조 함수] 전체 미리보기 업데이트 (탭 누를 때 실행됨)
+        function updateTotalPreview() {
+            // 1. 입력값 가져오기
+            const title = document.getElementById('admin-about-title').value;
+            const subtitle = document.getElementById('admin-about-subtitle').value;
+            const content = document.getElementById('admin-about-content').value;
+            const listText = document.getElementById('admin-about-list').value;
+            const imgUrl = document.getElementById('admin-about-img').value;
+
+            // 2. 미리보기 영역에 넣기 (innerHTML 사용)
+            document.getElementById('prev-title').innerHTML = title || '제목 없음';
+            document.getElementById('prev-subtitle').innerHTML = subtitle || '부제목 없음';
+            document.getElementById('prev-content').innerHTML = content || '내용 없음';
+            
+            // 3. 리스트 처리 (스마트 로직 동일 적용)
+            const listEl = document.getElementById('prev-list');
+            if (listText.includes('<li')) {
+                listEl.innerHTML = listText; // HTML 직접 입력 시
+            } else {
+                // 줄바꿈 입력 시 (미리보기용 스타일 적용)
+                let html = '';
+                listText.split('\n').forEach(item => {
+                    if(item.trim()) html += `<li><i class="bi bi-check2-all text-primary"></i> ${item.trim()}</li>`;
+                });
+                listEl.innerHTML = html || '<li>리스트 없음</li>';
+            }
+
+            // 4. 이미지 처리
+            document.getElementById('prev-img').src = imgUrl;
         }
     </script>
 </body>
