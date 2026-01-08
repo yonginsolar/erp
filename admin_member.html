@@ -367,6 +367,22 @@
         </div>
     </div>
 
+        <div class="modal fade" id="commonAlertModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content text-center p-3">
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+                    </div>
+                    <h6 class="fw-bold mb-0" id="commonAlertText">처리되었습니다.</h6>
+                </div>
+                <div class="modal-footer justify-content-center border-0 p-0 pb-2">
+                    <button type="button" class="btn btn-sm btn-dark px-4" data-bs-dismiss="modal">확인</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ★ Supabase 설정 (Anon Key 사용 - RPC 보안으로 안전함)
@@ -978,44 +994,68 @@ function switchTab(t) {
 
         // [보조 함수] 전체 미리보기 업데이트 (탭 누를 때 실행됨)
 // [수정] 전체 미리보기 (입력 안 한 건 안 보이게 처리)
+// [수정] 전체 미리보기 (점 제거 반영)
         function updateTotalPreview() {
-            // 1. 입력값 가져오기
             const title = document.getElementById('admin-about-title').value;
             const subtitle = document.getElementById('admin-about-subtitle').value;
             const content = document.getElementById('admin-about-content').value;
             const listText = document.getElementById('admin-about-list').value;
             const imgUrl = document.getElementById('admin-about-img').value;
 
-            // 2. 미리보기 영역에 넣기 (값이 없으면 빈 문자열)
             document.getElementById('prev-title').innerHTML = title;
             document.getElementById('prev-subtitle').innerHTML = subtitle;
             document.getElementById('prev-content').innerHTML = content;
             
-            // 3. 리스트 처리 (값이 없으면 숨김)
             const listEl = document.getElementById('prev-list');
+            // ★ 핵심: 미리보기 박스에도 'list-unstyled' 적용 (점 제거)
+            listEl.className = "list-unstyled mb-3"; 
+
             if (!listText.trim()) {
                 listEl.innerHTML = '';
-                listEl.style.display = 'none'; // 리스트 숨김
+                listEl.style.display = 'none';
             } else {
-                listEl.style.display = 'block'; // 리스트 보임
+                listEl.style.display = 'block';
                 if (listText.includes('<li')) {
                     listEl.innerHTML = listText;
                 } else {
                     let html = '';
                     listText.split('\n').forEach(item => {
-                        if(item.trim()) html += `<li><i class="bi bi-check2-all text-primary"></i> ${item.trim()}</li>`;
+                        // 아이콘 없이 깔끔하게
+                        if(item.trim()) html += `<li class="mb-1">${item.trim()}</li>`;
                     });
                     listEl.innerHTML = html;
                 }
             }
 
-            // 4. 이미지 처리 (없으면 숨김 표시)
             const imgEl = document.getElementById('prev-img');
-            if(imgUrl) {
-                imgEl.src = imgUrl;
-                imgEl.style.display = 'block';
+            if(imgUrl) { imgEl.src = imgUrl; imgEl.style.display = 'block'; } 
+            else { imgEl.style.display = 'none'; }
+        }
+
+        // [수정] 소개글 저장하기 (모달 적용)
+        async function saveAboutSettings() {
+            const updates = {
+                p_title: document.getElementById('admin-about-title').value,
+                p_subtitle: document.getElementById('admin-about-subtitle').value,
+                p_content: document.getElementById('admin-about-content').value,
+                p_list_items: document.getElementById('admin-about-list').value,
+                p_image_url: document.getElementById('admin-about-img').value
+            };
+
+            showLoading(true);
+            const { error } = await _supabase.rpc('upsert_about_secure', updates);
+            showLoading(false);
+
+            if(error) {
+                // 에러도 모달로 띄우면 좋겠죠? (내용 바꿔서 재활용)
+                document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
+                new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
             } else {
-                imgEl.style.display = 'none';
+                // 성공 모달 띄우기
+                document.getElementById('commonAlertText').innerText = '성공적으로 저장되었습니다!';
+                new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
+                
+                fetchAboutSettings(); // 저장 후 다시 불러오기
             }
         }
     </script>
