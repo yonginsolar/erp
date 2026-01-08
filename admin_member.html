@@ -136,8 +136,7 @@
                     <h3>📢 공지사항 관리</h3>
                     <button class="btn btn-primary btn-sm" onclick="openNoticeModal()"><i class="bi bi-pencil"></i> 공지 작성</button>
                 </div>
-                <div class="mb-3"><label class="form-label small">내용</label><textarea id="notice-content" class="form-control" rows="5"></textarea></div>
-                <div class="card border-0 shadow-sm">
+                    <div class="card border-0 shadow-sm">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
                             <thead><tr><th>날짜</th><th>분류</th><th>제목</th><th>팝업</th><th>상태</th><th>관리</th></tr></thead>
@@ -254,6 +253,7 @@
                 <div class="modal-body">
                     <input type="hidden" id="notice-id">
                     <div class="mb-3"><label class="form-label small">제목</label><input type="text" id="notice-title" class="form-control"></div>
+                    <div class="mb-3"><label class="form-label small">내용</label><textarea id="notice-content" class="form-control" rows="5"></textarea></div>
                     <div class="row mb-3">
                         <div class="col"><label class="form-label small">분류</label><select id="notice-category" class="form-select"><option>공지</option><option>소식</option><option>보도자료</option></select></div>
                         <div class="col"><label class="form-label small">상태</label><select id="notice-status" class="form-select"><option value="published">게시</option><option value="draft">임시저장</option></select></div>
