@@ -643,6 +643,7 @@
         }
 
         // --- 연혁 ---
+// 연혁 목록 불러오기 (삭제 버튼 추가됨)
         async function fetchHistory() {
             const { data } = await _supabase.from('site_documents').select('*').eq('category','history').order('event_date', {ascending:false});
             const tbody = document.getElementById('historyListBody');
@@ -653,7 +654,10 @@
                     <td>${h.event_date}</td>
                     <td>${h.title}</td>
                     <td>${h.content || ''}</td>
-                    <td><button class="btn btn-sm btn-light" onclick="openHistoryModal('${h.id}')">수정</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-light" onclick="openHistoryModal('${h.id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteHistory('${h.id}')">삭제</button>
+                    </td>
                 </tr>`;
             });
         }
