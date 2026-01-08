@@ -500,14 +500,6 @@
                         <div class="form-text text-end x-small">자동으로 조항을 인식하여 카드 형태로 변환합니다.</div>
                     </div>
 
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold text-muted">PDF 파일 (선택)</label>
-                        <div class="input-group">
-                            <input type="file" id="doc-file" class="form-control" accept=".pdf">
-                        </div>
-                        <input type="hidden" id="doc-file-url">
-                        <div id="doc-file-link" class="mt-1 small"></div>
-                    </div>
 
                     <div class="form-check p-3 bg-light rounded border">
                         <input class="form-check-input" type="checkbox" id="doc-current">
@@ -1459,9 +1451,13 @@ async function confirmDelete() {
 
         // 2. 모달 열기
 // [수정] 문서 모달 열기
+
+
+        // [수정] 문서 저장 (is_current 포함)
+
+        // [수정] 문서 모달 열기 (파일 관련 제거)
         async function openDocModal(id) {
             document.getElementById('doc-id').value = id || '';
-            document.getElementById('doc-file').value = ''; 
             
             if(id) {
                 const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
@@ -1470,41 +1466,27 @@ async function confirmDelete() {
                     document.getElementById('doc-version').value = data.version || '';
                     document.getElementById('doc-date').value = data.event_date;
                     document.getElementById('doc-content').value = data.content || '';
-                    document.getElementById('doc-file-url').value = data.file_url || '';
-                    document.getElementById('doc-current').checked = data.is_current; // 체크박스 상태
-                    
-                    if(data.file_url) {
-                        document.getElementById('doc-file-link').innerHTML = `<a href="${data.file_url}" target="_blank">파일 확인</a>`;
-                    } else {
-                        document.getElementById('doc-file-link').innerText = '';
-                    }
+                    document.getElementById('doc-current').checked = data.is_current;
                 }
             } else {
                 // 신규
-                document.getElementById('doc-title').value = '정관'; // 기본값
+                document.getElementById('doc-title').value = '정관';
                 document.getElementById('doc-version').value = '';
                 document.getElementById('doc-date').value = new Date().toISOString().substring(0, 10);
                 document.getElementById('doc-content').value = '';
-                document.getElementById('doc-file-url').value = '';
-                document.getElementById('doc-file-link').innerText = '';
-                document.getElementById('doc-current').checked = true; // 신규는 기본적으로 현재 버전
+                document.getElementById('doc-current').checked = true;
             }
             new bootstrap.Modal(document.getElementById('docModal')).show();
         }
 
-        // [수정] 문서 저장 (is_current 포함)
+        // [수정] 문서 저장 (파일 로직 삭제)
         async function saveDoc() {
             const title = document.getElementById('doc-title').value;
             if(!title) return alert("제목을 입력하세요.");
 
             showLoading(true);
 
-            // 파일 업로드 (생략 - 기존과 동일)
-            let finalUrl = document.getElementById('doc-file-url').value;
-            const fileInput = document.getElementById('doc-file');
-            if (fileInput.files.length > 0) {
-               // ... (기존 파일 업로드 로직 그대로 사용) ...
-            }
+            // 파일 업로드 로직 삭제됨 (순수 텍스트만 저장)
 
             const updates = {
                 p_id: document.getElementById('doc-id').value || null,
@@ -1513,8 +1495,8 @@ async function confirmDelete() {
                 p_date: document.getElementById('doc-date').value,
                 p_content: document.getElementById('doc-content').value,
                 p_version: document.getElementById('doc-version').value,
-                p_file_url: finalUrl,
-                p_is_current: document.getElementById('doc-current').checked // 추가됨
+                p_file_url: null, // 파일 없음
+                p_is_current: document.getElementById('doc-current').checked
             };
 
             const { error } = await _supabase.rpc('upsert_document_secure', updates);
