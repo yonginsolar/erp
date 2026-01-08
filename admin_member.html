@@ -679,20 +679,90 @@
                 </tr>`;
             });
         }
+// [수정] 연혁 모달 열기 (HTML 태그를 -> 편집하기 편한 텍스트로 변환)
         async function openHistoryModal(id) {
             document.getElementById('hist-id').value = id || '';
+            
             if(id) {
                 const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
                 if(data) {
                     document.getElementById('hist-date').value = data.event_date;
                     document.getElementById('hist-title').value = data.title;
-                    document.getElementById('hist-content').value = data.content;
+                    
+                    // ★ [핵심] DB의 HTML 태그를 사람이 보기 편한 텍스트로 복원
+                    let rawText = data.content || '';
+                    rawText = rawText.replaceAll('<br>', '\n');      // 줄바꿈 복원
+                    rawText = rawText.replaceAll('<ul>', '');        // 리스트 태그 제거
+                    rawText = rawText.replaceAll('</ul>', '');
+                    rawText = rawText.replaceAll('<ul class="my-1">', '');
+                    rawText = rawText.replace(/<li>/g, '- ');        // <li>를 '- '로 변환
+                    rawText = rawText.replace(/<\/li>/g, '\n');      // </li>를 줄바꿈으로
+                    rawText = rawText.replace(/\n\s*\n/g, '\n');     // 중복 줄바꿈 제거
+                    
+                    document.getElementById('hist-content').value = rawText.trim();
                 }
             } else {
+                // 신규 등록 시 초기화
                 document.getElementById('hist-title').value = '';
                 document.getElementById('hist-content').value = '';
+                // 날짜는 오늘 날짜로 기본 세팅해주면 편함
+                document.getElementById('hist-date').value = new Date().toISOString().substring(0, 10);
             }
             new bootstrap.Modal(document.getElementById('historyModal')).show();
+        }
+
+        // [수정] 연혁 저장 (텍스트를 -> 예쁜 HTML로 변환해서 저장)
+        async function saveHistory() {
+            const rawContent = document.getElementById('hist-content').value;
+            
+            // ★ [핵심] 엔터와 '-'를 감지해서 HTML로 변환하는 로직
+            let htmlContent = '';
+            let inList = false; // 현재 리스트 작성 중인지 체크
+
+            const lines = rawContent.split('\n');
+            lines.forEach((line, index) => {
+                line = line.trim();
+                if(!line) return; // 빈 줄 무시
+
+                if (line.startsWith('-') || line.startsWith('•')) {
+                    // 1. 목록 아이템인 경우 (- 또는 • 로 시작)
+                    if (!inList) {
+                        htmlContent += '<ul class="my-1">'; // 리스트 시작
+                        inList = true;
+                    }
+                    // 앞의 특수문자 제거하고 li 태그로 감싸기
+                    const cleanText = line.substring(1).trim();
+                    htmlContent += `<li>${cleanText}</li>`;
+                } else {
+                    // 2. 일반 텍스트인 경우
+                    if (inList) {
+                        htmlContent += '</ul>'; // 리스트가 열려있으면 닫음
+                        inList = false;
+                    }
+                    // 첫 줄이 아니면 앞에 줄바꿈 태그 추가
+                    if (htmlContent !== '') htmlContent += '<br>';
+                    htmlContent += line;
+                }
+            });
+            if (inList) htmlContent += '</ul>'; // 마지막에 리스트가 열려있으면 닫음
+
+
+            const updates = {
+                p_id: document.getElementById('hist-id').value || null,
+                p_date: document.getElementById('hist-date').value,
+                p_title: document.getElementById('hist-title').value,
+                p_content: htmlContent // 변환된 HTML 저장
+            };
+
+            showLoading(true);
+            const { error } = await _supabase.rpc('upsert_history_secure', updates);
+            showLoading(false);
+
+            if(error) alert(error.message); 
+            else { 
+                bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide(); 
+                fetchHistory(); 
+            }
         }
         async function saveHistory() {
             const updates = {
