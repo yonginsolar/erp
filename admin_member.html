@@ -142,16 +142,29 @@
                 </div>
             </div>
 
-            <div id="tab-site" class="tab-pane">
+<div id="tab-site" class="tab-pane">
                 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
                 
                 <ul class="nav nav-tabs mb-4">
-                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sub-sections" onclick="setTimeout(fetchSections,100)">섹션 설정 (ON/OFF)</a></li>
-                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-plants" onclick="setTimeout(fetchPlants,100)">발전소 현황</a></li>
-                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">연혁 (History)</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#sub-sections" onclick="setTimeout(fetchSections,100)">
+                            섹션 설정 (ON/OFF)
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#sub-plants" onclick="setTimeout(fetchPlants,100)">
+                            발전소 현황
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">
+                            연혁 (History)
+                        </a>
+                    </li>
                 </ul>
 
                 <div class="tab-content">
+                    
                     <div class="tab-pane fade show active" id="sub-sections">
                         <div class="alert alert-info small">
                             <i class="bi bi-info-circle-fill"></i> 홈페이지의 메뉴와 본문 섹션을 끄고 켤 수 있습니다. (체크 해제 시 즉시 반영)
@@ -164,24 +177,27 @@
                     </div>
                     
                     <div class="tab-pane fade" id="sub-plants">
-                    <div class="tab-pane fade show active" id="sub-plants">
-                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="openPlantModal()">+ 발전소 추가</button></div>
+                        <div class="d-flex justify-content-end mb-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openPlantModal()">+ 발전소 추가</button>
+                        </div>
                         <table class="table table-bordered bg-white">
                             <thead><tr><th>순서</th><th>발전소명</th><th>용량(kW)</th><th>상태</th><th>모니터링</th><th>관리</th></tr></thead>
                             <tbody id="plantListBody"></tbody>
                         </table>
                     </div>
+
                     <div class="tab-pane fade" id="sub-history">
-                        <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="openHistoryModal()">+ 연혁 추가</button></div>
+                        <div class="d-flex justify-content-end mb-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openHistoryModal()">+ 연혁 추가</button>
+                        </div>
                         <table class="table table-bordered bg-white">
                             <thead><tr><th>날짜</th><th>제목</th><th>내용</th><th>관리</th></tr></thead>
                             <tbody id="historyListBody"></tbody>
                         </table>
                     </div>
+
                 </div>
             </div>
-
-        </div>
     </div>
 
     <div id="loadingOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.7); display:none; justify-content:center; align-items:center; z-index:9999;">
@@ -663,14 +679,31 @@
         // 유틸리티
         function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
         function logout() { _supabase.auth.signOut().then(() => location.href='index.html'); }
-        function switchTab(t) { 
-            document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active')); 
-            document.getElementById('tab-'+t).classList.add('active'); 
-            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-            if(event && event.target) event.target.closest('.nav-link').classList.add('active');
+function switchTab(t) { 
+            // 1. 모든 탭 숨기기
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active')); 
             
-            if(t==='notices') fetchNotices();
-            if(t==='site') { document.querySelector('a[href="#sub-plants"]').click(); }
+            // 2. 선택한 메인 탭 보이기 (class에 active 추가가 아니라 display 스타일 제어 방식인 경우 주의)
+            // 현재 CSS 구조상 .tab-pane.active { display: block; } 이므로 class 추가가 맞음
+            const targetTab = document.getElementById('tab-' + t);
+            if(targetTab) targetTab.classList.add('active'); 
+            
+            // 3. 사이드바 메뉴 활성화 표시
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            if (event && event.target) {
+                // 클릭된 요소가 아이콘(i)일 수도 있으니 closest로 a태그 찾기
+                const link = event.target.closest('.nav-link');
+                if(link) link.classList.add('active');
+            }
+            
+            // 4. 탭별 데이터 로드 로직
+            if (t === 'notices') fetchNotices();
+            
+            if (t === 'site') { 
+                // [수정됨] 사이트 관리 탭을 누르면 '섹션 설정(#sub-sections)' 탭을 기본으로 클릭
+                const defaultSubTab = document.querySelector('a[href="#sub-sections"]');
+                if(defaultSubTab) defaultSubTab.click();
+            }
         }
         // ================================================================
         // [기능 5] 섹션(메뉴) 관리 (ON/OFF)
