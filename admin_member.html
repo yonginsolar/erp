@@ -335,15 +335,20 @@
                         </select>
                     </div>
 
-                    <div class="mb-3 p-3 bg-light rounded" id="plant-progress-area" style="display:none;">
+<div class="mb-3 p-3 bg-light rounded" id="plant-progress-area" style="display:none;">
                         <label class="form-label small fw-bold d-flex justify-content-between">
                             <span>🚧 진행률 설정</span>
-                            <span class="text-primary" id="plant-progress-val">0%</span>
+                            <span class="text-primary fw-bold" id="plant-progress-label">0% (조합설립)</span>
                         </label>
-                        <input type="range" id="plant-progress" class="form-range" min="0" max="100" step="1" oninput="document.getElementById('plant-progress-val').innerText = this.value + '%'">
-                        <div class="d-flex justify-content-between text-muted" style="font-size:0.7em;">
-                            <span>착공(0%)</span>
-                            <span>완공(100%)</span>
+                        <input type="range" id="plant-progress" class="form-range" min="0" max="100" step="1" 
+                               oninput="updateProgressLabel(this.value)">
+                        
+                        <div class="d-flex justify-content-between text-muted mt-1" style="font-size:0.7em;">
+                            <span onclick="setProg(0)" style="cursor:pointer">설립</span>
+                            <span onclick="setProg(25)" style="cursor:pointer">부지</span>
+                            <span onclick="setProg(50)" style="cursor:pointer">인허가</span>
+                            <span onclick="setProg(75)" style="cursor:pointer">착공</span>
+                            <span onclick="setProg(100)" style="cursor:pointer">완공</span>
                         </div>
                     </div>
                     <div class="mb-3"><label class="form-label small">모니터링 URL (선택)</label><input type="text" id="plant-url" class="form-control" placeholder="http://..."></div>
@@ -727,65 +732,33 @@ async function fetchPlants() {
         }
 // [수정] 발전소 모달 열기 (순서 자동 계산)
 // [수정 2] 발전소 모달 열기 (순서 자동 계산 + 빈칸 0 처리)
-        async function openPlantModal(id) {
-            document.getElementById('plant-id').value = id || '';
-            
-            if(id) {
-                // 수정 모드: DB에서 가져오기
-                const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
-                if(data) {
-                    document.getElementById('plant-name').value = data.name;
-                    document.getElementById('plant-capacity').value = data.capacity;
-                    document.getElementById('plant-order').value = data.display_order;
-                    document.getElementById('plant-status').value = data.status;
-                    document.getElementById('plant-url').value = data.monitor_url || '';
-                    
-                    const rate = data.progress_rate || 0;
-                    document.getElementById('plant-progress').value = rate;
-                    document.getElementById('plant-progress-val').innerText = rate + '%';
-                }
-            } else {
-                // 신규 모드: ★ 순서 자동 계산 (기존 최대값 + 1)
-                // g_plants에 데이터가 있으면 최대값 찾고, 없으면 0 -> 결과적으로 1번부터 시작
-                const maxOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) : 0;
-                const nextOrder = maxOrder + 1;
 
-                document.getElementById('plant-name').value = '';
-                document.getElementById('plant-capacity').value = ''; 
-                document.getElementById('plant-order').value = nextOrder; // 여기에 자동 입력됨!
-                document.getElementById('plant-url').value = '';
-                document.getElementById('plant-status').value = '준비중';
-                document.getElementById('plant-progress').value = 0;
-                document.getElementById('plant-progress-val').innerText = '0%';
-            }
             
             toggleProgressSlider();
             new bootstrap.Modal(document.getElementById('plantModal')).show();
         }
 // [수정] 발전소 저장 (빈칸 -> 0 자동 변환 안전장치 추가)
 async function savePlant() {
-            // 1. 입력값 가져오기
             const name = document.getElementById('plant-name').value;
-            const capInput = document.getElementById('plant-capacity').value;
-            const orderInput = document.getElementById('plant-order').value;
-            const status = document.getElementById('plant-status').value;
-            
-            // 필수값 체크
             if (!name) { alert("발전소명을 입력해주세요."); return; }
 
-            // ★ [에러 해결 핵심] 빈칸("")이면 무조건 숫자 0으로 변환
-            const capacity = capInput ? Number(capInput) : 0;
-            const order = orderInput ? Number(orderInput) : 0;
+            // ★ 숫자 에러 완벽 차단
+            // 값이 없거나("") 숫자가 아니면(isNaN) 무조건 0으로 만듦
+            const capVal = document.getElementById('plant-capacity').value;
+            const capacity = (capVal === '' || isNaN(capVal)) ? 0 : Number(capVal);
+
+            const orderVal = document.getElementById('plant-order').value;
+            const order = (orderVal === '' || isNaN(orderVal)) ? 0 : Number(orderVal);
             
-            // 진행률 처리
+            const status = document.getElementById('plant-status').value;
             const progress = (status === '운영중') ? 100 : Number(document.getElementById('plant-progress').value);
 
             const updates = {
                 p_id: document.getElementById('plant-id').value || null,
                 p_name: name,
-                p_capacity: capacity, // 이제 무조건 숫자가 들어감 (에러 안 남)
+                p_capacity: capacity, // 이제 절대 에러 안 남
                 p_status: status,
-                p_display_order: order, // 여기도 무조건 숫자
+                p_display_order: order,
                 p_progress: progress
             };
             
@@ -797,12 +770,10 @@ async function savePlant() {
                 if(document.getElementById('commonAlertModal')) {
                     document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
                     new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
-                } else {
-                    alert('저장 실패: ' + error.message);
-                }
+                } else alert(error.message);
             } else { 
                 bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
-                fetchPlants(); // 목록 갱신
+                fetchPlants(); 
             }
         }
 
@@ -1154,36 +1125,7 @@ function switchTab(t) {
         }
 
         // [수정] 발전소 모달 열기 (진행률 불러오기 추가)
-        async function openPlantModal(id) {
-            document.getElementById('plant-id').value = id || '';
-            
-            if(id) {
-                const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
-                if(data) {
-                    document.getElementById('plant-name').value = data.name;
-                    document.getElementById('plant-capacity').value = data.capacity;
-                    document.getElementById('plant-order').value = data.display_order;
-                    document.getElementById('plant-status').value = data.status;
-                    document.getElementById('plant-url').value = data.monitor_url || '';
-                    
-                    // 진행률 세팅
-                    const rate = data.progress_rate || 0;
-                    document.getElementById('plant-progress').value = rate;
-                    document.getElementById('plant-progress-val').innerText = rate + '%';
-                }
-            } else {
-                // 신규
-                document.getElementById('plant-name').value = '';
-                document.getElementById('plant-capacity').value = '';
-                document.getElementById('plant-url').value = '';
-                document.getElementById('plant-status').value = '준비중'; // 기본값
-                document.getElementById('plant-progress').value = 0;
-                document.getElementById('plant-progress-val').innerText = '0%';
-            }
-            
-            toggleProgressSlider(); // 상태에 맞춰 UI 갱신
-            new bootstrap.Modal(document.getElementById('plantModal')).show();
-        }
+
 
         // [수정] 발전소 저장 (진행률 포함 전송)
         async function savePlant() {
@@ -1243,6 +1185,55 @@ async function confirmDelete() {
                 if(deleteType === 'history') fetchHistory();
                 else fetchPlants();
             }
+        }
+        // [신규] 슬라이더 움직일 때 단계 이름 표시
+        function updateProgressLabel(val) {
+            const v = Number(val);
+            let step = '';
+            if (v < 20) step = '조합설립 단계';
+            else if (v < 40) step = '부지선정 단계';
+            else if (v < 60) step = '인허가 단계';
+            else if (v < 80) step = '착공/공사 단계';
+            else step = '완공/운영 단계';
+
+            document.getElementById('plant-progress-label').innerText = `${v}% (${step})`;
+        }
+        
+        // [신규] 글씨 클릭하면 슬라이더 이동
+        function setProg(val) {
+            document.getElementById('plant-progress').value = val;
+            updateProgressLabel(val);
+        }
+
+        // [기존 함수 수정] 모달 열기 (라벨 초기화 포함)
+        async function openPlantModal(id) {
+            document.getElementById('plant-id').value = id || '';
+            
+            if(id) {
+                const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
+                if(data) {
+                    document.getElementById('plant-name').value = data.name;
+                    document.getElementById('plant-capacity').value = data.capacity;
+                    document.getElementById('plant-order').value = data.display_order;
+                    document.getElementById('plant-status').value = data.status;
+                    document.getElementById('plant-url').value = data.monitor_url || '';
+                    
+                    const rate = data.progress_rate || 0;
+                    document.getElementById('plant-progress').value = rate;
+                    updateProgressLabel(rate); // 라벨 업데이트
+                }
+            } else {
+                const maxOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) : 0;
+                document.getElementById('plant-name').value = '';
+                document.getElementById('plant-capacity').value = ''; 
+                document.getElementById('plant-order').value = maxOrder + 1;
+                document.getElementById('plant-url').value = '';
+                document.getElementById('plant-status').value = '준비중';
+                document.getElementById('plant-progress').value = 0;
+                updateProgressLabel(0); // 라벨 업데이트
+            }
+            toggleProgressSlider();
+            new bootstrap.Modal(document.getElementById('plantModal')).show();
         }
     </script>
 </body>
