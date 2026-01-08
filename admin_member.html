@@ -765,59 +765,7 @@ async function fetchPlants() {
             new bootstrap.Modal(document.getElementById('plantModal')).show();
         }
 // [수정] 발전소 저장 (빈칸 -> 0 자동 변환 안전장치 추가)
-async function savePlant() {
-            const name = document.getElementById('plant-name').value;
-            if (!name) { alert("발전소명을 입력해주세요."); return; }
 
-            showLoading(true);
-
-            // 1. 이미지 업로드 처리
-            let finalImgUrl = document.getElementById('plant-img-url').value;
-            const fileInput = document.getElementById('plant-file');
-            
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const fileName = `plants/${Date.now()}_${file.name}`;
-                
-                // 스토리지에 업로드
-                const { data: uploadData, error: uploadError } = await _supabase.storage.from('assets').upload(fileName, file);
-                
-                if (uploadError) {
-                    showLoading(false);
-                    alert('사진 업로드 실패: ' + uploadError.message);
-                    return;
-                }
-                
-                // 공개 URL 가져오기
-                const { data: publicUrlData } = _supabase.storage.from('assets').getPublicUrl(fileName);
-                finalImgUrl = publicUrlData.publicUrl;
-            }
-
-            // 2. DB 저장
-            const capVal = document.getElementById('plant-capacity').value;
-            const updates = {
-                p_id: document.getElementById('plant-id').value || null,
-                p_name: name,
-                p_capacity: (capVal === '' || isNaN(capVal)) ? 0 : Number(capVal),
-                p_status: document.getElementById('plant-status').value,
-                p_display_order: Number(document.getElementById('plant-order').value) || 0,
-                p_progress: (document.getElementById('plant-status').value === '운영중') ? 100 : Number(document.getElementById('plant-progress').value),
-                // 신규 항목
-                p_location: document.getElementById('plant-location').value,
-                p_area: document.getElementById('plant-area').value,
-                p_completion_date: document.getElementById('plant-date').value || null,
-                p_image_url: finalImgUrl
-            };
-
-            const { error } = await _supabase.rpc('upsert_plant_secure', updates);
-            showLoading(false);
-
-            if(error) alert('저장 실패: ' + error.message);
-            else { 
-                bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
-                fetchPlants(); 
-            }
-        }
 
         // --- 연혁 ---
 // 연혁 목록 불러오기 (삭제 버튼 추가됨)
@@ -1170,37 +1118,7 @@ function switchTab(t) {
 
 
         // [수정] 발전소 저장 (진행률 포함 전송)
-        async function savePlant() {
-            const status = document.getElementById('plant-status').value;
-            // 운영중이면 무조건 100, 아니면 슬라이더 값 사용
-            const progress = (status === '운영중') ? 100 : document.getElementById('plant-progress').value;
 
-            const updates = {
-                p_id: document.getElementById('plant-id').value || null,
-                p_name: document.getElementById('plant-name').value,
-                p_capacity: document.getElementById('plant-capacity').value,
-                p_status: status,
-                p_display_order: document.getElementById('plant-order').value,
-                p_progress: progress // 추가됨
-            };
-            
-            showLoading(true);
-            const { error } = await _supabase.rpc('upsert_plant_secure', updates);
-            showLoading(false);
-
-            if(error) {
-                // 모달이 있으면 모달로, 없으면 alert (국장님 요청 반영)
-                if(document.getElementById('commonAlertModal')) {
-                    document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
-                    new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
-                } else {
-                    alert(error.message);
-                }
-            } else { 
-                bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
-                fetchPlants(); 
-            }
-        }
         // [추가] 발전소 삭제 요청
 function askDeletePlant(id) {
             deleteType = 'plant';
@@ -1248,14 +1166,15 @@ async function confirmDelete() {
         }
 
         // [기존 함수 수정] 모달 열기 (라벨 초기화 포함)
-async function openPlantModal(id) {
+// [수정 1] 발전소 모달 열기 (순서 자동 계산 + 이미지/데이터 초기화)
+        async function openPlantModal(id) {
             document.getElementById('plant-id').value = id || '';
             document.getElementById('plant-file').value = ''; // 파일 입력 초기화
             
             if(id) {
+                // [수정 모드] DB에서 데이터 가져오기
                 const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
                 if(data) {
-                    // 기본 정보
                     document.getElementById('plant-name').value = data.name;
                     document.getElementById('plant-capacity').value = data.capacity;
                     document.getElementById('plant-order').value = data.display_order;
@@ -1266,15 +1185,16 @@ async function openPlantModal(id) {
                     document.getElementById('plant-status').value = data.status;
                     document.getElementById('plant-url').value = data.monitor_url || '';
                     
-                    // 진행률
+                    // 진행률 세팅
                     const rate = data.progress_rate || 0;
                     document.getElementById('plant-progress').value = rate;
                     updateProgressLabel(rate);
 
-                    // 이미지
+                    // 이미지 세팅
                     document.getElementById('plant-img-url').value = data.image_url || '';
                     const preview = document.getElementById('plant-img-preview');
                     const placeholder = document.getElementById('plant-img-placeholder');
+                    
                     if(data.image_url) {
                         preview.src = data.image_url;
                         preview.style.display = 'block';
@@ -1285,21 +1205,96 @@ async function openPlantModal(id) {
                     }
                 }
             } else {
-                // 신규 등록
+                // [신규 모드] 순서 자동 계산 (최대값 + 1)
+                // g_plants가 비어있으면 0으로 계산하여 1번부터 시작
                 const maxOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) : 0;
-                // 초기화
-                ['plant-name','plant-capacity','plant-url','plant-location','plant-area','plant-date','plant-img-url'].forEach(id => document.getElementById(id).value = '');
                 
-                document.getElementById('plant-order').value = maxOrder + 1;
+                // 입력칸 초기화
+                ['plant-name','plant-capacity','plant-url','plant-location','plant-area','plant-date','plant-img-url'].forEach(elId => {
+                    const el = document.getElementById(elId);
+                    if(el) el.value = '';
+                });
+                
+                document.getElementById('plant-order').value = maxOrder + 1; // 자동 순서 입력
                 document.getElementById('plant-status').value = '준비중';
                 document.getElementById('plant-progress').value = 0;
                 updateProgressLabel(0);
                 
+                // 이미지 초기화
                 document.getElementById('plant-img-preview').style.display = 'none';
                 document.getElementById('plant-img-placeholder').style.display = 'block';
             }
-            toggleProgressSlider();
+            
+            toggleProgressSlider(); // 상태에 따라 슬라이더 보임/숨김
             new bootstrap.Modal(document.getElementById('plantModal')).show();
+        }
+
+        // [수정 2] 발전소 저장 (빈칸 숫자 에러 해결 + 이미지 업로드)
+        async function savePlant() {
+            const name = document.getElementById('plant-name').value;
+            if (!name) { alert("발전소명을 입력해주세요."); return; }
+
+            showLoading(true);
+
+            // 1. 이미지 업로드 처리
+            let finalImgUrl = document.getElementById('plant-img-url').value;
+            const fileInput = document.getElementById('plant-file');
+            
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                // 파일명 중복 방지를 위해 시간 추가
+                const fileName = `plants/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                
+                const { data: uploadData, error: uploadError } = await _supabase.storage.from('assets').upload(fileName, file);
+                
+                if (uploadError) {
+                    showLoading(false);
+                    alert('사진 업로드 실패: ' + uploadError.message);
+                    return;
+                }
+                
+                const { data: publicUrlData } = _supabase.storage.from('assets').getPublicUrl(fileName);
+                finalImgUrl = publicUrlData.publicUrl;
+            }
+
+            // 2. 숫자 변환 (빈칸 에러 방지 핵심 로직)
+            const capVal = document.getElementById('plant-capacity').value;
+            const orderVal = document.getElementById('plant-order').value;
+            
+            // 값이 없거나("") 숫자가 아니면 0으로 강제 변환
+            const capacity = (capVal === '' || isNaN(capVal)) ? 0 : Number(capVal);
+            const order = (orderVal === '' || isNaN(orderVal)) ? 0 : Number(orderVal);
+            
+            const status = document.getElementById('plant-status').value;
+            const progress = (status === '운영중') ? 100 : Number(document.getElementById('plant-progress').value);
+
+            const updates = {
+                p_id: document.getElementById('plant-id').value || null,
+                p_name: name,
+                p_capacity: capacity, // 안전한 숫자
+                p_status: status,
+                p_display_order: order, // 안전한 숫자
+                p_progress: progress,
+                p_location: document.getElementById('plant-location').value,
+                p_area: document.getElementById('plant-area').value,
+                p_completion_date: document.getElementById('plant-date').value || null,
+                p_image_url: finalImgUrl
+            };
+
+            const { error } = await _supabase.rpc('upsert_plant_secure', updates);
+            showLoading(false);
+
+            if(error) {
+                if(document.getElementById('commonAlertModal')) {
+                    document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
+                    new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
+                } else {
+                    alert('저장 실패: ' + error.message);
+                }
+            } else { 
+                bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
+                fetchPlants(); 
+            }
         }
         // [신규] 이미지 선택 시 미리보기
         function previewImage(input) {
