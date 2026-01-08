@@ -380,7 +380,7 @@
                     <input type="hidden" id="delete-target-id"> </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">취소</button>
-                    <button type="button" class="btn btn-danger" onclick="confirmDeleteHistory()">삭제하기</button>
+                    <button type="button" class="btn btn-danger" id="btn-real-delete">삭제하기</button>
                 </div>
             </div>
         </div>
@@ -411,6 +411,8 @@
         
         // 전역 변수
         let g_members = [];
+        // 전역 변수
+        let g_plants = []; // [추가] 발전소 목록 기억용
 
         // [초기화] 세션 체크 및 권한 확인
         window.onload = async () => {
@@ -696,11 +698,15 @@
         // ================================================================
         
         // --- 발전소 ---
+// [수정] 발전소 목록 불러오기 (삭제 버튼 추가 + 전역변수 저장)
         async function fetchPlants() {
             const { data } = await _supabase.from('site_power_plants').select('*').order('display_order');
             const tbody = document.getElementById('plantListBody');
             tbody.innerHTML = '';
+            
             if(!data) return;
+            g_plants = data; // ★ 목록 기억 (순서 계산용)
+
             data.forEach(p => {
                 tbody.innerHTML += `<tr>
                     <td>${p.display_order}</td>
@@ -708,13 +714,19 @@
                     <td>${p.capacity}kW</td>
                     <td>${p.status}</td>
                     <td><a href="${p.monitor_url||'#'}" target="_blank" class="text-truncate" style="max-width:100px; display:inline-block;">${p.monitor_url||'-'}</a></td>
-                    <td><button class="btn btn-sm btn-light" onclick="openPlantModal('${p.id}')">수정</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-light" onclick="openPlantModal('${p.id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeletePlant('${p.id}')">삭제</button>
+                    </td>
                 </tr>`;
             });
         }
+// [수정] 발전소 모달 열기 (순서 자동 계산)
         async function openPlantModal(id) {
             document.getElementById('plant-id').value = id || '';
+            
             if(id) {
+                // 수정 모드: DB에서 가져오기
                 const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
                 if(data) {
                     document.getElementById('plant-name').value = data.name;
@@ -722,12 +734,26 @@
                     document.getElementById('plant-order').value = data.display_order;
                     document.getElementById('plant-status').value = data.status;
                     document.getElementById('plant-url').value = data.monitor_url || '';
+                    
+                    const rate = data.progress_rate || 0;
+                    document.getElementById('plant-progress').value = rate;
+                    document.getElementById('plant-progress-val').innerText = rate + '%';
                 }
             } else {
+                // 신규 모드: ★ 여기서 순서를 자동으로 채워줍니다!
+                // 기존 목록 중 가장 큰 번호 + 1, 없으면 1
+                const nextOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) + 1 : 1;
+
                 document.getElementById('plant-name').value = '';
                 document.getElementById('plant-capacity').value = '';
+                document.getElementById('plant-order').value = nextOrder; // 자동 입력
                 document.getElementById('plant-url').value = '';
+                document.getElementById('plant-status').value = '준비중';
+                document.getElementById('plant-progress').value = 0;
+                document.getElementById('plant-progress-val').innerText = '0%';
             }
+            
+            toggleProgressSlider();
             new bootstrap.Modal(document.getElementById('plantModal')).show();
         }
 // [수정] 발전소 저장 (빈칸 -> 0 자동 변환 안전장치 추가)
@@ -974,10 +1000,12 @@ function switchTab(t) {
         // 연혁 삭제 함수
 
         // [수정 1] 삭제 요청 (모달 띄우기)
+// 연혁 삭제 요청
         function askDeleteHistory(id) {
-            // 1. 지울 ID를 히든 인풋에 저장
+            deleteType = 'history';
             document.getElementById('delete-target-id').value = id;
-            // 2. 모달 열기
+            // 버튼에 이벤트 연결
+            document.getElementById('btn-real-delete').onclick = confirmDelete;
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
 
@@ -1185,6 +1213,33 @@ function switchTab(t) {
             } else { 
                 bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
                 fetchPlants(); 
+            }
+        }
+        // [추가] 발전소 삭제 요청
+function askDeletePlant(id) {
+            deleteType = 'plant';
+            document.getElementById('delete-target-id').value = id;
+            // 버튼에 이벤트 연결
+            document.getElementById('btn-real-delete').onclick = confirmDelete;
+            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+        }
+
+async function confirmDelete() {
+            const id = document.getElementById('delete-target-id').value;
+            const modalEl = document.getElementById('deleteConfirmModal');
+            bootstrap.Modal.getInstance(modalEl).hide();
+
+            showLoading(true);
+            let rpcName = (deleteType === 'history') ? 'delete_document_secure' : 'delete_plant_secure';
+            
+            const { error } = await _supabase.rpc(rpcName, { p_id: id });
+            showLoading(false);
+
+            if (error) {
+                alert('삭제 실패: ' + error.message);
+            } else {
+                if(deleteType === 'history') fetchHistory();
+                else fetchPlants();
             }
         }
     </script>
