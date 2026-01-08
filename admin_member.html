@@ -36,6 +36,10 @@
         .tab-pane { display: none; }
         .tab-pane.active { display: block; animation: fadeIn 0.3s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* 탭 글씨 색상 강제 수정 */
+        .nav-tabs .nav-link { color: #495057 !important; font-weight: 600; }
+        .nav-tabs .nav-link.active { color: #0d6efd !important; border-bottom: 2px solid #0d6efd; }
     </style>
 </head>
 
@@ -132,6 +136,7 @@
                     <h3>📢 공지사항 관리</h3>
                     <button class="btn btn-primary btn-sm" onclick="openNoticeModal()"><i class="bi bi-pencil"></i> 공지 작성</button>
                 </div>
+                <div class="mb-3"><label class="form-label small">내용</label><textarea id="notice-content" class="form-control" rows="5"></textarea></div>
                 <div class="card border-0 shadow-sm">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
@@ -538,31 +543,34 @@
         }
         
         let g_current_notice_id = null;
+// 공지 모달 열기 (내용 불러오기 추가)
         async function openNoticeModal(id) {
             g_current_notice_id = id || null;
             document.getElementById('notice-id').value = id || '';
             
             if(id) {
-                // 수정: 데이터 가져와서 채우기
                 const { data } = await _supabase.from('coop_notices').select('*').eq('id', id).single();
                 if(data) {
                     document.getElementById('notice-title').value = data.title;
+                    document.getElementById('notice-content').value = data.content || ''; // 내용 불러오기
                     document.getElementById('notice-category').value = data.category;
                     document.getElementById('notice-status').value = data.status;
                     document.getElementById('notice-popup').checked = data.is_popup;
                 }
             } else {
-                // 신규: 빈칸
                 document.getElementById('notice-title').value = '';
+                document.getElementById('notice-content').value = ''; // 초기화
                 document.getElementById('notice-popup').checked = false;
             }
             new bootstrap.Modal(document.getElementById('noticeModal')).show();
         }
 
+        // 공지 저장 (내용 포함해서 전송)
         async function saveNotice() {
             const updates = {
                 p_id: document.getElementById('notice-id').value || null,
                 p_title: document.getElementById('notice-title').value,
+                p_content: document.getElementById('notice-content').value, // 내용 추가
                 p_category: document.getElementById('notice-category').value,
                 p_status: document.getElementById('notice-status').value,
                 p_is_popup: document.getElementById('notice-popup').checked
@@ -762,18 +770,17 @@ function switchTab(t) {
         }
 
         // 2. 스위치 변경 시 DB 즉시 저장
+// 2. 스위치 변경 (수정됨: RPC 사용으로 권한 문제 해결)
         async function toggleSection(id, isVisible) {
-            // 사용자 경험을 위해 로딩 화면은 굳이 안 띄우고(깜빡임 방지), 에러 났을 때만 알림
-            const { error } = await _supabase
-                .from('site_sections')
-                .update({ is_visible: isVisible })
-                .eq('id', id);
+            const { error } = await _supabase.rpc('update_section_visible', { 
+                p_id: id, 
+                p_visible: isVisible 
+            });
 
             if(error) {
                 alert('변경 실패: ' + error.message);
-                fetchSections(); // 실패하면 스위치를 원래대로 돌려놓기 위해 재로딩
+                fetchSections(); 
             } else {
-                // 성공하면 목록을 다시 불러서 '공개중/숨김' 배지 글자 업데이트
                 fetchSections();
             }
         }
