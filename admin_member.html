@@ -163,14 +163,15 @@
                             발전소 현황
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" data-bs-toggle="tab" href="#sub-docs" onclick="setTimeout(fetchDocs,100)">
-                            문서 관리 (정관/규약)
-                        </a>
-                    </li>
+
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">
                             연혁 (History)
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#sub-docs" onclick="setTimeout(fetchDocs,100)">
+                            문서 관리 (정관/규약)
                         </a>
                     </li>
                 </ul>
@@ -259,12 +260,7 @@
                         <div class="d-flex justify-content-end mb-2">
                             <button class="btn btn-sm btn-outline-primary" onclick="openDocModal()">+ 새 문서 등록</button>
                         </div>
-    <div class="form-check mb-3 p-3 bg-light rounded border">
-    <input class="form-check-input" type="checkbox" id="doc-current">
-    <label class="form-check-label fw-bold text-primary" for="doc-current">
-        이 버전을 '현재 적용 버전'으로 설정 (메인 노출)
-    </label>
-</div>
+
                         <table class="table table-bordered bg-white text-center">
                             <thead class="table-light">
                                 <tr>
@@ -505,6 +501,12 @@
                         <input type="hidden" id="doc-file-url">
                         <div id="doc-file-link" class="mt-1 small text-primary"></div>
                     </div>
+                        <div class="form-check mb-3 p-3 bg-light rounded border">
+    <input class="form-check-input" type="checkbox" id="doc-current">
+    <label class="form-check-label fw-bold text-primary" for="doc-current">
+        이 버전을 '현재 적용 버전'으로 설정 (메인 노출)
+    </label>
+</div>
                 </div>
                 <div class="modal-footer"><button class="btn btn-primary" onclick="saveDoc()">저장</button></div>
             </div>
