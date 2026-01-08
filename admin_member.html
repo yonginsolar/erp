@@ -164,6 +164,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#sub-docs" onclick="setTimeout(fetchDocs,100)">
+                            문서 관리 (정관/규약)
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">
                             연혁 (History)
                         </a>
@@ -248,6 +253,34 @@
                             <tbody id="historyListBody"></tbody>
                         </table>
                     </div>
+                    
+
+<div class="tab-pane fade" id="sub-docs">
+                        <div class="d-flex justify-content-end mb-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openDocModal()">+ 새 문서 등록</button>
+                        </div>
+    <div class="form-check mb-3 p-3 bg-light rounded border">
+    <input class="form-check-input" type="checkbox" id="doc-current">
+    <label class="form-check-label fw-bold text-primary" for="doc-current">
+        이 버전을 '현재 적용 버전'으로 설정 (메인 노출)
+    </label>
+</div>
+                        <table class="table table-bordered bg-white text-center">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>날짜/버전</th>
+                                    <th>제목</th>
+                                    <th>개정 요약</th>
+                                    <th>파일</th>
+                                    <th>관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="docListBody"></tbody>
+                        </table>
+                    </div>
+
+                    
+                    
 
                 </div>
             </div>
@@ -434,6 +467,46 @@
                 <div class="modal-footer justify-content-center border-0 p-0 pb-2">
                     <button type="button" class="btn btn-sm btn-dark px-4" data-bs-dismiss="modal">확인</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+        <div class="modal fade" id="docModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">문서(정관/규약) 등록</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="doc-id">
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label small">문서 제목</label>
+                            <input type="text" id="doc-title" class="form-control" placeholder="예: 정관">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">버전 (표시용)</label>
+                            <input type="text" id="doc-version" class="form-control" placeholder="예: 2025.12 개정안">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">시행일 (날짜)</label>
+                        <input type="date" id="doc-date" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">개정 요약 (변경사항)</label>
+                        <textarea id="doc-content" class="form-control" rows="4" placeholder="예: 제3조 조합원 자격 요건 완화 등"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">PDF 파일 첨부</label>
+                        <input type="file" id="doc-file" class="form-control" accept=".pdf">
+                        <input type="hidden" id="doc-file-url">
+                        <div id="doc-file-link" class="mt-1 small text-primary"></div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-primary" onclick="saveDoc()">저장</button></div>
             </div>
         </div>
     </div>
@@ -1337,7 +1410,117 @@ async function confirmDelete() {
                 fetchPlants(); 
             }
         }
+// ================================================================
+        // [기능 8] 문서 관리 (정관/규약)
+        // ================================================================
+        
+        // 1. 문서 목록 불러오기
+        async function fetchDocs() {
+            // category가 'doc'인 것만 가져옴
+            const { data } = await _supabase.from('site_documents').select('*').eq('category', 'doc').order('event_date', {ascending:false});
+            const tbody = document.getElementById('docListBody');
+            tbody.innerHTML = '';
+            
+            if(!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-muted">등록된 문서가 없습니다.</td></tr>';
+                return;
+            }
 
+            data.forEach(d => {
+                const fileBtn = d.file_url 
+                    ? `<a href="${d.file_url}" target="_blank" class="btn btn-xs btn-outline-success"><i class="bi bi-file-pdf"></i> 보기</a>` 
+                    : '<span class="text-muted text-xs">없음</span>';
+
+                tbody.innerHTML += `<tr>
+                    <td><div class="fw-bold">${d.version || '-'}</div><small class="text-muted">${d.event_date}</small></td>
+                    <td>${d.title}</td>
+                    <td class="text-start small text-truncate" style="max-width:200px;">${d.content || '-'}</td>
+                    <td>${fileBtn}</td>
+                    <td>
+                        <button class="btn btn-sm btn-light" onclick="openDocModal('${d.id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteDoc('${d.id}')">삭제</button>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        // 2. 모달 열기
+// [수정] 문서 모달 열기
+        async function openDocModal(id) {
+            document.getElementById('doc-id').value = id || '';
+            document.getElementById('doc-file').value = ''; 
+            
+            if(id) {
+                const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
+                if(data) {
+                    document.getElementById('doc-title').value = data.title;
+                    document.getElementById('doc-version').value = data.version || '';
+                    document.getElementById('doc-date').value = data.event_date;
+                    document.getElementById('doc-content').value = data.content || '';
+                    document.getElementById('doc-file-url').value = data.file_url || '';
+                    document.getElementById('doc-current').checked = data.is_current; // 체크박스 상태
+                    
+                    if(data.file_url) {
+                        document.getElementById('doc-file-link').innerHTML = `<a href="${data.file_url}" target="_blank">파일 확인</a>`;
+                    } else {
+                        document.getElementById('doc-file-link').innerText = '';
+                    }
+                }
+            } else {
+                // 신규
+                document.getElementById('doc-title').value = '정관'; // 기본값
+                document.getElementById('doc-version').value = '';
+                document.getElementById('doc-date').value = new Date().toISOString().substring(0, 10);
+                document.getElementById('doc-content').value = '';
+                document.getElementById('doc-file-url').value = '';
+                document.getElementById('doc-file-link').innerText = '';
+                document.getElementById('doc-current').checked = true; // 신규는 기본적으로 현재 버전
+            }
+            new bootstrap.Modal(document.getElementById('docModal')).show();
+        }
+
+        // [수정] 문서 저장 (is_current 포함)
+        async function saveDoc() {
+            const title = document.getElementById('doc-title').value;
+            if(!title) return alert("제목을 입력하세요.");
+
+            showLoading(true);
+
+            // 파일 업로드 (생략 - 기존과 동일)
+            let finalUrl = document.getElementById('doc-file-url').value;
+            const fileInput = document.getElementById('doc-file');
+            if (fileInput.files.length > 0) {
+               // ... (기존 파일 업로드 로직 그대로 사용) ...
+            }
+
+            const updates = {
+                p_id: document.getElementById('doc-id').value || null,
+                p_category: 'doc', 
+                p_title: title,
+                p_date: document.getElementById('doc-date').value,
+                p_content: document.getElementById('doc-content').value,
+                p_version: document.getElementById('doc-version').value,
+                p_file_url: finalUrl,
+                p_is_current: document.getElementById('doc-current').checked // 추가됨
+            };
+
+            const { error } = await _supabase.rpc('upsert_document_secure', updates);
+            showLoading(false);
+
+            if(error) alert('저장 실패: ' + error.message);
+            else {
+                bootstrap.Modal.getInstance(document.getElementById('docModal')).hide();
+                fetchDocs();
+            }
+        }
+
+        // 삭제 (기존 삭제 함수 재활용)
+        function askDeleteDoc(id) {
+            deleteType = 'history'; // 문서는 기술적으로 history와 같은 테이블(site_documents)을 씀
+            document.getElementById('delete-target-id').value = id;
+            document.getElementById('btn-real-delete').onclick = confirmDelete; 
+            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+        }
     </script>
 </body>
 </html>
