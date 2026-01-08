@@ -317,43 +317,70 @@
         </div>
     </div>
 
-    <div class="modal fade" id="plantModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">발전소 정보</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal fade" id="plantModal" tabindex="-1">
+        <div class="modal-dialog modal-lg"> <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title fw-bold">발전소 정보 관리</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="plant-id">
-                    <div class="mb-3"><label class="form-label small">발전소명</label><input type="text" id="plant-name" class="form-control"></div>
-                    <div class="mb-3"><label class="form-label small">설비용량 (kW)</label><input type="number" id="plant-capacity" class="form-control"></div>
-                    <div class="mb-3"><label class="form-label small">순서 (숫자)</label><input type="number" id="plant-order" class="form-control" value="0"></div>
-                    <div class="mb-3">
-                        <label class="form-label small">상태</label>
-                        <select id="plant-status" class="form-select" onchange="toggleProgressSlider()">
-                            <option value="운영중">운영중 (Portfolio로 이동)</option>
-                            <option value="공사중">공사중 (Progress로 이동)</option>
-                            <option value="준비중">준비중 (Progress로 이동)</option>
-                        </select>
-                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 border-end">
+                            <h6 class="text-primary fw-bold mb-3">📌 기본 정보</h6>
+                            <div class="mb-2"><label class="form-label small">발전소명</label><input type="text" id="plant-name" class="form-control"></div>
+                            <div class="row">
+                                <div class="col-6 mb-2"><label class="form-label small">설비용량 (kW)</label><input type="number" id="plant-capacity" class="form-control" placeholder="0"></div>
+                                <div class="col-6 mb-2"><label class="form-label small">순서</label><input type="number" id="plant-order" class="form-control"></div>
+                            </div>
+                            <div class="mb-2"><label class="form-label small">위치 (주소)</label><input type="text" id="plant-location" class="form-control" placeholder="예: 용인시 처인구..."></div>
+                            <div class="row">
+                                <div class="col-6 mb-2"><label class="form-label small">면적</label><input type="text" id="plant-area" class="form-control" placeholder="예: 150m²"></div>
+                                <div class="col-6 mb-2"><label class="form-label small">준공일(예정)</label><input type="date" id="plant-date" class="form-control"></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label small">상태</label>
+                                <select id="plant-status" class="form-select" onchange="toggleProgressSlider()">
+                                    <option value="운영중">운영중 (Portfolio)</option>
+                                    <option value="공사중">공사중 (Progress)</option>
+                                    <option value="준비중">준비중 (Progress)</option>
+                                </select>
+                            </div>
+                        </div>
 
-<div class="mb-3 p-3 bg-light rounded" id="plant-progress-area" style="display:none;">
-                        <label class="form-label small fw-bold d-flex justify-content-between">
-                            <span>🚧 진행률 설정</span>
-                            <span class="text-primary fw-bold" id="plant-progress-label">0% (조합설립)</span>
-                        </label>
-                        <input type="range" id="plant-progress" class="form-range" min="0" max="100" step="1" 
-                               oninput="updateProgressLabel(this.value)">
-                        
-                        <div class="d-flex justify-content-between text-muted mt-1" style="font-size:0.7em;">
-                            <span onclick="setProg(0)" style="cursor:pointer">설립</span>
-                            <span onclick="setProg(25)" style="cursor:pointer">부지</span>
-                            <span onclick="setProg(50)" style="cursor:pointer">인허가</span>
-                            <span onclick="setProg(75)" style="cursor:pointer">착공</span>
-                            <span onclick="setProg(100)" style="cursor:pointer">완공</span>
+                        <div class="col-md-6">
+                            <div id="plant-progress-area" style="display:none;">
+                                <h6 class="text-primary fw-bold mb-3">🚧 진행 상황</h6>
+                                <div class="p-3 bg-light rounded mb-3">
+                                    <label class="d-flex justify-content-between small fw-bold">
+                                        <span>진행률</span> <span class="text-primary" id="plant-progress-label">0%</span>
+                                    </label>
+                                    <input type="range" id="plant-progress" class="form-range" min="0" max="100" step="1" oninput="updateProgressLabel(this.value)">
+                                    <div class="d-flex justify-content-between text-muted mt-1" style="font-size:0.7em;">
+                                        <span onclick="setProg(0)" style="cursor:pointer">설립</span>
+                                        <span onclick="setProg(25)" style="cursor:pointer">부지</span>
+                                        <span onclick="setProg(50)" style="cursor:pointer">인허가</span>
+                                        <span onclick="setProg(75)" style="cursor:pointer">착공</span>
+                                        <span onclick="setProg(100)" style="cursor:pointer">완공</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="text-primary fw-bold mb-3">📷 현장 사진</h6>
+                            <div class="mb-2">
+                                <input type="file" id="plant-file" class="form-control form-control-sm" accept="image/*" onchange="previewImage(this)">
+                                <input type="hidden" id="plant-img-url">
+                            </div>
+                            <div class="text-center bg-light border rounded d-flex align-items-center justify-content-center" style="height: 150px; overflow:hidden;">
+                                <img id="plant-img-preview" src="" style="max-width:100%; max-height:100%; display:none;">
+                                <span id="plant-img-placeholder" class="text-muted small">사진 없음</span>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label class="form-label small">모니터링 URL</label>
+                                <input type="text" id="plant-url" class="form-control form-control-sm" placeholder="http://...">
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-3"><label class="form-label small">모니터링 URL (선택)</label><input type="text" id="plant-url" class="form-control" placeholder="http://..."></div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-primary" onclick="savePlant()">저장</button></div>
+                <div class="modal-footer"><button class="btn btn-primary px-4" onclick="savePlant()">저장하기</button></div>
             </div>
         </div>
     </div>
@@ -742,36 +769,51 @@ async function savePlant() {
             const name = document.getElementById('plant-name').value;
             if (!name) { alert("발전소명을 입력해주세요."); return; }
 
-            // ★ 숫자 에러 완벽 차단
-            // 값이 없거나("") 숫자가 아니면(isNaN) 무조건 0으로 만듦
-            const capVal = document.getElementById('plant-capacity').value;
-            const capacity = (capVal === '' || isNaN(capVal)) ? 0 : Number(capVal);
+            showLoading(true);
 
-            const orderVal = document.getElementById('plant-order').value;
-            const order = (orderVal === '' || isNaN(orderVal)) ? 0 : Number(orderVal);
+            // 1. 이미지 업로드 처리
+            let finalImgUrl = document.getElementById('plant-img-url').value;
+            const fileInput = document.getElementById('plant-file');
             
-            const status = document.getElementById('plant-status').value;
-            const progress = (status === '운영중') ? 100 : Number(document.getElementById('plant-progress').value);
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const fileName = `plants/${Date.now()}_${file.name}`;
+                
+                // 스토리지에 업로드
+                const { data: uploadData, error: uploadError } = await _supabase.storage.from('assets').upload(fileName, file);
+                
+                if (uploadError) {
+                    showLoading(false);
+                    alert('사진 업로드 실패: ' + uploadError.message);
+                    return;
+                }
+                
+                // 공개 URL 가져오기
+                const { data: publicUrlData } = _supabase.storage.from('assets').getPublicUrl(fileName);
+                finalImgUrl = publicUrlData.publicUrl;
+            }
 
+            // 2. DB 저장
+            const capVal = document.getElementById('plant-capacity').value;
             const updates = {
                 p_id: document.getElementById('plant-id').value || null,
                 p_name: name,
-                p_capacity: capacity, // 이제 절대 에러 안 남
-                p_status: status,
-                p_display_order: order,
-                p_progress: progress
+                p_capacity: (capVal === '' || isNaN(capVal)) ? 0 : Number(capVal),
+                p_status: document.getElementById('plant-status').value,
+                p_display_order: Number(document.getElementById('plant-order').value) || 0,
+                p_progress: (document.getElementById('plant-status').value === '운영중') ? 100 : Number(document.getElementById('plant-progress').value),
+                // 신규 항목
+                p_location: document.getElementById('plant-location').value,
+                p_area: document.getElementById('plant-area').value,
+                p_completion_date: document.getElementById('plant-date').value || null,
+                p_image_url: finalImgUrl
             };
-            
-            showLoading(true);
+
             const { error } = await _supabase.rpc('upsert_plant_secure', updates);
             showLoading(false);
 
-            if(error) {
-                if(document.getElementById('commonAlertModal')) {
-                    document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
-                    new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
-                } else alert(error.message);
-            } else { 
+            if(error) alert('저장 실패: ' + error.message);
+            else { 
                 bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
                 fetchPlants(); 
             }
@@ -1206,34 +1248,74 @@ async function confirmDelete() {
         }
 
         // [기존 함수 수정] 모달 열기 (라벨 초기화 포함)
-        async function openPlantModal(id) {
+async function openPlantModal(id) {
             document.getElementById('plant-id').value = id || '';
+            document.getElementById('plant-file').value = ''; // 파일 입력 초기화
             
             if(id) {
                 const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
                 if(data) {
+                    // 기본 정보
                     document.getElementById('plant-name').value = data.name;
                     document.getElementById('plant-capacity').value = data.capacity;
                     document.getElementById('plant-order').value = data.display_order;
+                    document.getElementById('plant-location').value = data.location || '';
+                    document.getElementById('plant-area').value = data.area || '';
+                    document.getElementById('plant-date').value = data.completion_date || '';
+                    
                     document.getElementById('plant-status').value = data.status;
                     document.getElementById('plant-url').value = data.monitor_url || '';
                     
+                    // 진행률
                     const rate = data.progress_rate || 0;
                     document.getElementById('plant-progress').value = rate;
-                    updateProgressLabel(rate); // 라벨 업데이트
+                    updateProgressLabel(rate);
+
+                    // 이미지
+                    document.getElementById('plant-img-url').value = data.image_url || '';
+                    const preview = document.getElementById('plant-img-preview');
+                    const placeholder = document.getElementById('plant-img-placeholder');
+                    if(data.image_url) {
+                        preview.src = data.image_url;
+                        preview.style.display = 'block';
+                        placeholder.style.display = 'none';
+                    } else {
+                        preview.style.display = 'none';
+                        placeholder.style.display = 'block';
+                    }
                 }
             } else {
+                // 신규 등록
                 const maxOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) : 0;
-                document.getElementById('plant-name').value = '';
-                document.getElementById('plant-capacity').value = ''; 
+                // 초기화
+                ['plant-name','plant-capacity','plant-url','plant-location','plant-area','plant-date','plant-img-url'].forEach(id => document.getElementById(id).value = '');
+                
                 document.getElementById('plant-order').value = maxOrder + 1;
-                document.getElementById('plant-url').value = '';
                 document.getElementById('plant-status').value = '준비중';
                 document.getElementById('plant-progress').value = 0;
-                updateProgressLabel(0); // 라벨 업데이트
+                updateProgressLabel(0);
+                
+                document.getElementById('plant-img-preview').style.display = 'none';
+                document.getElementById('plant-img-placeholder').style.display = 'block';
             }
             toggleProgressSlider();
             new bootstrap.Modal(document.getElementById('plantModal')).show();
+        }
+        // [신규] 이미지 선택 시 미리보기
+        function previewImage(input) {
+            const file = input.files[0];
+            const preview = document.getElementById('plant-img-preview');
+            const placeholder = document.getElementById('plant-img-placeholder');
+            
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                }
+                reader.readAsDataURL(file);
+            }
         }
     </script>
 </body>
