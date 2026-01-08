@@ -182,34 +182,53 @@
                                 </tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="sub-about">
+
+                    
+<div class="tab-pane fade" id="sub-about">
         <div class="card p-4 border-0 shadow-sm">
             <h5 class="fw-bold mb-4">📝 소개 섹션 수정</h5>
             
             <div class="mb-3">
-                <label class="form-label fw-bold">메인 제목</label>
-                <input type="text" id="admin-about-title" class="form-control" placeholder="예: 우리는 햇빛으로 가치를 만듭니다">
+                <label class="form-label fw-bold">1. 메인 제목</label>
+                <input type="text" id="admin-about-title" class="form-control fw-bold" placeholder="예: 우리는 햇빛으로 가치를 만듭니다">
             </div>
             
             <div class="mb-3">
-                <label class="form-label fw-bold">부제목 (이탤릭체)</label>
-                <input type="text" id="admin-about-subtitle" class="form-control" placeholder="짧은 강조 문구">
+                <label class="form-label fw-bold">2. 부제목 (이탤릭체)</label>
+                <input type="text" id="admin-about-subtitle" class="form-control text-muted" placeholder="짧은 강조 문구">
             </div>
             
             <div class="mb-3">
-                <label class="form-label fw-bold">체크리스트 (엔터로 구분)</label>
-                <textarea id="admin-about-list" class="form-control" rows="4" placeholder="한 줄에 하나씩 입력하면 체크 표시와 함께 나옵니다."></textarea>
+                <label class="form-label fw-bold">3. 체크리스트 (엔터로 구분)</label>
+                <textarea id="admin-about-list" class="form-control" rows="3" placeholder="한 줄에 하나씩 입력"></textarea>
             </div>
             
             <div class="mb-3">
-                <label class="form-label fw-bold">본문 내용</label>
-                <textarea id="admin-about-content" class="form-control" rows="5"></textarea>
+                <label class="form-label fw-bold">4. 본문 내용 (HTML 허용)</label>
+                
+                <ul class="nav nav-tabs" id="aboutContentTab">
+                    <li class="nav-item">
+                        <button class="nav-link active small py-1" data-bs-toggle="tab" data-bs-target="#edit-mode" type="button">✏️ 작성하기</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link small py-1" data-bs-toggle="tab" data-bs-target="#preview-mode" type="button" onclick="updateAboutPreview()">👀 미리보기</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content border border-top-0 p-3 bg-white" style="border-radius: 0 0 5px 5px;">
+                    <div class="tab-pane fade show active" id="edit-mode">
+                        <textarea id="admin-about-content" class="form-control border-0 p-0" rows="6" placeholder="내용을 입력하세요. <b>굵게</b>, <br>줄바꿈 등 HTML 태그 사용 가능"></textarea>
+                    </div>
+                    <div class="tab-pane fade" id="preview-mode">
+                        <div id="about-preview-area" class="p-2" style="background:#f8f9fa; min-height:150px; border-radius:4px;">
+                            </div>
+                    </div>
+                </div>
             </div>
             
             <div class="mb-3">
-                <label class="form-label fw-bold">사진 URL (주소)</label>
-                <input type="text" id="admin-about-img" class="form-control" placeholder="https://... 또는 assets/img/파일명.jpg">
-                <small class="text-muted">* 이미지를 교체하려면 새 파일 경로를 입력하세요.</small>
+                <label class="form-label fw-bold">5. 사진 URL (오른쪽 배치)</label>
+                <input type="text" id="admin-about-img" class="form-control" placeholder="assets/img/about.jpg">
             </div>
             
             <div class="text-end mt-4">
@@ -940,6 +959,15 @@ function switchTab(t) {
                 document.getElementById('admin-about-list').value = data.list_items || '';
                 document.getElementById('admin-about-img').value = data.image_url || '';
             }
+        }
+        
+        // [보조 함수] About 본문 미리보기 업데이트
+        function updateAboutPreview() {
+            const rawContent = document.getElementById('admin-about-content').value;
+            // 줄바꿈(\n)을 <br>로 바꿔서 보여줘야 실제와 비슷함
+            // 단, 사용자가 직접 <br>을 썼을 수도 있으니 단순 텍스트만 처리
+            const previewHtml = rawContent.replace(/\n/g, '<br>'); 
+            document.getElementById('about-preview-area').innerHTML = rawContent ? rawContent : '<span class="text-muted">내용이 없습니다.</span>';
         }
 
         async function saveAboutSettings() {
