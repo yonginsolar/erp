@@ -326,7 +326,26 @@
                     <div class="mb-3"><label class="form-label small">발전소명</label><input type="text" id="plant-name" class="form-control"></div>
                     <div class="mb-3"><label class="form-label small">설비용량 (kW)</label><input type="number" id="plant-capacity" class="form-control"></div>
                     <div class="mb-3"><label class="form-label small">순서 (숫자)</label><input type="number" id="plant-order" class="form-control" value="0"></div>
-                    <div class="mb-3"><label class="form-label small">상태</label><select id="plant-status" class="form-select"><option>운영중</option><option>공사중</option><option>준비중</option></select></div>
+                    <div class="mb-3">
+                        <label class="form-label small">상태</label>
+                        <select id="plant-status" class="form-select" onchange="toggleProgressSlider()">
+                            <option value="운영중">운영중 (Portfolio로 이동)</option>
+                            <option value="공사중">공사중 (Progress로 이동)</option>
+                            <option value="준비중">준비중 (Progress로 이동)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3 p-3 bg-light rounded" id="plant-progress-area" style="display:none;">
+                        <label class="form-label small fw-bold d-flex justify-content-between">
+                            <span>🚧 진행률 설정</span>
+                            <span class="text-primary" id="plant-progress-val">0%</span>
+                        </label>
+                        <input type="range" id="plant-progress" class="form-range" min="0" max="100" step="1" oninput="document.getElementById('plant-progress-val').innerText = this.value + '%'">
+                        <div class="d-flex justify-content-between text-muted" style="font-size:0.7em;">
+                            <span>착공(0%)</span>
+                            <span>완공(100%)</span>
+                        </div>
+                    </div>
                     <div class="mb-3"><label class="form-label small">모니터링 URL (선택)</label><input type="text" id="plant-url" class="form-control" placeholder="http://..."></div>
                 </div>
                 <div class="modal-footer"><button class="btn btn-primary" onclick="savePlant()">저장</button></div>
@@ -1056,6 +1075,82 @@ function switchTab(t) {
                 new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
                 
                 fetchAboutSettings(); // 저장 후 다시 불러오기
+            }
+        }
+        // [보조 함수] 상태에 따라 슬라이더 숨기기/보이기
+        function toggleProgressSlider() {
+            const status = document.getElementById('plant-status').value;
+            const area = document.getElementById('plant-progress-area');
+            
+            if (status === '운영중') {
+                area.style.display = 'none'; // 운영중이면 100%니까 숨김
+            } else {
+                area.style.display = 'block'; // 공사/준비중이면 보임
+            }
+        }
+
+        // [수정] 발전소 모달 열기 (진행률 불러오기 추가)
+        async function openPlantModal(id) {
+            document.getElementById('plant-id').value = id || '';
+            
+            if(id) {
+                const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
+                if(data) {
+                    document.getElementById('plant-name').value = data.name;
+                    document.getElementById('plant-capacity').value = data.capacity;
+                    document.getElementById('plant-order').value = data.display_order;
+                    document.getElementById('plant-status').value = data.status;
+                    document.getElementById('plant-url').value = data.monitor_url || '';
+                    
+                    // 진행률 세팅
+                    const rate = data.progress_rate || 0;
+                    document.getElementById('plant-progress').value = rate;
+                    document.getElementById('plant-progress-val').innerText = rate + '%';
+                }
+            } else {
+                // 신규
+                document.getElementById('plant-name').value = '';
+                document.getElementById('plant-capacity').value = '';
+                document.getElementById('plant-url').value = '';
+                document.getElementById('plant-status').value = '준비중'; // 기본값
+                document.getElementById('plant-progress').value = 0;
+                document.getElementById('plant-progress-val').innerText = '0%';
+            }
+            
+            toggleProgressSlider(); // 상태에 맞춰 UI 갱신
+            new bootstrap.Modal(document.getElementById('plantModal')).show();
+        }
+
+        // [수정] 발전소 저장 (진행률 포함 전송)
+        async function savePlant() {
+            const status = document.getElementById('plant-status').value;
+            // 운영중이면 무조건 100, 아니면 슬라이더 값 사용
+            const progress = (status === '운영중') ? 100 : document.getElementById('plant-progress').value;
+
+            const updates = {
+                p_id: document.getElementById('plant-id').value || null,
+                p_name: document.getElementById('plant-name').value,
+                p_capacity: document.getElementById('plant-capacity').value,
+                p_status: status,
+                p_display_order: document.getElementById('plant-order').value,
+                p_progress: progress // 추가됨
+            };
+            
+            showLoading(true);
+            const { error } = await _supabase.rpc('upsert_plant_secure', updates);
+            showLoading(false);
+
+            if(error) {
+                // 모달이 있으면 모달로, 없으면 alert (국장님 요청 반영)
+                if(document.getElementById('commonAlertModal')) {
+                    document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
+                    new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
+                } else {
+                    alert(error.message);
+                }
+            } else { 
+                bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
+                fetchPlants(); 
             }
         }
     </script>
