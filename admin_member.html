@@ -977,6 +977,7 @@ function switchTab(t) {
 
 
         // [보조 함수] 전체 미리보기 업데이트 (탭 누를 때 실행됨)
+// [수정] 전체 미리보기 (입력 안 한 건 안 보이게 처리)
         function updateTotalPreview() {
             // 1. 입력값 가져오기
             const title = document.getElementById('admin-about-title').value;
@@ -985,26 +986,37 @@ function switchTab(t) {
             const listText = document.getElementById('admin-about-list').value;
             const imgUrl = document.getElementById('admin-about-img').value;
 
-            // 2. 미리보기 영역에 넣기 (innerHTML 사용)
-            document.getElementById('prev-title').innerHTML = title || '제목 없음';
-            document.getElementById('prev-subtitle').innerHTML = subtitle || '부제목 없음';
-            document.getElementById('prev-content').innerHTML = content || '내용 없음';
+            // 2. 미리보기 영역에 넣기 (값이 없으면 빈 문자열)
+            document.getElementById('prev-title').innerHTML = title;
+            document.getElementById('prev-subtitle').innerHTML = subtitle;
+            document.getElementById('prev-content').innerHTML = content;
             
-            // 3. 리스트 처리 (스마트 로직 동일 적용)
+            // 3. 리스트 처리 (값이 없으면 숨김)
             const listEl = document.getElementById('prev-list');
-            if (listText.includes('<li')) {
-                listEl.innerHTML = listText; // HTML 직접 입력 시
+            if (!listText.trim()) {
+                listEl.innerHTML = '';
+                listEl.style.display = 'none'; // 리스트 숨김
             } else {
-                // 줄바꿈 입력 시 (미리보기용 스타일 적용)
-                let html = '';
-                listText.split('\n').forEach(item => {
-                    if(item.trim()) html += `<li><i class="bi bi-check2-all text-primary"></i> ${item.trim()}</li>`;
-                });
-                listEl.innerHTML = html || '<li>리스트 없음</li>';
+                listEl.style.display = 'block'; // 리스트 보임
+                if (listText.includes('<li')) {
+                    listEl.innerHTML = listText;
+                } else {
+                    let html = '';
+                    listText.split('\n').forEach(item => {
+                        if(item.trim()) html += `<li><i class="bi bi-check2-all text-primary"></i> ${item.trim()}</li>`;
+                    });
+                    listEl.innerHTML = html;
+                }
             }
 
-            // 4. 이미지 처리
-            document.getElementById('prev-img').src = imgUrl;
+            // 4. 이미지 처리 (없으면 숨김 표시)
+            const imgEl = document.getElementById('prev-img');
+            if(imgUrl) {
+                imgEl.src = imgUrl;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
         }
     </script>
 </body>
