@@ -56,7 +56,7 @@
     <div class="d-flex hidden" id="main-system">
         <div class="sidebar">
             <div class="sidebar-header">
-                <h5 class="fw-bold m-0">☀️ 협동조합 ERP</h5>
+                <h5 class="fw-bold m-0">☀️ 협동조합 ERP <span class="badge bg-warning text-dark" style="font-size:0.6em; vertical-align:middle;">v1.1.0</span></h5>
                 <small class="text-white-50" id="adminProfile">접속중...</small>
             </div>
             
@@ -146,11 +146,24 @@
                 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
                 
                 <ul class="nav nav-tabs mb-4">
-                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sub-plants" onclick="setTimeout(fetchPlants,100)">발전소 현황</a></li>
+                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sub-sections" onclick="setTimeout(fetchSections,100)">섹션 설정 (ON/OFF)</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-plants" onclick="setTimeout(fetchPlants,100)">발전소 현황</a></li>
                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sub-history" onclick="setTimeout(fetchHistory,100)">연혁 (History)</a></li>
                 </ul>
 
                 <div class="tab-content">
+                    <div class="tab-pane fade show active" id="sub-sections">
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle-fill"></i> 홈페이지의 메뉴와 본문 섹션을 끄고 켤 수 있습니다. (체크 해제 시 즉시 반영)
+                        </div>
+                        <table class="table table-bordered bg-white text-center">
+                            <thead class="table-light"><tr><th>순서</th><th>섹션 이름(ID)</th><th>상태</th><th>관리</th></tr></thead>
+                            <tbody id="sectionListBody">
+                                </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="sub-plants">
                     <div class="tab-pane fade show active" id="sub-plants">
                         <div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-outline-primary" onclick="openPlantModal()">+ 발전소 추가</button></div>
                         <table class="table table-bordered bg-white">
@@ -658,6 +671,78 @@
             
             if(t==='notices') fetchNotices();
             if(t==='site') { document.querySelector('a[href="#sub-plants"]').click(); }
+        }
+        // ================================================================
+        // [기능 5] 섹션(메뉴) 관리 (ON/OFF)
+        // ================================================================
+        
+        // 1. 섹션 목록 불러오기
+        async function fetchSections() {
+            // DB에서 순서대로 가져옴
+            const { data, error } = await _supabase
+                .from('site_sections')
+                .select('*')
+                .order('display_order');
+
+            if (error) {
+                console.error("섹션 로딩 에러:", error);
+                return;
+            }
+
+            const tbody = document.getElementById('sectionListBody');
+            tbody.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3">섹션 정보가 없습니다.</td></tr>';
+                return;
+            }
+
+            data.forEach(sec => {
+                // 스위치가 켜져야 하는지 꺼져야 하는지 확인
+                const checkedAttr = sec.is_visible ? 'checked' : '';
+                
+                // 상태 배지 (초록색/회색)
+                const statusBadge = sec.is_visible 
+                    ? '<span class="badge bg-success">공개중</span>' 
+                    : '<span class="badge bg-secondary">숨김</span>';
+
+                // 테이블 행 추가
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="align-middle text-center">${sec.display_order}</td>
+                        <td class="align-middle text-start ps-4">
+                            <span class="fw-bold text-dark">${sec.name}</span> <br>
+                            <small class="text-muted" style="font-size:0.85em;">ID: ${sec.id}</small>
+                        </td>
+                        <td class="align-middle text-center">${statusBadge}</td>
+                        <td class="align-middle text-center">
+                            <div class="form-check form-switch d-inline-block">
+                                <input class="form-check-input" type="checkbox" role="switch" 
+                                    style="width: 45px; height: 24px; cursor: pointer;"
+                                    ${checkedAttr} 
+                                    onchange="toggleSection('${sec.id}', this.checked)">
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 2. 스위치 변경 시 DB 즉시 저장
+        async function toggleSection(id, isVisible) {
+            // 사용자 경험을 위해 로딩 화면은 굳이 안 띄우고(깜빡임 방지), 에러 났을 때만 알림
+            const { error } = await _supabase
+                .from('site_sections')
+                .update({ is_visible: isVisible })
+                .eq('id', id);
+
+            if(error) {
+                alert('변경 실패: ' + error.message);
+                fetchSections(); // 실패하면 스위치를 원래대로 돌려놓기 위해 재로딩
+            } else {
+                // 성공하면 목록을 다시 불러서 '공개중/숨김' 배지 글자 업데이트
+                fetchSections();
+            }
         }
     </script>
 </body>
