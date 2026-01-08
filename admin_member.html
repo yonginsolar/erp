@@ -784,6 +784,17 @@ function switchTab(t) {
                 fetchSections();
             }
         }
+        // 연혁 삭제 함수
+        async function deleteHistory(id) {
+            if(!confirm('정말 삭제하시겠습니까?')) return;
+            
+            showLoading(true);
+            const { error } = await _supabase.rpc('delete_document_secure', { p_id: id });
+            showLoading(false);
+
+            if(error) alert('삭제 실패: ' + error.message);
+            else fetchHistory();
+        }
     </script>
 </body>
 </html>
