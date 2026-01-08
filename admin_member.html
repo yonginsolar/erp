@@ -699,13 +699,17 @@
         
         // --- 발전소 ---
 // [수정] 발전소 목록 불러오기 (삭제 버튼 추가 + 전역변수 저장)
-        async function fetchPlants() {
+async function fetchPlants() {
             const { data } = await _supabase.from('site_power_plants').select('*').order('display_order');
             const tbody = document.getElementById('plantListBody');
             tbody.innerHTML = '';
             
-            if(!data) return;
-            g_plants = data; // ★ 목록 기억 (순서 계산용)
+            if(!data) {
+                g_plants = []; // 데이터 없으면 빈 배열
+                return;
+            }
+
+            g_plants = data; // ★ 핵심: 목록을 전역 변수에 저장 (나중에 순서 계산할 때 씀)
 
             data.forEach(p => {
                 tbody.innerHTML += `<tr>
@@ -722,6 +726,7 @@
             });
         }
 // [수정] 발전소 모달 열기 (순서 자동 계산)
+// [수정 2] 발전소 모달 열기 (순서 자동 계산 + 빈칸 0 처리)
         async function openPlantModal(id) {
             document.getElementById('plant-id').value = id || '';
             
@@ -740,13 +745,14 @@
                     document.getElementById('plant-progress-val').innerText = rate + '%';
                 }
             } else {
-                // 신규 모드: ★ 여기서 순서를 자동으로 채워줍니다!
-                // 기존 목록 중 가장 큰 번호 + 1, 없으면 1
-                const nextOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) + 1 : 1;
+                // 신규 모드: ★ 순서 자동 계산 (기존 최대값 + 1)
+                // g_plants에 데이터가 있으면 최대값 찾고, 없으면 0 -> 결과적으로 1번부터 시작
+                const maxOrder = g_plants.length > 0 ? Math.max(...g_plants.map(p => p.display_order)) : 0;
+                const nextOrder = maxOrder + 1;
 
                 document.getElementById('plant-name').value = '';
-                document.getElementById('plant-capacity').value = '';
-                document.getElementById('plant-order').value = nextOrder; // 자동 입력
+                document.getElementById('plant-capacity').value = ''; 
+                document.getElementById('plant-order').value = nextOrder; // 여기에 자동 입력됨!
                 document.getElementById('plant-url').value = '';
                 document.getElementById('plant-status').value = '준비중';
                 document.getElementById('plant-progress').value = 0;
@@ -757,20 +763,17 @@
             new bootstrap.Modal(document.getElementById('plantModal')).show();
         }
 // [수정] 발전소 저장 (빈칸 -> 0 자동 변환 안전장치 추가)
-        async function savePlant() {
+async function savePlant() {
             // 1. 입력값 가져오기
             const name = document.getElementById('plant-name').value;
             const capInput = document.getElementById('plant-capacity').value;
             const orderInput = document.getElementById('plant-order').value;
             const status = document.getElementById('plant-status').value;
             
-            // 2. 필수값 체크 (이름 없으면 중단)
-            if (!name) {
-                alert("발전소명을 입력해주세요.");
-                return;
-            }
+            // 필수값 체크
+            if (!name) { alert("발전소명을 입력해주세요."); return; }
 
-            // 3. 숫자 변환 (빈칸이면 0으로 처리) ★ 에러 해결 핵심!
+            // ★ [에러 해결 핵심] 빈칸("")이면 무조건 숫자 0으로 변환
             const capacity = capInput ? Number(capInput) : 0;
             const order = orderInput ? Number(orderInput) : 0;
             
@@ -780,9 +783,9 @@
             const updates = {
                 p_id: document.getElementById('plant-id').value || null,
                 p_name: name,
-                p_capacity: capacity, // 이제 무조건 숫자가 들어갑니다
+                p_capacity: capacity, // 이제 무조건 숫자가 들어감 (에러 안 남)
                 p_status: status,
-                p_display_order: order,
+                p_display_order: order, // 여기도 무조건 숫자
                 p_progress: progress
             };
             
@@ -791,7 +794,6 @@
             showLoading(false);
 
             if(error) {
-                // 모달이 있으면 모달로, 없으면 alert
                 if(document.getElementById('commonAlertModal')) {
                     document.getElementById('commonAlertText').innerText = '저장 실패: ' + error.message;
                     new bootstrap.Modal(document.getElementById('commonAlertModal')).show();
@@ -800,7 +802,7 @@
                 }
             } else { 
                 bootstrap.Modal.getInstance(document.getElementById('plantModal')).hide(); 
-                fetchPlants(); 
+                fetchPlants(); // 목록 갱신
             }
         }
 
