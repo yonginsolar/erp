@@ -2567,38 +2567,37 @@ function animateNumber(id, target, isMoney = false) {
 // 테이블 렌더링 함수
 // [수정 1] 탭 전환 함수 (딜레이 없이 즉시 전환)
 // [수정] 탭 전환 함수 (모든 탭 ID 매칭 보장)
-function switchTab(tabName) {
-    // 1. 디버깅용 로그 (개발자 도구 콘솔에서 확인 가능)
-    console.log("탭 전환 시도:", tabName);
+// 기존 switchTab 함수를 찾아서 이 부분만 바꾸거나 함수 전체를 교체하세요.
 
-    // 2. 모든 탭 내용 숨기기
-    const panes = document.querySelectorAll('.tab-pane');
+function switchTab(tabName) {
+    // [수정 전] const panes = document.querySelectorAll('.tab-pane'); (모달 탭까지 다 죽임)
+    
+    // [수정 후] 메인 컨텐츠 바로 아래에 있는 탭만 선택 (모달 내부 탭은 건드리지 않음)
+    const panes = document.querySelectorAll('.main-content > .tab-pane'); 
+    
     panes.forEach(el => {
         el.classList.remove('show', 'active');
-        el.style.display = 'none'; // 강제 숨김
+        el.style.display = 'none'; 
     });
 
-    // 3. 선택한 탭 찾기 (ID가 tab-어쩌구 형식이어야 함)
-    const targetId = 'tab-' + tabName;
-    const target = document.getElementById(targetId);
-
+    const target = document.getElementById('tab-' + tabName);
     if (target) {
         target.style.display = 'block';
         setTimeout(() => target.classList.add('show', 'active'), 10);
-    } else {
-        console.error("탭을 찾을 수 없습니다. ID를 확인하세요:", targetId);
-        // 사이트 컨텐츠가 안 뜬다면 HTML에 id="tab-site"가 없는 것입니다.
     }
 
-    // 4. 사이드바 버튼 활성화
+    // 사이드바 버튼 활성화 로직
     document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
     const navBtn = document.getElementById('nav-' + tabName);
     if(navBtn) navBtn.classList.add('active');
 
-    // 5. 데이터 로드 (필요한 경우만)
+    // 데이터 로드 연결
     if (tabName === 'dashboard') loadDashboard();
     else if (tabName === 'members') fetchMembers();
-    // 사이트 관리는 별도 로드 함수가 없으면 화면만 보여주면 됨
+    else if (tabName === 'notices') fetchNotices();
+    
+    // [수정 2번 관련] 사이트 컨텐츠 누르면 데이터 불러오기 추가
+    else if (tabName === 'site') fetchSections(); 
 }
 
 // [수정 2] 대시보드 로드 (애니메이션 제거 -> 즉시 표시)
