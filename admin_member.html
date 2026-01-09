@@ -1336,30 +1336,33 @@ function askDeletePlant(id) {
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
 
+async function confirmDelete() {// [수정] 통합 삭제 함수 (중복 선언 해결됨)
 async function confirmDelete() {
-            const id = document.getElementById('delete-target-id').value;
-            const modalEl = document.getElementById('deleteConfirmModal');
-            bootstrap.Modal.getInstance(modalEl).hide();
+    const id = document.getElementById('delete-target-id').value;
+    const modalEl = document.getElementById('deleteConfirmModal');
+    bootstrap.Modal.getInstance(modalEl).hide();
 
-            showLoading(true);
-            let rpcName = (deleteType === 'history') ? 'delete_document_secure' : 'delete_plant_secure';
-
-    let rpcName = '';
-    if(deleteType === 'history') rpcName = 'delete_document_secure';
-    else if(deleteType === 'plant') rpcName = 'delete_plant_secure';
-    else if(deleteType === 'partner') rpcName = 'delete_partner_secure'; // ★ 추가됨
+    showLoading(true);
     
-            const { error } = await _supabase.rpc(rpcName, { p_id: id });
-            showLoading(false);
+    // rpcName 결정 로직 (한 번만 선언)
+    let rpcName = '';
+    if (deleteType === 'history') rpcName = 'delete_document_secure';
+    else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
+    else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
 
-            if (error) {
-                alert('삭제 실패: ' + error.message);
-            } else {
-                if(deleteType === 'history') fetchHistory();
-                else fetchPlants();
-            }
-    if(deleteType === 'partner') fetchPartners(); // 목록 갱신 추가
-        }
+    // RPC 실행
+    const { error } = await _supabase.rpc(rpcName, { p_id: id });
+    showLoading(false);
+
+    if (error) {
+        alert('삭제 실패: ' + error.message);
+    } else {
+        // 타입에 따라 목록 새로고침
+        if (deleteType === 'history') fetchHistory();
+        else if (deleteType === 'plant') fetchPlants();
+        else if (deleteType === 'partner') fetchPartners();
+    }
+}
         // [신규] 슬라이더 움직일 때 단계 이름 표시
         function updateProgressLabel(val) {
             const v = Number(val);
