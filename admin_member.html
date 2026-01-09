@@ -64,48 +64,142 @@
                 <small class="text-white-50" id="adminProfile">접속중...</small>
             </div>
             
-            <div class="sidebar-menu">
-                <div class="menu-category">회원 및 자금</div>
-                <a class="nav-link active" onclick="switchTab('members')"><i class="bi bi-people-fill"></i> 조합원 관리</a>
-                <a class="nav-link" onclick="switchTab('deposit')"><i class="bi bi-cash-coin"></i> 입금 매칭</a>
+<div class="sidebar-menu">
+    <a class="nav-link active" onclick="switchTab('dashboard')" id="nav-dashboard">
+        <i class="bi bi-grid-fill"></i> 대시보드
+    </a>
 
-                <div class="menu-category">운영 관리</div>
-                <a class="nav-link" onclick="switchTab('notices')"><i class="bi bi-megaphone"></i> 공지사항 관리</a>
+    <div class="menu-category mt-3">회원 및 자금</div>
+    
+    <a class="nav-link" onclick="switchTab('members')" id="nav-members">
+        <i class="bi bi-people-fill"></i> 조합원 관리
+    </a>
+    
+    <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit">
+        <i class="bi bi-cash-coin"></i> 입금 매칭
+    </a>
 
-                <div class="menu-category">홈페이지 관리</div>
-                <a class="nav-link" onclick="switchTab('site')"><i class="bi bi-window-sidebar"></i> 사이트 컨텐츠</a>
+    <div class="menu-category">운영 관리</div>
+    <a class="nav-link" onclick="switchTab('notices')" id="nav-notices">
+        <i class="bi bi-megaphone"></i> 공지사항 관리
+    </a>
 
-                <div class="mt-4 pt-4 border-top border-secondary">
-                    <a class="nav-link text-warning" onclick="location.href='index.html'"><i class="bi bi-box-arrow-up-right"></i> 메뉴로 바로가기</a>
-                    <a class="nav-link text-danger" onclick="logout()"><i class="bi bi-box-arrow-right"></i> 로그아웃</a>
-                </div>
-            </div>
+    <div class="menu-category">홈페이지 관리</div>
+    <a class="nav-link" onclick="switchTab('site')" id="nav-site">
+        <i class="bi bi-window-sidebar"></i> 사이트 컨텐츠
+    </a>
+
+    <div class="mt-4 pt-4 border-top border-secondary">
+        <a class="nav-link text-warning" onclick="location.href='index.html'">
+            <i class="bi bi-box-arrow-up-right"></i> 메뉴로 바로가기
+        </a>
+        <a class="nav-link text-danger" onclick="logout()">
+            <i class="bi bi-box-arrow-right"></i> 로그아웃
+        </a>
+    </div>
+</div>
         </div>
 
         <div class="main-content">
             
-            <div id="tab-members" class="tab-pane active">
-                <div class="content-header">
-                    <h3>👥 조합원 통합 관리</h3>
-                    <button class="btn btn-success btn-sm" onclick="openExcelModal()"><i class="bi bi-file-earmark-excel"></i> 엑셀 다운로드</button>
-                </div>
-                <div class="card border-0 shadow-sm mb-3">
-                    <div class="card-body">
-                        <div class="row g-2">
-                            <div class="col-md-3"><input type="text" id="search-keyword" class="form-control form-control-sm" placeholder="이름, 번호 검색" onkeyup="if(event.key=='Enter') fetchMembers()"></div>
-                            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" onclick="fetchMembers()">검색</button></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="card border-0 shadow-sm">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead><tr><th>No</th><th>유형</th><th>이름/번호</th><th>생년월일/사업자</th><th>연락처</th><th>납입총액(ref)</th><th>상태</th><th>관리</th></tr></thead>
-                            <tbody id="memberListBody"></tbody>
-                        </table>
-                    </div>
+<div class="tab-pane fade show active" id="tab-dashboard">
+    <h3 class="fw-bold mb-4" style="font-family:'GmarketSans';">운영 대시보드</h3>
+    
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3 border-0 shadow-sm h-100 bg-primary bg-opacity-10">
+                <div class="small text-muted fw-bold">총 조합원</div>
+                <div class="fs-2 fw-bold text-primary" id="dash-total">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 border-0 shadow-sm h-100 bg-warning bg-opacity-10 cursor-pointer" onclick="goToPendingMembers()">
+                <div class="small text-muted fw-bold">승인 대기 (클릭)</div>
+                <div class="fs-2 fw-bold text-warning" id="dash-pending">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 border-0 shadow-sm h-100 bg-success bg-opacity-10">
+                <div class="small text-muted fw-bold">누적 출자금</div>
+                <div class="fs-3 fw-bold text-success" id="dash-capital">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 border-0 shadow-sm h-100 bg-info bg-opacity-10">
+                <div class="small text-muted fw-bold">오늘의 상담</div>
+                <div class="fs-2 fw-bold text-info" id="dash-consult">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm p-4 mb-3">
+        <h5 class="fw-bold mb-3">바로가기</h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark" onclick="openNoticeModal()">📢 공지사항 쓰기</button>
+            <button class="btn btn-outline-success" onclick="document.querySelector('[href=\'#tab-members\']').click()">👥 조합원 검색</button>
+            <button class="btn btn-outline-primary" onclick="alert('준비중입니다.')">📊 엑셀 업로드</button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-pane fade" id="tab-members">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="fw-bold m-0" style="font-family:'GmarketSans';">조합원 명부</h3>
+        <button class="btn btn-primary" onclick="alert('신규 등록은 신청서를 통해 진행됩니다.')">+ 신규 등록 안내</button>
+    </div>
+
+    <div class="card p-3 mb-3 border-0 bg-light">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2">
+                <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="all">상태: 전체</option>
+                    <option value="active" selected>정상 (정조합원)</option>
+                    <option value="pending">승인 대기</option>
+                    <option value="withdrawn">탈퇴/제명</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="all">유형: 전체</option>
+                    <option value="general">개인</option>
+                    <option value="org">단체</option>
+                    <option value="family">가족(자녀)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="name">이름순</option>
+                    <option value="join_date">가입일순 (최신)</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <div class="input-group input-group-sm">
+                    <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
+                    <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
                 </div>
             </div>
+            <div class="col-md-2 text-end">
+                <button class="btn btn-sm btn-outline-success" onclick="alert('준비중')">📥 엑셀</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white border rounded">
+        <table class="table table-hover align-middle mb-0 text-center">
+            <thead class="table-light">
+                <tr>
+                    <th>번호</th>
+                    <th>유형</th>
+                    <th>이름 (조합원번호)</th>
+                    <th>연락처</th>
+                    <th>가입일/상태</th>
+                    <th>관리</th>
+                </tr>
+            </thead>
+            <tbody id="memberListBody"></tbody>
+        </table>
+    </div>
+</div>
 
             <div id="tab-deposit" class="tab-pane">
                 <div class="content-header"><h3>💰 입금 내역 매칭</h3></div>
@@ -150,6 +244,7 @@
                 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
                 
                 <ul class="nav nav-tabs mb-4">
+                    
                     <li class="nav-item">
                         <a class="nav-link active" data-bs-toggle="tab" href="#sub-sections" onclick="setTimeout(fetchSections,100)">
                             섹션 설정 (ON/OFF)
@@ -890,54 +985,7 @@ async function deleteOldFile(fullUrl) {
         // ================================================================
         // [기능 1] 조합원 관리 (RPC 사용)
         // ================================================================
-        async function fetchMembers() {
-            showLoading(true);
-            const keyword = document.getElementById('search-keyword').value;
-            
-            // RPC 호출 (보안 우회하여 데이터 획득)
-            const { data: members, error: err1 } = await _supabase.rpc('get_members_secure');
-            const { data: payments, error: err2 } = await _supabase.rpc('get_payments_secure');
-            showLoading(false);
 
-            if(err1) return console.error(err1);
-            g_members = members || [];
-
-            const tbody = document.getElementById('memberListBody');
-            tbody.innerHTML = '';
-            
-            let filtered = members;
-            if(keyword) filtered = members.filter(m => (m.name+m.phone).includes(keyword));
-
-            if(!filtered || filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5">데이터가 없습니다.</td></tr>';
-                return;
-            }
-
-            filtered.forEach((m, idx) => {
-                // 납입금 매칭
-                const pay = payments ? (payments.find(p => p.member_uuid === m.id)?.total_amount || 0) : 0;
-                
-                // 주민번호 포맷팅
-                let rrnShow = m.rrn_display || '-';
-                if(m.member_type !== '단체' && rrnShow.length > 6) {
-                     const y = rrnShow.charAt(7)=='1'||rrnShow.charAt(7)=='2'?'19':'20';
-                     rrnShow = `${y}${rrnShow.substring(0,2)}.${rrnShow.substring(2,4)}.${rrnShow.substring(4,6)}`;
-                } else if(m.member_type === '단체') {
-                    rrnShow = `<span class="badge bg-light text-secondary border">사업자</span> ${rrnShow}`;
-                }
-
-                tbody.innerHTML += `<tr>
-                    <td>${filtered.length - idx}</td>
-                    <td><span class="badge bg-light text-dark border">${m.member_type}</span></td>
-                    <td>${m.name}<br><small class="text-muted">${m.member_id||''}</small></td>
-                    <td>${rrnShow}</td>
-                    <td>${m.phone}</td>
-                    <td class="fw-bold text-primary">${pay.toLocaleString()}원</td>
-                    <td>${m.status}</td>
-                    <td><button class="btn btn-sm btn-outline-secondary" onclick="openMemberEdit('${m.id}')">관리</button></td>
-                </tr>`;
-            });
-        }
 
         // 회원 수정 모달 열기
         function openMemberEdit(id) {
@@ -1258,32 +1306,33 @@ async function fetchPlants() {
         // 유틸리티
         function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
         function logout() { _supabase.auth.signOut().then(() => location.href='index.html'); }
-function switchTab(t) { 
-            // 1. 모든 탭 숨기기
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active')); 
-            
-            // 2. 선택한 메인 탭 보이기 (class에 active 추가가 아니라 display 스타일 제어 방식인 경우 주의)
-            // 현재 CSS 구조상 .tab-pane.active { display: block; } 이므로 class 추가가 맞음
-            const targetTab = document.getElementById('tab-' + t);
-            if(targetTab) targetTab.classList.add('active'); 
-            
-            // 3. 사이드바 메뉴 활성화 표시
-            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-            if (event && event.target) {
-                // 클릭된 요소가 아이콘(i)일 수도 있으니 closest로 a태그 찾기
-                const link = event.target.closest('.nav-link');
-                if(link) link.classList.add('active');
-            }
-            
-            // 4. 탭별 데이터 로드 로직
-            if (t === 'notices') fetchNotices();
-            
-            if (t === 'site') { 
-                // [수정됨] 사이트 관리 탭을 누르면 '섹션 설정(#sub-sections)' 탭을 기본으로 클릭
-                const defaultSubTab = document.querySelector('a[href="#sub-sections"]');
-                if(defaultSubTab) defaultSubTab.click();
-            }
-        }
+// [수정] 탭 전환 함수 (대시보드 로직 추가)
+function switchTab(tabName) {
+    // 1. 모든 탭 내용 숨기기 (.tab-pane 클래스 사용 가정)
+    document.querySelectorAll('.tab-pane').forEach(el => {
+        el.classList.remove('show', 'active');
+    });
+
+    // 2. 선택한 탭 내용 보여주기
+    const target = document.getElementById('tab-' + tabName);
+    if(target) target.classList.add('show', 'active');
+
+    // 3. 사이드바 메뉴 활성화 표시 (색상 변경)
+    document.querySelectorAll('.sidebar .nav-link').forEach(el => {
+        el.classList.remove('active');
+    });
+    const navBtn = document.getElementById('nav-' + tabName);
+    if(navBtn) navBtn.classList.add('active');
+
+    // 4. 탭별 데이터 로드 함수 호출
+    if (tabName === 'dashboard') loadDashboard();     // [신규] 대시보드
+    else if (tabName === 'members') fetchMembers();   // [수정] 조합원 명부
+    
+    // (기존 함수들이 있다면 유지, 없으면 에러 방지 위해 체크)
+    else if (tabName === 'deposit' && typeof fetchPayments === 'function') fetchPayments();
+    else if (tabName === 'notices' && typeof fetchNotices === 'function') fetchNotices();
+    // 사이트 관리 탭은 별도 로드 함수가 없다면 생략 가능
+}
         // ================================================================
         // [기능 5] 섹션(메뉴) 관리 (ON/OFF)
         // ================================================================
@@ -2267,6 +2316,162 @@ async function confirmDelete() {
         else if (deleteType === 'badge') fetchBadges();
         else if (deleteType === 'faq') fetchFaqs(); // ★ 추가됨
     }
+}
+        // ================================================================
+// [기능 0] 대시보드 로드 및 유틸
+// ================================================================
+async function loadDashboard() {
+    // DB 함수(get_dashboard_stats) 호출
+    const { data, error } = await _supabase.rpc('get_dashboard_stats');
+    
+    if (error) {
+        console.error("대시보드 로드 실패:", error);
+        return;
+    }
+
+    // 숫자 카운팅 애니메이션 적용
+    animateNumber('dash-total', data.total_members);
+    animateNumber('dash-pending', data.pending_members);
+    animateNumber('dash-capital', data.total_capital, true); // true = 원화 표시
+    animateNumber('dash-consult', data.today_consults);
+}
+
+// 승인 대기 카드 클릭 시 조합원 탭으로 이동
+function goToPendingMembers() {
+    // 탭 전환
+    const tabTrigger = new bootstrap.Tab(document.querySelector('[href="#tab-members"]'));
+    tabTrigger.show();
+    
+    // 필터 변경 후 목록 조회
+    setTimeout(() => {
+        document.getElementById('filter-status').value = 'pending';
+        fetchMembers();
+    }, 200);
+}
+
+// 숫자 애니메이션 효과 함수
+function animateNumber(id, target, isMoney = false) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    
+    const start = 0;
+    const duration = 1000; // 1초 동안 실행
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const value = Math.floor(progress * (target - start) + start);
+
+        el.innerText = isMoney 
+            ? value.toLocaleString() + '원' 
+            : value.toLocaleString() + (id.includes('capital') ? '' : (id.includes('consult')?'건':'명'));
+
+        if (progress < 1) requestAnimationFrame(update);
+        else el.innerText = isMoney 
+            ? target.toLocaleString() + '원' 
+            : target.toLocaleString() + (id.includes('capital') ? '' : (id.includes('consult')?'건':'명'));
+    }
+    requestAnimationFrame(update);
+}
+
+
+// ================================================================
+// [기능 1] 조합원 목록 조회 (검색/필터/정렬 완비)
+// ================================================================
+let g_members = []; // 전역 변수
+
+async function fetchMembers() {
+    showLoading(true);
+
+    const statusFilter = document.getElementById('filter-status').value;
+    const typeFilter = document.getElementById('filter-type').value;
+    const sortOrder = document.getElementById('sort-order').value;
+    const keyword = document.getElementById('search-keyword').value.toLowerCase();
+
+    // 1. Supabase 쿼리 빌드
+    let query = _supabase.from('coop_members').select('*');
+
+    // 2. 필터링 조건
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (typeFilter !== 'all') query = query.eq('join_category', typeFilter);
+
+    // 3. 정렬 조건 (DB단 정렬)
+    if (sortOrder === 'name') query = query.order('name', { ascending: true });
+    else if (sortOrder === 'join_date') query = query.order('join_date', { ascending: false });
+    
+    const { data: members, error } = await query;
+    showLoading(false);
+
+    if(error) { 
+        console.error(error); 
+        alert('데이터 로드 실패');
+        return; 
+    }
+
+    let list = members || [];
+
+    // 4. 검색어 필터링 (JS단 처리 - 이름/전화번호/조합원번호)
+    if(keyword) {
+        list = list.filter(m => 
+            (m.name && m.name.toLowerCase().includes(keyword)) || 
+            (m.phone && m.phone.includes(keyword)) ||
+            (m.member_id && m.member_id.toLowerCase().includes(keyword))
+        );
+    }
+
+    g_members = list; // 전역 변수에 저장 (나중에 모달 띄울 때 사용)
+    renderMemberTable(list);
+}
+
+// 테이블 렌더링 함수
+function renderMemberTable(list) {
+    const tbody = document.getElementById('memberListBody');
+    tbody.innerHTML = '';
+
+    if(list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-muted">조건에 맞는 조합원이 없습니다.</td></tr>';
+        return;
+    }
+
+    list.forEach((m, idx) => {
+        // 유형 뱃지
+        let typeBadge = '<span class="badge bg-secondary">개인</span>';
+        if(m.join_category === 'org') typeBadge = '<span class="badge bg-info">단체</span>';
+        if(m.join_category === 'family') typeBadge = '<span class="badge bg-warning text-dark">자녀</span>';
+
+        // 상태 뱃지
+        let statusBadge = '<span class="badge bg-success">정상</span>';
+        if(m.status === 'pending') statusBadge = '<span class="badge bg-danger">승인대기</span>';
+        if(m.status === 'withdrawn') statusBadge = '<span class="badge bg-dark">탈퇴</span>';
+
+        // 가입일
+        const joinDate = m.join_date ? m.join_date : '-';
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${idx + 1}</td>
+                <td>${typeBadge}</td>
+                <td class="fw-bold text-start ps-4">
+                    ${m.name} 
+                    <br><span class="text-muted small">${m.member_id || '-'}</span>
+                </td>
+                <td>${m.phone || '-'}</td>
+                <td>
+                    <div>${joinDate}</div>
+                    <div class="mt-1">${statusBadge}</div>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-dark" onclick="openMemberDetail('${m.id}')">관리</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+// (임시) Phase 2에서 구현할 상세 모달 함수 껍데기
+function openMemberDetail(id) {
+    alert("상세 관리 모달(Phase 2)은 다음 단계에서 구현됩니다.\nID: " + id);
 }
     </script>
 </body>
