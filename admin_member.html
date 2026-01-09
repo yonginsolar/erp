@@ -1336,7 +1336,7 @@ function askDeletePlant(id) {
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
 
-async function confirmDelete() {// [수정] 통합 삭제 함수 (중복 선언 해결됨)
+
 async function confirmDelete() {
     const id = document.getElementById('delete-target-id').value;
     const modalEl = document.getElementById('deleteConfirmModal');
