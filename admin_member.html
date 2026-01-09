@@ -83,6 +83,7 @@
         <i class="bi bi-megaphone"></i> 공지사항 관리
     </a>
 
+
     <div class="menu-category">홈페이지 관리</div>
     <a class="nav-link" onclick="switchTab('site')" id="nav-site" style="cursor:pointer;">
         <i class="bi bi-window-sidebar"></i> 사이트 컨텐츠
@@ -240,7 +241,7 @@
                 </div>
             </div>
 
-<div id="tab-site" class="tab-pane">
+<div class="tab-pane fade" id="tab-site">
                 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
                 
                 <ul class="nav nav-tabs mb-4">
@@ -903,20 +904,28 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
-                <ul class="nav nav-tabs nav-justified" id="memberDetailTab" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link active py-3" data-bs-toggle="tab" href="#md-tab-basic">📝 기본 정보</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-funds">💰 출자/배당/자금</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-family">👨‍👩‍👧‍👦 가족/단체 연결</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-consult">📞 상담 이력</a>
-                    </li>
-                </ul>
+ <ul class="nav nav-tabs nav-justified" id="memberDetailTab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#md-tab-basic" type="button">
+            📝 기본 정보
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#md-tab-funds" type="button">
+            💰 출자/배당/자금
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#md-tab-family" type="button">
+            👨‍👩‍👧‍👦 가족/단체 연결
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#md-tab-consult" type="button">
+            📞 상담 이력
+        </button>
+    </li>
+</ul>
 
                 <div class="tab-content p-4">
                     <div class="tab-pane fade show active" id="md-tab-basic">
@@ -2557,31 +2566,39 @@ function animateNumber(id, target, isMoney = false) {
 
 // 테이블 렌더링 함수
 // [수정 1] 탭 전환 함수 (딜레이 없이 즉시 전환)
+// [수정] 탭 전환 함수 (모든 탭 ID 매칭 보장)
 function switchTab(tabName) {
-    // 1. 모든 탭 숨김
-    document.querySelectorAll('.tab-pane').forEach(el => {
+    // 1. 디버깅용 로그 (개발자 도구 콘솔에서 확인 가능)
+    console.log("탭 전환 시도:", tabName);
+
+    // 2. 모든 탭 내용 숨기기
+    const panes = document.querySelectorAll('.tab-pane');
+    panes.forEach(el => {
         el.classList.remove('show', 'active');
-        el.style.display = 'none'; // 확실하게 숨김
+        el.style.display = 'none'; // 강제 숨김
     });
 
-    // 2. 선택한 탭 보임
-    const target = document.getElementById('tab-' + tabName);
-    if(target) {
+    // 3. 선택한 탭 찾기 (ID가 tab-어쩌구 형식이어야 함)
+    const targetId = 'tab-' + tabName;
+    const target = document.getElementById(targetId);
+
+    if (target) {
         target.style.display = 'block';
-        // 약간의 딜레이 후 클래스 추가 (부트스트랩 페이드 효과용)
-        setTimeout(() => target.classList.add('show', 'active'), 10); 
+        setTimeout(() => target.classList.add('show', 'active'), 10);
+    } else {
+        console.error("탭을 찾을 수 없습니다. ID를 확인하세요:", targetId);
+        // 사이트 컨텐츠가 안 뜬다면 HTML에 id="tab-site"가 없는 것입니다.
     }
 
-    // 3. 사이드바 활성화
+    // 4. 사이드바 버튼 활성화
     document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
     const navBtn = document.getElementById('nav-' + tabName);
     if(navBtn) navBtn.classList.add('active');
 
-    // 4. 데이터 로드
+    // 5. 데이터 로드 (필요한 경우만)
     if (tabName === 'dashboard') loadDashboard();
     else if (tabName === 'members') fetchMembers();
-    else if (tabName === 'deposit' && typeof fetchPayments === 'function') fetchPayments();
-    else if (tabName === 'notices' && typeof fetchNotices === 'function') fetchNotices();
+    // 사이트 관리는 별도 로드 함수가 없으면 화면만 보여주면 됨
 }
 
 // [수정 2] 대시보드 로드 (애니메이션 제거 -> 즉시 표시)
