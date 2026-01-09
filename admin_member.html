@@ -1057,7 +1057,52 @@
     </div>
 </div>
 
+<div class="modal fade" id="fundEditorModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header bg-light py-2">
+                <h6 class="modal-title fw-bold" id="fund-modal-title">내역 입력</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="fund-edit-id">   <input type="hidden" id="fund-edit-type"> <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted">날짜</label>
+                    <input type="date" id="fund-date" class="form-control form-control-sm">
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted">금액</label>
+                    <input type="number" id="fund-amount" class="form-control form-control-sm" placeholder="숫자만 입력">
+                </div>
 
+                <div class="mb-2" id="fund-method-group" style="display:none;">
+                    <label class="form-label small fw-bold text-muted">입금 방식</label>
+                    <select id="fund-method" class="form-select form-select-sm">
+                        <option value="transfer">계좌이체</option>
+                        <option value="cash">현금</option>
+                        <option value="card">카드</option>
+                        <option value="etc">기타</option>
+                    </select>
+                </div>
+                
+                <div class="mb-2" id="fund-depositor-group">
+                    <label class="form-label small fw-bold text-muted">입금자명</label>
+                    <input type="text" id="fund-depositor" class="form-control form-control-sm">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">비고 (메모)</label>
+                    <input type="text" id="fund-note" class="form-control form-control-sm">
+                </div>
+
+                <button class="btn btn-primary w-100 btn-sm" onclick="saveFundData()">저장하기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+        
         
 
 
@@ -2767,47 +2812,221 @@ async function addConsultLog() {
 }
 
 // 5. 자금 로드 (출자금, 기부금 등) - Phase 2에서는 '조회' 위주
-async function loadMemberFunds(uuid, textId) {
-    const capitalListEl = document.getElementById('md-capital-list');
-    capitalListEl.innerHTML = '<tr><td colspan="4">로딩중...</td></tr>';
 
-    // (A) 출자금 조회 (ref_members - textId 사용)
-    let capitalHtml = '';
-    if (textId) {
-        const { data: capData } = await _supabase.from('ref_members').select('*').eq('member_id', textId);
-        if (capData && capData.length > 0) {
-            capData.forEach(c => {
-                 capitalHtml += `<tr><td>${c.deposit_date}</td><td>${Number(c.amount).toLocaleString()}</td><td>${c.note||'-'}</td><td><button class="btn btn-xs btn-light border">수정</button></td></tr>`;
-            });
-        } else {
-            capitalHtml = '<tr><td colspan="4" class="text-muted small">출자 내역 없음</td></tr>';
-        }
-    } else {
-        capitalHtml = '<tr><td colspan="4" class="text-muted small">조합원 번호 없음 (조회 불가)</td></tr>';
-    }
-    capitalListEl.innerHTML = capitalHtml;
-
-    // (B) 기부금 조회 (coop_donations - uuid 사용)
-    const donationListEl = document.getElementById('md-donation-list');
-    const { data: donData } = await _supabase.from('coop_donations').select('*').eq('member_uid', uuid);
-    if(donData && donData.length > 0) {
-        let donHtml = '';
-        donData.forEach(d => {
-            donHtml += `<tr><td>${d.donation_date}</td><td>${d.amount.toLocaleString()}</td><td>${d.account_category}</td><td>${d.note||'-'}</td><td><button class="btn btn-xs btn-light border">관리</button></td></tr>`;
-        });
-        donationListEl.innerHTML = donHtml;
-    } else {
-        donationListEl.innerHTML = '<tr><td colspan="5" class="text-muted small">기부 내역 없음</td></tr>';
-    }
-
-    // 포인트, 배당은 Phase 3에서 상세 구현 (일단 0원 표시)
-}
 
 // 6. 가족 로드 (Placeholder)
 async function loadMemberFamily(uuid) {
     // Phase 3: manager_id 또는 rep_uuid로 연결된 계정 조회 로직 구현
 }
 
+        // ================================================================
+// [기능 Phase 3] 자금 관리 (출자/기부 CRUD)
+// ================================================================
+
+// 1. [수정] 기존 loadMemberFunds 함수 교체 (버튼 및 기능 연결)
+async function loadMemberFunds(uuid, textId) {
+    // 1-1. 출자금 목록 로드
+    const capitalListEl = document.getElementById('md-capital-list');
+    capitalListEl.innerHTML = '<tr><td colspan="4">로딩중...</td></tr>';
+
+    // [+입금 추가] 버튼에 이벤트 연결 (textId 넘김)
+    const addCapBtn = document.querySelector('#md-tab-funds button[onclick*="Phase 3"]');
+    if(addCapBtn) {
+        addCapBtn.innerText = '+ 입금 추가';
+        addCapBtn.onclick = () => openFundEditor('capital', null, textId); // null=신규
+    } else {
+        // 이미 버튼이 바뀐 경우(재호출 시) 대비
+        const freshBtn = document.querySelector('#md-tab-funds .btn-outline-success');
+        if(freshBtn) freshBtn.onclick = () => openFundEditor('capital', null, textId);
+    }
+
+    if (textId) {
+        const { data: capData } = await _supabase.from('ref_members')
+            .select('*').eq('member_id', textId).order('deposit_date', {ascending: false});
+        
+        if (capData && capData.length > 0) {
+            let capitalHtml = '';
+            capData.forEach(c => {
+                 // 데이터를 JSON 문자열로 인코딩해서 버튼에 심음 (수정 시 꺼내 쓰기 위함)
+                 const rowData = encodeURIComponent(JSON.stringify(c));
+                 capitalHtml += `
+                    <tr>
+                        <td>${c.deposit_date}</td>
+                        <td class="fw-bold">${Number(c.amount).toLocaleString()}</td>
+                        <td class="text-start text-truncate" style="max-width:100px;">${c.note||'-'}</td>
+                        <td>
+                            <button class="btn btn-xs btn-light border py-0" onclick="openFundEditor('capital', '${rowData}')">수정</button>
+                            <button class="btn btn-xs btn-outline-danger border py-0 ms-1" onclick="deleteFundData('capital', ${c.id})">삭제</button>
+                        </td>
+                    </tr>`;
+            });
+            capitalListEl.innerHTML = capitalHtml;
+        } else {
+            capitalListEl.innerHTML = '<tr><td colspan="4" class="text-muted small py-3">출자 내역이 없습니다.</td></tr>';
+        }
+    } else {
+        capitalListEl.innerHTML = '<tr><td colspan="4" class="text-muted small">조합원 번호 없음 (관리 불가)</td></tr>';
+    }
+
+
+    // 1-2. 기부금 목록 로드
+    const donationListEl = document.getElementById('md-donation-list');
+    
+    // [+기부 추가] 버튼 연결
+    const addDonBtn = document.querySelector('#md-tab-funds .btn-outline-primary');
+    if(addDonBtn) {
+        addDonBtn.onclick = () => openFundEditor('donation', null);
+    }
+
+    const { data: donData } = await _supabase.from('coop_donations')
+        .select('*').eq('member_uid', uuid).order('donation_date', {ascending: false});
+    
+    if(donData && donData.length > 0) {
+        let donHtml = '';
+        donData.forEach(d => {
+            const rowData = encodeURIComponent(JSON.stringify(d));
+            donHtml += `
+                <tr>
+                    <td>${d.donation_date}</td>
+                    <td class="fw-bold">${Number(d.amount).toLocaleString()}</td>
+                    <td><span class="badge bg-light text-dark border">${d.payment_method||'-'}</span></td>
+                    <td class="text-start text-truncate" style="max-width:80px;">${d.note||'-'}</td>
+                    <td>
+                        <button class="btn btn-xs btn-light border py-0" onclick="openFundEditor('donation', '${rowData}')">수정</button>
+                        <button class="btn btn-xs btn-outline-danger border py-0 ms-1" onclick="deleteFundData('donation', ${d.id})">삭제</button>
+                    </td>
+                </tr>`;
+        });
+        donationListEl.innerHTML = donHtml;
+    } else {
+        donationListEl.innerHTML = '<tr><td colspan="5" class="text-muted small py-3">기부 내역이 없습니다.</td></tr>';
+    }
+}
+
+
+// 2. 에디터 모달 열기 (신규/수정 공용)
+function openFundEditor(type, rowDataStr, textId = null) {
+    const modalEl = document.getElementById('fundEditorModal');
+    const titleEl = document.getElementById('fund-modal-title');
+    
+    // 필드 초기화
+    document.getElementById('fund-edit-type').value = type;
+    document.getElementById('fund-edit-id').value = ''; 
+    document.getElementById('fund-date').value = new Date().toISOString().split('T')[0]; // 오늘 날짜 기본
+    document.getElementById('fund-amount').value = '';
+    document.getElementById('fund-note').value = '';
+    document.getElementById('fund-depositor').value = '';
+    
+    // UI 분기 (출자금 vs 기부금)
+    if(type === 'capital') {
+        titleEl.innerText = '💰 출자금 내역 관리';
+        titleEl.className = 'modal-title fw-bold text-success';
+        document.getElementById('fund-method-group').style.display = 'none';
+        document.getElementById('fund-depositor-group').style.display = 'block';
+    } else {
+        titleEl.innerText = '🎁 기부금 내역 관리';
+        titleEl.className = 'modal-title fw-bold text-primary';
+        document.getElementById('fund-method-group').style.display = 'block';
+        document.getElementById('fund-depositor-group').style.display = 'none';
+    }
+
+    // 수정 모드일 경우 데이터 채우기
+    if (rowDataStr) {
+        const data = JSON.parse(decodeURIComponent(rowDataStr));
+        document.getElementById('fund-edit-id').value = data.id;
+        document.getElementById('fund-date').value = data.deposit_date || data.donation_date;
+        document.getElementById('fund-amount').value = data.amount;
+        document.getElementById('fund-note').value = data.note || '';
+        
+        if(type === 'capital') document.getElementById('fund-depositor').value = data.depositor || '';
+        if(type === 'donation') document.getElementById('fund-method').value = data.payment_method || 'transfer';
+    } 
+    // 신규 모드인데 출자금이면, 입금자명에 기본으로 조합원 이름 넣어주기
+    else if (type === 'capital') {
+        document.getElementById('fund-depositor').value = document.getElementById('md-name').value;
+    }
+
+    // 이중 모달 처리를 위해 z-index 조정 (부트스트랩 버그 방지)
+    modalEl.style.zIndex = 2000; 
+    new bootstrap.Modal(modalEl).show();
+}
+
+
+// 3. 저장 실행
+async function saveFundData() {
+    const type = document.getElementById('fund-edit-type').value;
+    const idVal = document.getElementById('fund-edit-id').value || null; // 빈 문자열이면 null로
+    const amount = document.getElementById('fund-amount').value;
+    const date = document.getElementById('fund-date').value;
+    const note = document.getElementById('fund-note').value;
+    
+    // 유효성 검사
+    if(!amount || !date) return alert('날짜와 금액을 입력해주세요.');
+
+    // 현재 열려있는 슈퍼 모달의 조합원 정보 가져오기
+    const memberUid = document.getElementById('md-uid').value;
+    const memberTextId = document.getElementById('md-id-text').innerText;
+
+    showLoading(true);
+    let rpcName = type === 'capital' ? 'manage_capital_secure' : 'manage_donation_secure';
+    
+    let params = {};
+    if(type === 'capital') {
+        params = {
+            p_id: idVal,
+            p_member_text_id: memberTextId,
+            p_amount: amount,
+            p_date: date,
+            p_note: note,
+            p_depositor: document.getElementById('fund-depositor').value
+        };
+    } else {
+        params = {
+            p_id: idVal,
+            p_member_uid: memberUid,
+            p_member_text_id: memberTextId,
+            p_amount: amount,
+            p_date: date,
+            p_method: document.getElementById('fund-method').value,
+            p_note: note
+        };
+    }
+
+    const { error } = await _supabase.rpc(rpcName, params);
+    showLoading(false);
+
+    if (error) {
+        alert('저장 실패: ' + error.message);
+    } else {
+        // 성공 시 에디터 모달 닫고 리스트 새로고침
+        bootstrap.Modal.getInstance(document.getElementById('fundEditorModal')).hide();
+        loadMemberFunds(memberUid, memberTextId);
+        
+        // 대시보드 통계도 갱신되면 좋으므로 (선택사항)
+        loadDashboard();
+    }
+}
+
+
+// 4. 삭제 실행
+async function deleteFundData(type, id) {
+    if(!confirm('정말 이 내역을 삭제하시겠습니까? (복구 불가)')) return;
+
+    showLoading(true);
+    const rpcName = type === 'capital' ? 'delete_capital_secure' : 'delete_donation_secure';
+    const { error } = await _supabase.rpc(rpcName, { p_id: id });
+    showLoading(false);
+
+    if(error) {
+        alert('삭제 실패: ' + error.message);
+    } else {
+        // 목록 새로고침
+        const memberUid = document.getElementById('md-uid').value;
+        const memberTextId = document.getElementById('md-id-text').innerText;
+        loadMemberFunds(memberUid, memberTextId);
+        loadDashboard(); // 통계 갱신
+    }
+}
     </script>
 </body>
 </html>
