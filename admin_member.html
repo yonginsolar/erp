@@ -947,47 +947,44 @@
         <div class="col-md-3">
             <label class="form-label small fw-bold text-muted">상태</label>
             <select id="md-status" class="form-select">
-                <option value="pending">승인 대기</option>
-                <option value="active">정상 (정조합원)</option>
-                <option value="withdrawn">탈퇴/제명</option>
+                <option value="승인대기">승인 대기</option>
+                <option value="정상">정상 (정조합원)</option>
+                <option value="탈퇴">탈퇴</option>
+                <option value="제명">제명</option>
             </select>
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold text-muted">유형</label>
-            <select id="md-category" class="form-select">
-                <option value="general">개인</option>
-                <option value="org">단체</option>
-                <option value="family">가족(자녀)</option>
+            <select id="md-type" class="form-select">
+                <option value="개인">개인</option>
+                <option value="단체">단체</option>
             </select>
         </div>
     </div>
 
     <div class="mb-3">
         <label class="form-label small fw-bold text-muted">생년월일/성별 (주민등록번호)</label>
-        
         <div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
             <span id="md-rrn-view">-</span>
         </div>
-
         <div id="rrn-edit-area" style="display:none;">
-            <input type="text" id="md-rrn" class="form-control" placeholder="변경 시에만 입력 (숫자만)" maxlength="14" oninput="autoHyphen(this)">
-            <div class="form-text x-small text-danger">* 입력 시 기존 번호를 덮어씁니다.</div>
+            <input type="text" id="md-rrn" class="form-control" placeholder="변경하려면 숫자만 입력하세요" maxlength="14" oninput="autoHyphen(this)">
         </div>
     </div>
 
     <div class="mb-3">
         <label class="form-label small fw-bold text-muted">주소</label>
         <div class="input-group mb-1">
-            <input type="text" id="md-addr" class="form-control" placeholder="주소 검색 버튼을 누르세요" readonly>
-            <button class="btn btn-outline-secondary" type="button" onclick="searchAddress()">🔍 주소 찾기</button>
+            <input type="text" id="md-addr" class="form-control" readonly>
+            <button class="btn btn-outline-secondary" type="button" id="btn-addr-search" onclick="searchAddress()" style="display:none;">🔍 검색</button>
         </div>
-        <input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소 입력">
+        <input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소 (수정 시 입력)" style="display:none;">
     </div>
 
     <div class="row g-3 mb-3">
         <div class="col-md-12">
             <label class="form-label small fw-bold text-muted">관리자 메모</label>
-            <textarea id="md-memo" class="form-control" rows="2" placeholder="특이사항 기록"></textarea>
+            <textarea id="md-memo" class="form-control" rows="2"></textarea>
         </div>
         
         <div class="col-12"><hr class="my-2"></div>
@@ -996,18 +993,20 @@
             <h6 class="fw-bold small text-primary mb-2">🏦 환급/배당 계좌 정보</h6>
             <div class="row g-2 align-items-center bg-light p-3 rounded border">
                 <div class="col-md-3">
-                    <input type="text" id="md-bank-name" class="form-control form-control-sm" placeholder="은행명">
+                    <label class="small text-muted">은행명</label>
+                    <input type="text" id="md-bank-name" class="form-control form-control-sm">
                 </div>
                 <div class="col-md-3">
-                    <input type="text" id="md-bank-owner" class="form-control form-control-sm" placeholder="예금주">
+                    <label class="small text-muted">예금주</label>
+                    <input type="text" id="md-bank-owner" class="form-control form-control-sm">
                 </div>
                 <div class="col-md-4">
+                    <label class="small text-muted">계좌번호</label>
                     <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-white text-muted" id="md-account-display">****</span>
-                        <input type="text" id="md-bank-account" class="form-control" placeholder="변경 시 입력">
+                        <input type="text" id="md-bank-account" class="form-control" placeholder="숫자만 입력">
                     </div>
                 </div>
-                <div class="col-md-2 text-end">
+                <div class="col-md-2 text-end pt-3">
                     <small class="text-muted fw-bold" id="md-sns-status" style="font-size:0.75rem;">SNS 미연동</small>
                 </div>
             </div>
@@ -1015,10 +1014,8 @@
     </div>
 
     <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-dark btn-sm" onclick="alert('준비중: 증명서 발급')">🖨️ 증명서 발급</button>
-        
+        <button class="btn btn-outline-dark btn-sm" onclick="alert('준비중')">🖨️ 증명서</button>
         <button id="btn-edit-mode" class="btn btn-primary px-4" onclick="toggleEditMode(true)">✏️ 정보 수정</button>
-        
         <div id="btn-save-group" style="display:none;">
             <button class="btn btn-secondary me-2" onclick="toggleEditMode(false)">취소</button>
             <button class="btn btn-success px-4 fw-bold" onclick="saveMemberBasic()">💾 저장 완료</button>
@@ -2839,76 +2836,139 @@ function renderMemberTable(list) {
 
 let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
 
-// 1. 모달 열기 및 데이터 로드
-// 2. 기본 정보 저장
-// [교체] 모달 열기
+
+// [교체] 상세 모달 열기 (DB 칼럼명 완벽 매칭)
 async function openMemberDetail(id) {
     g_current_member_id = id;
     const m = g_members.find(x => x.id === id);
-    if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
+    if (!m) return myAlert("데이터 없음", 'error');
 
-    // 기본 데이터 바인딩
+    // 1. 헤더 정보
     document.getElementById('md-uid').value = m.id;
     document.getElementById('md-title').innerText = `${m.name} 님 상세`;
     document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
     document.getElementById('md-type-badge').innerText = m.member_type || '개인';
 
+    // 2. 기본 정보 바인딩
     document.getElementById('md-name').value = m.name;
     document.getElementById('md-phone').value = m.phone;
-    document.getElementById('md-status').value = m.status;
-    document.getElementById('md-addr').value = m.address || ''; // 주소
-    document.getElementById('md-addr-detail').value = m.address_detail || '';
+    document.getElementById('md-status').value = m.status || '정상'; // 한글 값 매칭
+    document.getElementById('md-type').value = m.member_type || '개인'; // 한글 값 매칭
+    
+    // 3. 주소 처리 (DB에 있는 전체 주소를 일단 기본창에 다 보여줌)
+    document.getElementById('md-addr').value = m.address || '';
+    document.getElementById('md-addr-detail').value = ''; // 상세주소창은 초기화 (수정 시에만 사용)
+
+    // 4. 메모 (admin_memo)
     document.getElementById('md-memo').value = m.admin_memo || '';
     
-    // 계좌 정보 (실제 DB 칼럼명 반영)
+    // 5. 계좌 정보 (DB 칼럼명: bank_name, account_holder, account_number)
     document.getElementById('md-bank-name').value = m.bank_name || '';
     document.getElementById('md-bank-owner').value = m.account_holder || ''; 
     document.getElementById('md-bank-account').value = m.account_number || ''; 
 
-    // 주민번호 파싱 (보여주기용)
+    // 6. 주민번호 파싱 (rrn_display: 840914-1******)
     const rrn = m.rrn_display || '';
     let genderAge = '정보 없음';
+    
+    // 헤더 옆에 생년월일/성별 표시 로직 (국장님 요청)
     if(rrn.length >= 8) {
         const g = rrn.charAt(7);
         const yPre = (g === '1' || g === '2') ? '19' : '20';
-        const gender = (g === '1' || g === '3') ? '남성' : '여성';
-        genderAge = `${yPre}${rrn.substr(0,2)}년 ${rrn.substr(2,2)}월 ${rrn.substr(4,2)}일 (${gender})`;
+        const gender = (g === '1' || g === '3') ? '남' : '여';
+        // 예: 1984년 9월 14일 (남)
+        genderAge = `${yPre}${rrn.substr(0,2)}년 ${parseInt(rrn.substr(2,2))}월 ${parseInt(rrn.substr(4,2))}일 (${gender})`;
     }
+    // 모달 제목 옆이나 RRN 뷰 영역에 표시
     document.getElementById('md-rrn-view').innerText = genderAge;
-    document.getElementById('md-rrn').value = ''; // 수정용은 비워둠
+    document.getElementById('md-rrn').value = ''; // 수정용 인풋은 비워둠
 
-    // SNS 아이콘
-    let sns = '';
-    if(m.kakao_id) sns += '<i class="bi bi-chat-fill text-warning me-1"></i>Kakao ';
-    if(m.naver_id) sns += '<i class="bi bi-n-square-fill text-success"></i>Naver';
-    document.getElementById('md-sns-status').innerHTML = sns || '미연동';
+    // 7. SNS 아이콘 (kakao_id, naver_id 확인)
+    let snsHtml = '';
+    if(m.kakao_id) snsHtml += '<i class="bi bi-chat-fill text-warning me-1"></i>Kakao ';
+    if(m.naver_id) snsHtml += '<i class="bi bi-n-square-fill text-success"></i>Naver';
+    document.getElementById('md-sns-status').innerHTML = snsHtml || '미연동';
 
-    // "읽기 전용" 모드로 초기화
+    // 읽기 전용 모드로 시작
     toggleEditMode(false);
 
-    // 하위 데이터 로드 (초기화=true)
+    // 탭 데이터 로드
     loadMemberFunds(m.id, m.member_id, true);
     loadConsultLogs(m.id);
 
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
-// [교체] 기본 정보 저장 (모달 알림 및 모드 전환 적용)
+// [교체] 수정 모드 토글 (주소찾기 버튼 및 상세주소창 제어 추가)
+function toggleEditMode(isEdit) {
+    const inputs = document.querySelectorAll('#md-tab-basic input, #md-tab-basic select, #md-tab-basic textarea');
+    const btnSearch = document.getElementById('btn-addr-search'); // 주소검색 버튼
+    const addrDetail = document.getElementById('md-addr-detail'); // 상세주소 입력창
+
+    inputs.forEach(el => {
+        // 주소 기본창(md-addr)은 수정 모드여도 직접 타이핑 불가 (검색 버튼 이용)
+        if(el.id === 'md-addr') el.disabled = true; 
+        else el.disabled = !isEdit;
+        
+        el.classList.toggle('bg-light', !isEdit);
+    });
+
+    if(isEdit) {
+        document.getElementById('btn-edit-mode').style.display = 'none';
+        document.getElementById('btn-save-group').style.display = 'flex';
+        
+        document.getElementById('rrn-edit-area').style.display = 'block';
+        document.getElementById('rrn-view-area').style.display = 'none';
+
+        // 주소 관련 UI 노출
+        btnSearch.style.display = 'inline-block';
+        addrDetail.style.display = 'block';
+    } else {
+        document.getElementById('btn-edit-mode').style.display = 'inline-block';
+        document.getElementById('btn-save-group').style.display = 'none';
+        
+        document.getElementById('rrn-edit-area').style.display = 'none';
+        document.getElementById('rrn-view-area').style.display = 'block';
+
+        // 주소 관련 UI 숨김
+        btnSearch.style.display = 'none';
+        addrDetail.style.display = 'none';
+    }
+}
+
+// [교체] 주소 검색 (검색 결과 -> 기본창, 포커스 -> 상세창)
+function searchAddress() {
+    new daum.Postcode({
+        oncomplete: function(data) {
+            const fullAddr = `(${data.zonecode}) ${data.roadAddress || data.jibunAddress}`;
+            document.getElementById('md-addr').value = fullAddr;
+            document.getElementById('md-addr-detail').value = ''; // 상세주소 초기화
+            document.getElementById('md-addr-detail').focus();
+        }
+    }).open();
+}
+
+// [교체] 저장 (주소 합치기 & 함수 파라미터 매칭)
 async function saveMemberBasic() {
     myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
+        // 1. 주소 합치기 (기본 + 상세)
+        const basicAddr = document.getElementById('md-addr').value;
+        const detailAddr = document.getElementById('md-addr-detail').value;
+        const finalAddr = detailAddr ? `${basicAddr} ${detailAddr}` : basicAddr;
+
+        // 2. 파라미터 구성 (새 SQL 함수에 맞춤)
         const updates = {
             p_id: document.getElementById('md-uid').value,
             p_name: document.getElementById('md-name').value,
             p_phone: document.getElementById('md-phone').value,
-            p_address: document.getElementById('md-addr').value,
-            p_address_detail: document.getElementById('md-addr-detail').value,
+            p_address: finalAddr, // 합친 주소 전송
             p_bank_name: document.getElementById('md-bank-name').value,
-            p_bank_owner: document.getElementById('md-bank-owner').value,     // account_holder
-            p_bank_account: document.getElementById('md-bank-account').value, // account_number
+            p_bank_owner: document.getElementById('md-bank-owner').value,     
+            p_bank_account: document.getElementById('md-bank-account').value, 
             p_status: document.getElementById('md-status').value,
-            // p_join_category 등 필요한 필드 추가
+            p_member_type: document.getElementById('md-type').value, // p_join_category 아님
             p_admin_memo: document.getElementById('md-memo').value,
-            p_rrn: document.getElementById('md-rrn').value || null // 주민번호 입력 시에만 전송
+            p_rrn: document.getElementById('md-rrn').value || null 
         };
 
         showLoading(true);
@@ -2918,11 +2978,13 @@ async function saveMemberBasic() {
         if (error) myAlert('저장 실패: ' + error.message, 'error');
         else {
             myAlert('저장되었습니다.');
-            toggleEditMode(false); // 다시 읽기 모드로
+            toggleEditMode(false); 
             fetchMembers(); // 목록 갱신
         }
     });
 }
+
+
 
 // 3. 상담 이력 로드
 // 4. 상담 등록
@@ -3190,43 +3252,9 @@ function autoHyphen(target) {
     }
 }
 
-// 3. [유틸] 주소 찾기 (카카오)
-function searchAddress() {
-    new daum.Postcode({
-        oncomplete: function(data) {
-            const fullAddr = `(${data.zonecode}) ${data.roadAddress || data.jibunAddress}`;
-            document.getElementById('md-addr').value = fullAddr;
-            document.getElementById('md-addr-detail').focus();
-        }
-    }).open();
-}
 
-// 4. [유틸] 읽기/수정 모드 토글
-function toggleEditMode(isEdit) {
-    // 기본 정보 탭 내의 모든 입력 필드 제어
-    const inputs = document.querySelectorAll('#md-tab-basic input, #md-tab-basic select, #md-tab-basic textarea');
-    const btnEdit = document.getElementById('btn-edit-mode');
-    const btnSaveGroup = document.getElementById('btn-save-group'); // 저장/취소 버튼 감싸는 div
-    const rrnEdit = document.getElementById('rrn-edit-area');
-    const rrnView = document.getElementById('rrn-view-area');
 
-    inputs.forEach(el => {
-        el.disabled = !isEdit;
-        el.classList.toggle('bg-light', !isEdit); // 읽기 모드면 회색 배경
-    });
 
-    if(isEdit) {
-        btnEdit.style.display = 'none';
-        btnSaveGroup.style.display = 'flex';
-        rrnEdit.style.display = 'block'; // 주민번호 수정창 표시
-        rrnView.style.display = 'none';
-    } else {
-        btnEdit.style.display = 'inline-block';
-        btnSaveGroup.style.display = 'none';
-        rrnEdit.style.display = 'none';
-        rrnView.style.display = 'block'; // 84년생... 텍스트 표시
-    }
-}
         // [교체] 자금 목록 로드 (무한 스크롤 지원)
 async function loadMemberFunds(uuid, textId, reset=false) {
     const listEl = document.getElementById('md-capital-list');
