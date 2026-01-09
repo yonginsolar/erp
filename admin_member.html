@@ -179,7 +179,12 @@
                     <a class="nav-link" data-bs-toggle="tab" href="#sub-partners" onclick="setTimeout(fetchPartners,100)">
                         🤝 협력 단체
                     </a>
-                </li>        
+                </li> 
+                    <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#sub-badges" onclick="setTimeout(fetchBadges,100)">
+        🏅 뱃지 관리
+    </a>
+</li>
 
                 </ul>
 
@@ -291,6 +296,29 @@
         <tbody id="partnerActiveBody"></tbody>
     </table>
 </div>
+
+<div class="tab-pane fade" id="sub-badges">
+    <div class="d-flex justify-content-end mb-2">
+        <button class="btn btn-sm btn-outline-primary" onclick="openBadgeModal()">+ 새 뱃지 만들기</button>
+    </div>
+    <div class="alert alert-light border small">
+        <i class="bi bi-info-circle"></i> 이곳에서 만든 뱃지는 '협력 단체'나 '조합원'에게 부여할 수 있습니다.
+    </div>
+    <table class="table table-bordered bg-white text-center align-middle">
+        <thead class="table-light">
+            <tr>
+                <th width="60">순서</th>
+                <th width="60">아이콘</th>
+                <th>이름 / 설명</th>
+                <th width="100">코드</th>
+                <th width="100">색상</th>
+                <th width="120">관리</th>
+            </tr>
+        </thead>
+        <tbody id="badgeListBody"></tbody>
+    </table>
+</div>
+                    
                     
 
 <div class="tab-pane fade" id="sub-docs">
@@ -632,6 +660,68 @@
     </div>
 </div>
 
+
+<div class="modal fade" id="badgeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">🏅 뱃지 디자인/설정</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="bg-id">
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">아이콘</label>
+                        <input type="text" id="bg-icon" class="form-control text-center" placeholder="🌱" style="font-size:1.5rem;">
+                        <div class="form-text x-small">이모지 권장</div>
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label small fw-bold">뱃지 이름</label>
+                        <input type="text" id="bg-name" class="form-control" placeholder="예: 모범 조합원">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">설명 (획득 조건 등)</label>
+                    <input type="text" id="bg-desc" class="form-control" placeholder="예: 조합 행사 10회 이상 참여">
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">고유 코드 (영어)</label>
+                        <input type="text" id="bg-code" class="form-control" placeholder="example_code">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">색상</label>
+                        <select id="bg-color" class="form-select">
+                            <option value="primary" class="text-primary">파랑</option>
+                            <option value="success" class="text-success">초록</option>
+                            <option value="warning" class="text-warning">노랑</option>
+                            <option value="danger" class="text-danger">빨강</option>
+                            <option value="info" class="text-info">하늘</option>
+                            <option value="dark" class="text-dark">검정</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">순서</label>
+                        <input type="number" id="bg-order" class="form-control">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary w-100" onclick="saveBadge()">뱃지 저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+        
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ★ Supabase 설정 (Anon Key 사용 - RPC 보안으로 안전함)
@@ -644,19 +734,7 @@
         // 전역 변수
         let g_plants = []; // [추가] 발전소 목록 기억용
 
-        // 1. 뱃지 목록 정의 (관리자가 체크할 항목들)
-const BADGE_LIST = [
-    { code: 'founder', label: '🌱 설립 발기인', color: 'success' },
-    { code: 'investor_1', label: '👑 1호 출자', color: 'warning' },
-    { code: 'director', label: '🏢 이사 단체', color: 'primary' },
-    { code: 'mou', label: '🤝 MOU 체결', color: 'info' },
-    { code: 'energy_leader', label: '⚡ 에너지 리더', color: 'danger' },
-    { code: 'high_invest', label: '💰 고액 출자', color: 'dark' },
-    { code: 'promotion', label: '📢 홍보 대사', color: 'secondary' },
-    { code: 'local', label: '🏡 용인 찐이웃', color: 'success' },
-    { code: 'earth', label: '🌿 지구 지킴이', color: 'success' },
-    { code: 'angel', label: '👼 햇빛 천사', color: 'info' }
-];
+        let g_badges = []; // DB에서 불러온 뱃지 목록을 기억해둠
 
         // [초기화] 세션 체크 및 권한 확인
         window.onload = async () => {
@@ -1337,6 +1415,7 @@ function askDeletePlant(id) {
         }
 
 
+// [수정] 통합 삭제 실행 함수 (중복 선언 해결 & 뱃지 삭제 추가)
 async function confirmDelete() {
     const id = document.getElementById('delete-target-id').value;
     const modalEl = document.getElementById('deleteConfirmModal');
@@ -1344,11 +1423,12 @@ async function confirmDelete() {
 
     showLoading(true);
     
-    // rpcName 결정 로직 (한 번만 선언)
+    // 삭제 타입에 따라 RPC 함수 결정
     let rpcName = '';
     if (deleteType === 'history') rpcName = 'delete_document_secure';
     else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
     else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
+    else if (deleteType === 'badge') rpcName = 'delete_badge_secure'; 
 
     // RPC 실행
     const { error } = await _supabase.rpc(rpcName, { p_id: id });
@@ -1357,10 +1437,11 @@ async function confirmDelete() {
     if (error) {
         alert('삭제 실패: ' + error.message);
     } else {
-        // 타입에 따라 목록 새로고침
+        // 삭제 성공 시 목록 새로고침
         if (deleteType === 'history') fetchHistory();
         else if (deleteType === 'plant') fetchPlants();
         else if (deleteType === 'partner') fetchPartners();
+        else if (deleteType === 'badge') fetchBadges();
     }
 }
         // [신규] 슬라이더 움직일 때 단계 이름 표시
@@ -1656,26 +1737,32 @@ async function confirmDelete() {
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
         // 2. 파트너 목록 불러오기 (대기/승인 분리)
+// [수정] 파트너 목록 불러오기 (뱃지 DB 매칭 포함)
 async function fetchPartners() {
+    // 1. 파트너 데이터 가져오기
     const { data: list, error } = await _supabase.from('site_partners')
         .select('*').order('display_order', { ascending: true });
 
     if(error) { console.error(error); return; }
 
+    // 2. 뱃지 정보가 없으면 한번 불러오기 (매칭을 위해 필요)
+    if (!g_badges || g_badges.length === 0) {
+        const { data: bData } = await _supabase.from('site_badges').select('*');
+        g_badges = bData || [];
+    }
+
     const pendingBody = document.getElementById('partnerPendingBody');
     const activeBody = document.getElementById('partnerActiveBody');
     pendingBody.innerHTML = ''; activeBody.innerHTML = '';
 
-    // 대기 목록이 없으면 숨김 처리 등은 UI 취향껏
     const pendingList = list.filter(p => p.status === 'pending');
-    const activeList = list.filter(p => p.status !== 'pending'); // active or others
+    const activeList = list.filter(p => p.status !== 'pending');
 
-    // (1) 대기 목록 렌더링
+    // (1) 승인 대기 목록 렌더링
     if(pendingList.length === 0) {
         pendingBody.innerHTML = '<tr><td class="text-center text-muted py-3 small">승인 대기 중인 신청이 없습니다.</td></tr>';
     } else {
         pendingList.forEach(p => {
-            const logo = p.logo_url ? `<img src="${p.logo_url}" style="height:30px;">` : '-';
             pendingBody.innerHTML += `
                 <tr class="bg-warning bg-opacity-10">
                     <td class="align-middle fw-bold ps-3">${p.name}</td>
@@ -1688,17 +1775,22 @@ async function fetchPartners() {
         });
     }
 
-    // (2) 승인 목록 렌더링
+    // (2) 등록된 파트너 목록 렌더링
     if(activeList.length === 0) {
         activeBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">등록된 파트너가 없습니다.</td></tr>';
     } else {
         activeList.forEach(p => {
-            // 뱃지 HTML 생성
+            // ★ 뱃지 HTML 생성 (DB에 있는 정보와 매칭)
             let badgesHtml = '';
             if(p.badges && p.badges.length > 0) {
                 p.badges.forEach(bCode => {
-                    const badgeInfo = BADGE_LIST.find(b => b.code === bCode);
-                    if(badgeInfo) badgesHtml += `<span class="badge bg-${badgeInfo.color} me-1 small fw-normal">${badgeInfo.label}</span>`;
+                    const b = g_badges.find(item => item.code === bCode);
+                    if(b) {
+                        // 아이콘과 이름, 색상 적용
+                        badgesHtml += `<span class="badge bg-${b.color} me-1 text-white fw-normal" title="${b.description}">
+                                        ${b.icon || ''} ${b.name}
+                                      </span>`;
+                    }
                 });
             }
 
@@ -1725,23 +1817,35 @@ async function fetchPartners() {
     }
 }
         // 3. 모달 열기 (뱃지 체크박스 생성 포함)
+// [수정] 파트너 모달 열기 (뱃지 DB 목록으로 체크박스 생성)
 async function openPartnerModal(id) {
     document.getElementById('pt-id').value = id || '';
     
-    // 뱃지 체크박스 동적 생성
+    // 1. 뱃지 최신 목록 불러오기 (혹시 모르니 업데이트)
+    const { data: bData } = await _supabase.from('site_badges').select('*').order('display_order');
+    g_badges = bData || [];
+
+    // 2. 뱃지 체크박스 동적 생성
     const badgeContainer = document.getElementById('badge-checkboxes');
     badgeContainer.innerHTML = '';
-    BADGE_LIST.forEach(b => {
-        badgeContainer.innerHTML += `
-            <div class="form-check form-check-inline m-0">
-                <input class="form-check-input" type="checkbox" id="badge-${b.code}" value="${b.code}">
-                <label class="form-check-label small" for="badge-${b.code}">${b.label}</label>
-            </div>
-        `;
-    });
+    
+    if(g_badges.length === 0) {
+        badgeContainer.innerHTML = '<span class="small text-muted">등록된 뱃지가 없습니다.</span>';
+    } else {
+        g_badges.forEach(b => {
+            badgeContainer.innerHTML += `
+                <div class="form-check form-check-inline m-0 mb-1" title="${b.description || ''}">
+                    <input class="form-check-input" type="checkbox" id="badge-chk-${b.code}" value="${b.code}">
+                    <label class="form-check-label small" for="badge-chk-${b.code}">
+                        ${b.icon || ''} ${b.name}
+                    </label>
+                </div>
+            `;
+        });
+    }
 
+    // 3. 수정(Edit) 모드일 경우 데이터 채우기
     if(id) {
-        // 수정/승인 모드
         const { data } = await _supabase.from('site_partners').select('*').eq('id', id).single();
         if(data) {
             document.getElementById('pt-name').value = data.name;
@@ -1751,27 +1855,27 @@ async function openPartnerModal(id) {
             document.getElementById('pt-status').value = data.status || 'active';
             document.getElementById('pt-order').value = data.display_order;
             
-            // 뱃지 체크
+            // 저장된 뱃지 체크하기
             if(data.badges) {
                 data.badges.forEach(code => {
-                    const chk = document.getElementById(`badge-${code}`);
+                    const chk = document.getElementById(`badge-chk-${code}`);
                     if(chk) chk.checked = true;
                 });
             }
 
-            // 이미지 처리 (기존 로직 재사용)
+            // 이미지 프리뷰
             handleImagePreview('pt', data.logo_url);
         }
     } else {
-        // 신규 등록
+        // 4. 신규(New) 등록일 경우 초기화
         document.getElementById('pt-name').value = '';
         document.getElementById('pt-member-id').value = '';
         document.getElementById('pt-desc').value = '';
         document.getElementById('pt-link').value = '';
-        document.getElementById('pt-status').value = 'active'; // 신규는 기본 승인 상태
-        document.getElementById('pt-order').value = 99; // 대충 뒤로
+        document.getElementById('pt-status').value = 'active'; 
+        // 마지막 순서 + 1 (간단 로직)
+        document.getElementById('pt-order').value = 99; 
         
-        // 이미지 초기화
         handleImagePreview('pt', null);
     }
     
@@ -1873,6 +1977,90 @@ function clearPartnerImage() {
     document.getElementById('pt-img-url').value = '';
     document.getElementById('pt-img-preview').style.display = 'none';
     document.getElementById('pt-img-placeholder').style.display = 'block';
+}
+        // 1. 뱃지 목록 불러오기
+async function fetchBadges() {
+    const { data, error } = await _supabase.from('site_badges').select('*').order('display_order');
+    if (error) { console.error(error); return; }
+    
+    g_badges = data || []; // 전역 변수 업데이트
+    const tbody = document.getElementById('badgeListBody');
+    if(tbody) { // 뱃지 관리 탭이 있을 때만 그림
+        tbody.innerHTML = '';
+        g_badges.forEach(b => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${b.display_order}</td>
+                    <td class="fs-4">${b.icon || ''}</td>
+                    <td class="text-start">
+                        <div class="fw-bold text-${b.color}">${b.name}</div>
+                        <div class="small text-muted">${b.description || '-'}</div>
+                    </td>
+                    <td class="small font-monospace">${b.code}</td>
+                    <td><span class="badge bg-${b.color}">${b.color}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-light" onclick="openBadgeModal('${b.id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteBadge('${b.id}')">삭제</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+}
+
+// 2. 뱃지 모달 열기
+async function openBadgeModal(id) {
+    document.getElementById('bg-id').value = id || '';
+    if(id) {
+        const b = g_badges.find(x => x.id == id); // 전역변수에서 찾음 (DB호출 절약)
+        if(b) {
+            document.getElementById('bg-code').value = b.code;
+            document.getElementById('bg-icon').value = b.icon;
+            document.getElementById('bg-name').value = b.name;
+            document.getElementById('bg-desc').value = b.description;
+            document.getElementById('bg-color').value = b.color;
+            document.getElementById('bg-order').value = b.display_order;
+        }
+    } else {
+        document.getElementById('bg-code').value = '';
+        document.getElementById('bg-icon').value = '🏅';
+        document.getElementById('bg-name').value = '';
+        document.getElementById('bg-desc').value = '';
+        document.getElementById('bg-color').value = 'primary';
+        document.getElementById('bg-order').value = g_badges.length + 1;
+    }
+    new bootstrap.Modal(document.getElementById('badgeModal')).show();
+}
+
+// 3. 뱃지 저장
+async function saveBadge() {
+    const updates = {
+        p_id: document.getElementById('bg-id').value || null,
+        p_code: document.getElementById('bg-code').value,
+        p_icon: document.getElementById('bg-icon').value,
+        p_name: document.getElementById('bg-name').value,
+        p_desc: document.getElementById('bg-desc').value,
+        p_color: document.getElementById('bg-color').value,
+        p_order: Number(document.getElementById('bg-order').value)
+    };
+    
+    showLoading(true);
+    const { error } = await _supabase.rpc('upsert_badge_secure', updates);
+    showLoading(false);
+
+    if(error) alert('저장 실패: ' + error.message);
+    else {
+        bootstrap.Modal.getInstance(document.getElementById('badgeModal')).hide();
+        fetchBadges(); // 목록 갱신
+    }
+}
+
+// 4. 뱃지 삭제
+function askDeleteBadge(id) {
+    deleteType = 'badge'; 
+    document.getElementById('delete-target-id').value = id;
+    document.getElementById('btn-real-delete').onclick = confirmDelete; 
+    new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
 }
     </script>
 </body>
