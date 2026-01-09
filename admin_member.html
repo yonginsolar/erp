@@ -181,6 +181,11 @@
                     </a>
                 </li> 
                     <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#sub-faqs" onclick="setTimeout(fetchFaqs,100)">
+        ❓ FAQ 관리
+    </a>
+</li>
+                    <li class="nav-item">
     <a class="nav-link" data-bs-toggle="tab" href="#sub-badges" onclick="setTimeout(fetchBadges,100)">
         🏅 뱃지 관리
     </a>
@@ -319,7 +324,28 @@
     </table>
 </div>
                     
-                    
+<div class="tab-pane fade" id="sub-faqs">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex gap-2">
+            <input type="text" id="search-faq" class="form-control form-control-sm" placeholder="질문 검색..." onkeyup="if(event.key=='Enter') fetchFaqs()">
+            <button class="btn btn-sm btn-outline-secondary" onclick="fetchFaqs()">검색</button>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" onclick="openFaqModal()">+ 질문 추가</button>
+    </div>
+
+    <table class="table table-bordered bg-white align-middle">
+        <thead class="table-light text-center">
+            <tr>
+                <th style="width:60px;">순서</th>
+                <th style="width:100px;">분류</th>
+                <th>질문 및 답변 요약</th>
+                <th style="width:80px;">상태</th>
+                <th style="width:120px;">관리</th>
+            </tr>
+        </thead>
+        <tbody id="faqListBody"></tbody>
+    </table>
+</div>                    
 
 <div class="tab-pane fade" id="sub-docs">
                         <div class="d-flex justify-content-end mb-2">
@@ -339,6 +365,10 @@
                             <tbody id="docListBody"></tbody>
                         </table>
                     </div>
+
+
+
+
 
                     
                     
@@ -717,6 +747,57 @@
     </div>
 </div>
 
+        <div class="modal fade" id="faqModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">❓ 자주 묻는 질문 관리</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="faq-id">
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">카테고리</label>
+                        <select id="faq-category" class="form-select">
+                            <option value="가입/탈퇴">가입/탈퇴</option>
+                            <option value="출자/배당">출자/배당</option>
+                            <option value="발전소">발전소</option>
+                            <option value="활동">활동</option>
+                            <option value="기타">기타</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">순서</label>
+                        <input type="number" id="faq-order" class="form-control" value="0">
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="form-check form-switch mb-2 ms-2">
+                            <input class="form-check-input" type="checkbox" id="faq-visible" checked>
+                            <label class="form-check-label small fw-bold" for="faq-visible">홈페이지에 공개</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">질문 (Q)</label>
+                    <input type="text" id="faq-question" class="form-control" placeholder="예: 조합원 가입은 어떻게 하나요?">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">답변 (A)</label>
+                    <textarea id="faq-answer" class="form-control" rows="6" placeholder="답변 내용을 입력하세요."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary px-4" onclick="saveFaq()">저장하기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+        
 
 
 
@@ -1445,34 +1526,7 @@ function askDeletePlant(id) {
 
 // [수정] 통합 삭제 실행 함수 (중복 선언 해결 & 뱃지 삭제 추가)
 // [수정] 통합 삭제 실행 함수 (중복 선언 해결 & 뱃지 삭제 추가)
-async function confirmDelete() {
-    const id = document.getElementById('delete-target-id').value;
-    const modalEl = document.getElementById('deleteConfirmModal');
-    bootstrap.Modal.getInstance(modalEl).hide();
 
-    showLoading(true);
-    
-    // 삭제 타입에 따라 RPC 함수 결정 (let 한 번만 선언)
-    let rpcName = '';
-    if (deleteType === 'history') rpcName = 'delete_document_secure';
-    else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
-    else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
-    else if (deleteType === 'badge') rpcName = 'delete_badge_secure'; 
-
-    // RPC 실행
-    const { error } = await _supabase.rpc(rpcName, { p_id: id });
-    showLoading(false);
-
-    if (error) {
-        alert('삭제 실패: ' + error.message);
-    } else {
-        // 삭제 성공 시 목록 새로고침
-        if (deleteType === 'history') fetchHistory();
-        else if (deleteType === 'plant') fetchPlants();
-        else if (deleteType === 'partner') fetchPartners();
-        else if (deleteType === 'badge') fetchBadges();
-    }
-}
         // [신규] 슬라이더 움직일 때 단계 이름 표시
         function updateProgressLabel(val) {
             const v = Number(val);
@@ -2064,6 +2118,155 @@ function askDeleteBadge(id) {
     document.getElementById('delete-target-id').value = id;
     document.getElementById('btn-real-delete').onclick = confirmDelete; 
     new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+}
+        // ================================================================
+// [기능 10] FAQ 관리
+// ================================================================
+
+// 1. FAQ 목록 불러오기
+async function fetchFaqs() {
+    const keyword = document.getElementById('search-faq').value;
+    
+    // DB 조회 (순서대로)
+    let query = _supabase.from('site_faqs').select('*').order('display_order', { ascending: true });
+    
+    // 검색어가 있으면 필터링
+    if (keyword) {
+        query = query.ilike('question', `%${keyword}%`);
+    }
+
+    const { data: list, error } = await query;
+    if (error) { console.error(error); return; }
+
+    const tbody = document.getElementById('faqListBody');
+    if (!tbody) return; // 탭이 없으면 패스
+    tbody.innerHTML = '';
+
+    if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">등록된 질문이 없습니다.</td></tr>';
+        return;
+    }
+
+    list.forEach(f => {
+        const badge = f.is_visible 
+            ? '<span class="badge bg-success">공개</span>' 
+            : '<span class="badge bg-secondary">숨김</span>';
+        
+        const answerPreview = f.answer && f.answer.length > 50 
+            ? f.answer.substring(0, 50) + '...' 
+            : f.answer;
+
+        tbody.innerHTML += `
+            <tr>
+                <td class="text-center">${f.display_order}</td>
+                <td class="text-center"><span class="badge bg-light text-dark border">${f.category}</span></td>
+                <td>
+                    <div class="fw-bold text-primary mb-1">Q. ${f.question}</div>
+                    <div class="small text-muted text-truncate" style="max-width:400px;">A. ${answerPreview}</div>
+                </td>
+                <td class="text-center">${badge}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-light" onclick="openFaqModal('${f.id}')">수정</button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteFaq('${f.id}')">삭제</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+// 2. 모달 열기 (등록/수정)
+async function openFaqModal(id) {
+    document.getElementById('faq-id').value = id || '';
+
+    if (id) {
+        // 수정 모드
+        const { data } = await _supabase.from('site_faqs').select('*').eq('id', id).single();
+        if (data) {
+            document.getElementById('faq-category').value = data.category || '기타';
+            document.getElementById('faq-order').value = data.display_order;
+            document.getElementById('faq-visible').checked = data.is_visible;
+            document.getElementById('faq-question').value = data.question;
+            document.getElementById('faq-answer').value = data.answer;
+        }
+    } else {
+        // 신규 모드
+        document.getElementById('faq-category').value = '가입/탈퇴';
+        document.getElementById('faq-order').value = 0; // 맨 앞
+        document.getElementById('faq-visible').checked = true;
+        document.getElementById('faq-question').value = '';
+        document.getElementById('faq-answer').value = '';
+    }
+    
+    new bootstrap.Modal(document.getElementById('faqModal')).show();
+}
+
+// 3. 저장 함수
+async function saveFaq() {
+    const question = document.getElementById('faq-question').value;
+    const answer = document.getElementById('faq-answer').value;
+
+    if (!question || !answer) return alert('질문과 답변을 모두 입력해주세요.');
+
+    // ID 처리 (UUID 오류 방지)
+    let idVal = document.getElementById('faq-id').value;
+    if (!idVal || idVal.trim() === '') idVal = null;
+
+    const updates = {
+        p_id: idVal,
+        p_category: document.getElementById('faq-category').value,
+        p_display_order: Number(document.getElementById('faq-order').value),
+        p_is_visible: document.getElementById('faq-visible').checked,
+        p_question: question,
+        p_answer: answer
+    };
+
+    showLoading(true);
+    const { error } = await _supabase.rpc('upsert_faq_secure', updates);
+    showLoading(false);
+
+    if (error) alert('저장 실패: ' + error.message);
+    else {
+        bootstrap.Modal.getInstance(document.getElementById('faqModal')).hide();
+        fetchFaqs();
+    }
+}
+
+// 4. 삭제 요청
+function askDeleteFaq(id) {
+    confirmWithModal('faq', id);
+}
+
+// ================================================================
+// [수정] 통합 삭제 함수에 FAQ 추가 (기존 confirmDelete 교체)
+// ================================================================
+async function confirmDelete() {
+    const id = document.getElementById('delete-target-id').value;
+    const modalEl = document.getElementById('deleteConfirmModal');
+    bootstrap.Modal.getInstance(modalEl).hide();
+
+    showLoading(true);
+    
+    let rpcName = '';
+    // 삭제 타입 분기 처리
+    if (deleteType === 'history') rpcName = 'delete_document_secure';
+    else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
+    else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
+    else if (deleteType === 'badge') rpcName = 'delete_badge_secure';
+    else if (deleteType === 'faq') rpcName = 'delete_faq_secure'; // ★ 추가됨
+
+    const { error } = await _supabase.rpc(rpcName, { p_id: id });
+    showLoading(false);
+
+    if (error) {
+        alert('삭제 실패: ' + error.message);
+    } else {
+        // 목록 새로고침
+        if (deleteType === 'history') fetchHistory();
+        else if (deleteType === 'plant') fetchPlants();
+        else if (deleteType === 'partner') fetchPartners();
+        else if (deleteType === 'badge') fetchBadges();
+        else if (deleteType === 'faq') fetchFaqs(); // ★ 추가됨
+    }
 }
     </script>
 </body>
