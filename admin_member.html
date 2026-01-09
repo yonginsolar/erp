@@ -892,6 +892,172 @@
     </div>
 </div>
 
+<div class="modal fade" id="memberDetailModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"> <div class="modal-content">
+            <div class="modal-header bg-light">
+                <div>
+                    <h5 class="modal-title fw-bold" id="md-title">조합원 상세 정보</h5>
+                    <span class="badge bg-secondary" id="md-type-badge">-</span>
+                    <span class="small text-muted ms-2" id="md-id-text">-</span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <ul class="nav nav-tabs nav-justified" id="memberDetailTab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active py-3" data-bs-toggle="tab" href="#md-tab-basic">📝 기본 정보</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-funds">💰 출자/배당/자금</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-family">👨‍👩‍👧‍👦 가족/단체 연결</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-3" data-bs-toggle="tab" href="#md-tab-consult">📞 상담 이력</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-4">
+                    <div class="tab-pane fade show active" id="md-tab-basic">
+                        <input type="hidden" id="md-uid">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">이름</label>
+                                <input type="text" id="md-name" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">연락처</label>
+                                <input type="text" id="md-phone" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">상태</label>
+                                <select id="md-status" class="form-select">
+                                    <option value="pending">승인 대기</option>
+                                    <option value="active">정상 (정조합원)</option>
+                                    <option value="withdrawn">탈퇴/제명</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">유형</label>
+                                <select id="md-category" class="form-select">
+                                    <option value="general">개인</option>
+                                    <option value="org">단체</option>
+                                    <option value="family">가족(자녀)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">주소</label>
+                                <input type="text" id="md-addr" class="form-control mb-1" placeholder="기본 주소">
+                                <input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">관리자 메모</label>
+                                <textarea id="md-memo" class="form-control" rows="3" placeholder="중요 특이사항 기록"></textarea>
+                            </div>
+
+                            <div class="col-12"><hr></div>
+                            
+                            <div class="col-md-12">
+                                <h6 class="fw-bold mb-3">🏦 계좌 정보 (수정 시에만 번호 입력)</h6>
+                                <div class="row g-2 align-items-center bg-light p-3 rounded">
+                                    <div class="col-md-3">
+                                        <input type="text" id="md-bank-name" class="form-control" placeholder="은행명">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="text" id="md-bank-owner" class="form-control" placeholder="예금주">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-white text-muted" id="md-account-display">****</span>
+                                            <input type="text" id="md-bank-account" class="form-control" placeholder="변경할 때만 입력 (덮어쓰기)">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        <small class="text-muted" id="md-sns-status">SNS 미연동</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-12 mt-4 d-flex justify-content-between">
+                                <button class="btn btn-outline-dark" onclick="alert('준비중: PDF 증명서 발급 기능')">🖨️ 증명서 발급</button>
+                                <button class="btn btn-primary px-5" onclick="saveMemberBasic()">기본정보 저장</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="md-tab-funds">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold m-0 text-success">💰 출자금 내역</h6>
+                            <button class="btn btn-sm btn-outline-success" onclick="alert('Phase 3에서 구현: 출자금 수동 추가')">+ 입금 추가</button>
+                        </div>
+                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
+                            <table class="table table-sm table-hover mb-0 text-center small">
+                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>비고</th><th>관리</th></tr></thead>
+                                <tbody id="md-capital-list"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold m-0 text-primary">🎁 기부금 내역</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="alert('Phase 3: 기부금 추가')">+ 기부 추가</button>
+                        </div>
+                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
+                            <table class="table table-sm table-hover mb-0 text-center small">
+                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>유형</th><th>비고</th><th>관리</th></tr></thead>
+                                <tbody id="md-donation-list"></tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-warning">🪙 포인트/적립금</h6>
+                                <div class="border rounded p-3 text-center bg-light">
+                                    <h4 class="fw-bold mb-0" id="md-point-total">0 P</h4>
+                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 포인트 내역 상세')">내역 보기</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-info">💵 미지급 배당금</h6>
+                                <div class="border rounded p-3 text-center bg-light">
+                                    <h4 class="fw-bold mb-0" id="md-dividend-total">0 원</h4>
+                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 배당금 지급 처리')">지급 처리</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="md-tab-family">
+                        <div class="alert alert-light border small">
+                            <i class="bi bi-info-circle"></i> 이 조합원이 관리하는 <strong>가족(자녀)</strong>이나 <strong>단체</strong> 목록입니다.
+                        </div>
+                        <div class="d-flex justify-content-end mb-2">
+                            <button class="btn btn-sm btn-outline-dark" onclick="alert('Phase 3: 자녀 계정 생성')">+ 자녀 계정 추가</button>
+                        </div>
+                        <table class="table table-bordered text-center align-middle">
+                            <thead class="table-light"><tr><th>관계</th><th>이름</th><th>생년월일</th><th>상태</th><th>관리</th></tr></thead>
+                            <tbody id="md-family-list">
+                                <tr><td colspan="5" class="text-muted small py-3">연결된 가족/단체가 없습니다.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="tab-pane fade" id="md-tab-consult">
+                        <div class="input-group mb-3">
+                            <input type="text" id="md-consult-input" class="form-control" placeholder="상담/통화 내용을 입력하세요 (예: 계좌번호 변경 요청)">
+                            <button class="btn btn-dark" onclick="addConsultLog()">등록</button>
+                        </div>
+                        <div class="list-group list-group-flush border rounded overflow-auto" style="max-height: 400px;" id="md-consult-list">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
         
 
 
@@ -2468,10 +2634,180 @@ function renderMemberTable(list) {
     });
 }
 
-// (임시) Phase 2에서 구현할 상세 모달 함수 껍데기
-function openMemberDetail(id) {
-    alert("상세 관리 모달(Phase 2)은 다음 단계에서 구현됩니다.\nID: " + id);
+// ================================================================
+// [기능 2] 조합원 상세 관리 (슈퍼 모달)
+// ================================================================
+
+let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
+
+// 1. 모달 열기 및 데이터 로드
+async function openMemberDetail(id) {
+    g_current_member_id = id;
+    
+    // 전역 목록에서 기본 정보 찾기 (속도 향상)
+    const m = g_members.find(x => x.id === id);
+    if (!m) { alert("데이터를 찾을 수 없습니다."); return; }
+
+    // UI 초기화
+    document.getElementById('md-uid').value = m.id;
+    document.getElementById('md-title').innerText = `${m.name} 님 상세 정보`;
+    document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
+    document.getElementById('md-type-badge').innerText = 
+        (m.join_category === 'org' ? '단체' : (m.join_category === 'family' ? '가족' : '개인'));
+    
+    // 탭 1: 기본 정보 바인딩
+    document.getElementById('md-name').value = m.name;
+    document.getElementById('md-phone').value = m.phone;
+    document.getElementById('md-status').value = m.status;
+    document.getElementById('md-category').value = m.join_category || 'general';
+    document.getElementById('md-addr').value = m.address || '';
+    document.getElementById('md-addr-detail').value = m.address_detail || '';
+    document.getElementById('md-memo').value = m.admin_memo || '';
+    
+    // 계좌 정보 (마스킹 처리)
+    document.getElementById('md-bank-name').value = m.bank_name || '';
+    document.getElementById('md-bank-owner').value = m.bank_owner || '';
+    document.getElementById('md-bank-account').value = ''; // 항상 빈칸 (보안)
+    const acc = m.bank_account || '';
+    document.getElementById('md-account-display').innerText = acc.length > 4 ? `***-${acc.slice(-4)}` : (acc || '미등록');
+
+    // SNS 상태
+    const sns = m.sns_connected || {};
+    let snsText = [];
+    if(sns.kakao) snsText.push('Kakao');
+    if(sns.naver) snsText.push('Naver');
+    document.getElementById('md-sns-status').innerText = snsText.length > 0 ? snsText.join(', ') + ' 연동됨' : 'SNS 미연동';
+
+    // 탭 2,3,4 데이터 비동기 로드
+    loadMemberFunds(m.id, m.member_id); // 자금 (출자금 포함)
+    loadMemberFamily(m.id);             // 가족
+    loadConsultLogs(m.id);              // 상담
+
+    new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
+
+// 2. 기본 정보 저장
+async function saveMemberBasic() {
+    if(!confirm('기본 정보를 수정하시겠습니까?')) return;
+
+    const updates = {
+        p_id: document.getElementById('md-uid').value,
+        p_name: document.getElementById('md-name').value,
+        p_phone: document.getElementById('md-phone').value,
+        p_address: document.getElementById('md-addr').value,
+        p_address_detail: document.getElementById('md-addr-detail').value,
+        p_bank_name: document.getElementById('md-bank-name').value,
+        p_bank_owner: document.getElementById('md-bank-owner').value,
+        p_bank_account: document.getElementById('md-bank-account').value, // 빈 값이면 무시됨(SQL 처리)
+        p_status: document.getElementById('md-status').value,
+        p_join_category: document.getElementById('md-category').value,
+        p_admin_memo: document.getElementById('md-memo').value
+    };
+
+    showLoading(true);
+    const { error } = await _supabase.rpc('update_member_details_secure', updates);
+    showLoading(false);
+
+    if (error) alert('저장 실패: ' + error.message);
+    else {
+        alert('저장되었습니다.');
+        fetchMembers(); // 목록 갱신 (변경된 정보 반영)
+    }
+}
+
+// 3. 상담 이력 로드
+async function loadConsultLogs(id) {
+    const listEl = document.getElementById('md-consult-list');
+    listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
+    
+    const { data, error } = await _supabase.rpc('get_member_consultations', { p_member_id: id });
+    listEl.innerHTML = '';
+    
+    if (error) { console.error(error); return; }
+    if (!data || data.length === 0) {
+        listEl.innerHTML = '<div class="text-center text-muted py-3 small">상담 이력이 없습니다.</div>';
+        return;
+    }
+
+    data.forEach(log => {
+        const date = new Date(log.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+        listEl.innerHTML += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between">
+                    <small class="fw-bold text-primary">${log.author_email || '관리자'}</small>
+                    <small class="text-muted">${date}</small>
+                </div>
+                <div class="mt-1 text-dark" style="font-size:0.95rem;">${log.content}</div>
+            </div>
+        `;
+    });
+}
+
+// 4. 상담 등록
+async function addConsultLog() {
+    const content = document.getElementById('md-consult-input').value;
+    if(!content.trim()) return alert('내용을 입력하세요.');
+    
+    const userEmail = document.getElementById('adminProfile').innerText; // 현재 로그인한 관리자 이메일 (UI에서 가져옴)
+
+    showLoading(true);
+    const { error } = await _supabase.rpc('add_consultation', {
+        p_member_id: g_current_member_id,
+        p_member_text_id: document.getElementById('md-id-text').innerText,
+        p_author_email: userEmail, // 현재 로그인 관리자
+        p_content: content
+    });
+    showLoading(false);
+
+    if(error) alert('등록 실패: ' + error.message);
+    else {
+        document.getElementById('md-consult-input').value = '';
+        loadConsultLogs(g_current_member_id);
+    }
+}
+
+// 5. 자금 로드 (출자금, 기부금 등) - Phase 2에서는 '조회' 위주
+async function loadMemberFunds(uuid, textId) {
+    const capitalListEl = document.getElementById('md-capital-list');
+    capitalListEl.innerHTML = '<tr><td colspan="4">로딩중...</td></tr>';
+
+    // (A) 출자금 조회 (ref_members - textId 사용)
+    let capitalHtml = '';
+    if (textId) {
+        const { data: capData } = await _supabase.from('ref_members').select('*').eq('member_id', textId);
+        if (capData && capData.length > 0) {
+            capData.forEach(c => {
+                 capitalHtml += `<tr><td>${c.deposit_date}</td><td>${Number(c.amount).toLocaleString()}</td><td>${c.note||'-'}</td><td><button class="btn btn-xs btn-light border">수정</button></td></tr>`;
+            });
+        } else {
+            capitalHtml = '<tr><td colspan="4" class="text-muted small">출자 내역 없음</td></tr>';
+        }
+    } else {
+        capitalHtml = '<tr><td colspan="4" class="text-muted small">조합원 번호 없음 (조회 불가)</td></tr>';
+    }
+    capitalListEl.innerHTML = capitalHtml;
+
+    // (B) 기부금 조회 (coop_donations - uuid 사용)
+    const donationListEl = document.getElementById('md-donation-list');
+    const { data: donData } = await _supabase.from('coop_donations').select('*').eq('member_uid', uuid);
+    if(donData && donData.length > 0) {
+        let donHtml = '';
+        donData.forEach(d => {
+            donHtml += `<tr><td>${d.donation_date}</td><td>${d.amount.toLocaleString()}</td><td>${d.account_category}</td><td>${d.note||'-'}</td><td><button class="btn btn-xs btn-light border">관리</button></td></tr>`;
+        });
+        donationListEl.innerHTML = donHtml;
+    } else {
+        donationListEl.innerHTML = '<tr><td colspan="5" class="text-muted small">기부 내역 없음</td></tr>';
+    }
+
+    // 포인트, 배당은 Phase 3에서 상세 구현 (일단 0원 표시)
+}
+
+// 6. 가족 로드 (Placeholder)
+async function loadMemberFamily(uuid) {
+    // Phase 3: manager_id 또는 rep_uuid로 연결된 계정 조회 로직 구현
+}
+
     </script>
 </body>
 </html>
