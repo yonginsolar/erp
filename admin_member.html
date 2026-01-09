@@ -135,7 +135,7 @@
         <h5 class="fw-bold mb-3">바로가기</h5>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-dark" onclick="openNoticeModal()">📢 공지사항 쓰기</button>
-            <button class="btn btn-outline-success" onclick="document.querySelector('[href=\'#tab-members\']').click()">👥 조합원 검색</button>
+<button class="btn btn-outline-success" onclick="document.getElementById('nav-members').click()">👥 조합원 검색</button>
             <button class="btn btn-outline-primary" onclick="alert('준비중입니다.')">📊 엑셀 업로드</button>
         </div>
     </div>
@@ -147,41 +147,41 @@
         <button class="btn btn-primary" onclick="alert('신규 등록은 신청서를 통해 진행됩니다.')">+ 신규 등록 안내</button>
     </div>
 
-    <div class="card p-3 mb-3 border-0 bg-light">
-        <div class="row g-2 align-items-center">
-            <div class="col-md-2">
-                <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
-                    <option value="all">상태: 전체</option>
-                    <option value="active" selected>정상 (정조합원)</option>
-                    <option value="pending">승인 대기</option>
-                    <option value="withdrawn">탈퇴/제명</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
-                    <option value="all">유형: 전체</option>
-                    <option value="general">개인</option>
-                    <option value="org">단체</option>
-                    <option value="family">가족(자녀)</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
-                    <option value="name">이름순</option>
-                    <option value="join_date">가입일순 (최신)</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <div class="input-group input-group-sm">
-                    <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
-                    <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
-                </div>
-            </div>
-            <div class="col-md-2 text-end">
-                <button class="btn btn-sm btn-outline-success" onclick="alert('준비중')">📥 엑셀</button>
+<div class="card p-3 mb-3 border-0 bg-light">
+    <div class="row g-2 align-items-center">
+        <div class="col-md-2">
+            <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="all" selected>상태: 전체</option>
+                <option value="active">정상 (정조합원)</option>
+                <option value="pending">승인 대기</option>
+                <option value="withdrawn">탈퇴/제명</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="all">유형: 전체</option>
+                <option value="개인">개인</option>
+                <option value="단체">단체</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="name">이름순</option>
+                <option value="join_date">가입일순 (최신)</option>
+                <option value="capital">출자금순 (고액)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <div class="input-group input-group-sm">
+                <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
+                <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
             </div>
         </div>
+        <div class="col-md-2 text-end">
+            <button class="btn btn-sm btn-outline-success" onclick="alert('준비중')">📥 엑셀</button>
+        </div>
     </div>
+</div>
 
     <div class="table-responsive bg-white border rounded">
         <table class="table table-hover align-middle mb-0 text-center">
@@ -2600,7 +2600,9 @@ async function loadDashboard() {
     document.getElementById('dash-consult').innerText = data.today_consults + '건';
 }
 
-// [수정 3] 조합원 명부 로드 (유형, 출자금 문제 해결)
+
+
+// [수정] 조합원 명부 로드 (유형 필터 버그 수정 & 출자금 뷰 사용)
 async function fetchMembers() {
     showLoading(true);
 
@@ -2609,31 +2611,38 @@ async function fetchMembers() {
     const sortOrder = document.getElementById('sort-order').value;
     const keyword = document.getElementById('search-keyword').value.toLowerCase();
 
-    // ★ 수정됨: coop_members 대신 'view_member_list' 뷰를 조회 (출자금 포함됨)
+    // 1. 뷰(View)에서 데이터 조회 (출자금 포함됨)
     let query = _supabase.from('view_member_list').select('*');
 
-    // 필터
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-    if (typeFilter !== 'all') query = query.eq('join_category', typeFilter);
+    // 2. 상태 필터 적용
+    if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+    }
 
-    // 정렬
+    // 3. [핵심 수정] 유형 필터 적용 (member_type 칼럼 사용)
+    // 값이 '개인' 또는 '단체'인 경우에만 필터링
+    if (typeFilter !== 'all') {
+        query = query.eq('member_type', typeFilter);
+    }
+
+    // 4. 정렬
     if (sortOrder === 'name') query = query.order('name', { ascending: true });
     else if (sortOrder === 'join_date') query = query.order('join_date', { ascending: false });
-    else if (sortOrder === 'capital') query = query.order('total_capital', { ascending: false }); // 출자금순 정렬 가능해짐
+    else if (sortOrder === 'capital') query = query.order('total_capital', { ascending: false });
 
     const { data: members, error } = await query;
     showLoading(false);
 
     if(error) { 
-        console.error(error); 
-        // 뷰가 없어서 에러날 경우를 대비해 안내
-        if(error.code === '42P01') alert("SQL Editor에서 'view_member_list' 생성 쿼리를 먼저 실행해주세요.");
+        console.error("데이터 로드 에러:", error);
+        if(error.code === '42P01') alert("SQL 오류: view_member_list 뷰가 없습니다. SQL을 실행해주세요.");
+        else alert("데이터를 불러오지 못했습니다: " + error.message);
         return; 
     }
 
     let list = members || [];
 
-    // 검색 필터
+    // 5. 검색 필터 (JS 처리)
     if(keyword) {
         list = list.filter(m => 
             (m.name && m.name.toLowerCase().includes(keyword)) || 
@@ -2646,7 +2655,7 @@ async function fetchMembers() {
     renderMemberTable(list);
 }
 
-// [수정 4] 테이블 렌더링 (유형 표시 로직 개선)
+// [수정] 테이블 렌더링 (member_type 값 그대로 표시)
 function renderMemberTable(list) {
     const tbody = document.getElementById('memberListBody');
     tbody.innerHTML = '';
@@ -2657,22 +2666,24 @@ function renderMemberTable(list) {
     }
 
     list.forEach((m, idx) => {
-        // 1. 유형 (join_category가 없으면 member_type을 확인)
-        let category = m.join_category || m.member_type || 'general';
+        // 1. 유형 뱃지 (DB 값 '개인', '단체'를 그대로 사용)
+        let typeVal = m.member_type || '개인'; 
         let typeBadge = '<span class="badge bg-secondary">개인</span>';
         
-        if(category === 'org' || category === '단체') typeBadge = '<span class="badge bg-info">단체</span>';
-        else if(category === 'family' || category === '가족') typeBadge = '<span class="badge bg-warning text-dark">자녀</span>';
+        if (typeVal === '단체') typeBadge = '<span class="badge bg-info">단체</span>';
+        // (자녀 구분은 member_type에 없다면 추후 join_category 로직 추가 필요, 현재는 개인/단체만 처리)
 
-        // 2. 상태
+        // 2. 상태 뱃지
         let statusBadge = '<span class="badge bg-success">정상</span>';
         if(m.status === 'pending') statusBadge = '<span class="badge bg-danger blink-badge">승인대기</span>';
         if(m.status === 'withdrawn') statusBadge = '<span class="badge bg-dark">탈퇴</span>';
 
-        // 3. 가입일
-        const joinDate = m.join_date ? m.join_date : (m.created_at ? m.created_at.split('T')[0] : '-');
+        // 3. 가입일 처리
+        let joinDate = '-';
+        if (m.join_date) joinDate = m.join_date;
+        else if (m.created_at) joinDate = m.created_at.split('T')[0];
 
-        // 4. 출자금 (뷰에서 가져온 total_capital 사용)
+        // 4. 출자금 (뷰에서 계산된 total_capital)
         const capital = m.total_capital ? Number(m.total_capital).toLocaleString() + '원' : '0원';
 
         tbody.innerHTML += `
@@ -2688,7 +2699,7 @@ function renderMemberTable(list) {
                     <div>${joinDate}</div>
                     <div class="mt-1">${statusBadge}</div>
                 </td>
-                <td class="text-end fw-bold text-primary pe-3">${capital}</td> 
+                <td class="text-end fw-bold text-primary pe-3">${capital}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-dark">관리</button>
                 </td>
