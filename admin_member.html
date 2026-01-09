@@ -10,6 +10,7 @@
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 
     <style>
         body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflow: hidden; }
@@ -40,6 +41,9 @@
         /* 탭 글씨 색상 강제 수정 */
         .nav-tabs .nav-link { color: #495057 !important; font-weight: 600; }
         .nav-tabs .nav-link.active { color: #0d6efd !important; border-bottom: 2px solid #0d6efd; }
+        /* 기본 정보 탭 버튼 제어 */
+#btn-save-mode { display: none; } /* 처음엔 숨김 */
+#rrn-edit-area { display: none; } /* 처음엔 숨김 */
     </style>
 </head>
 
@@ -1110,7 +1114,55 @@
     </div>
 </div>
 
+<div class="modal fade" id="customAlertModal" tabindex="-1" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content text-center p-3 border-0 shadow">
+            <div class="modal-body">
+                <div class="mb-2" id="alertIcon"></div>
+                <h6 class="fw-bold mb-0" id="alertText"></h6>
+            </div>
+            <div class="modal-footer justify-content-center border-0 p-0 pb-2">
+                <button type="button" class="btn btn-sm btn-dark px-4" data-bs-dismiss="modal">확인</button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<div class="modal fade" id="customConfirmModal" tabindex="-1" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold">확인</h6>
+            </div>
+            <div class="modal-body py-4 text-center">
+                <p class="mb-0" id="confirmText">진행하시겠습니까?</p>
+            </div>
+            <div class="modal-footer border-0 justify-content-center pt-0">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btnConfirmYes">확인</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="groupSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold">🏢 관리할 단체 찾기</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="group-search-input" class="form-control" placeholder="단체명 입력" onkeyup="if(event.key=='Enter') searchGroups()">
+                    <button class="btn btn-outline-secondary" onclick="searchGroups()">검색</button>
+                </div>
+                <div class="list-group" id="group-search-result" style="max-height: 300px; overflow-y: auto;">
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
         
         
 
@@ -1131,14 +1183,22 @@
         let g_plants = []; // [추가] 발전소 목록 기억용
 
         let g_badges = []; // DB에서 불러온 뱃지 목록을 기억해둠
+        let g_fund_page = 0; // [추가] 무한 스크롤 페이지 번호
+const PAGE_SIZE = 20; // [추가] 한 번에 불러올 개수
 
         // [초기화] 세션 체크 및 권한 확인
-        window.onload = async () => {
-            const { data: { session } } = await _supabase.auth.getSession();
-            if (session) checkAdmin(session.user);
-            else document.getElementById('login-gate').classList.remove('hidden');
-            switchTab('dashboard');
-        };
+window.onload = async () => {
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (session) checkAdmin(session.user);
+    else document.getElementById('login-gate').classList.remove('hidden');
+    switchTab('dashboard');
+    
+    // [추가] 자금 내역 테이블 스크롤 이벤트 연결 (무한 스크롤)
+    const fundTableContainer = document.querySelector('#md-capital-list').closest('.table-responsive');
+    if(fundTableContainer) {
+        fundTableContainer.addEventListener('scroll', handleFundScroll);
+    }
+};
 
 // ★ [공통] 파일 업로드 함수 (한글 깨짐 방지 & 난수 이름 생성)
 async function uploadFileToStorage(file, folderName) {
@@ -2754,78 +2814,88 @@ function renderMemberTable(list) {
 let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
 
 // 1. 모달 열기 및 데이터 로드
+// 2. 기본 정보 저장
+// [교체] 모달 열기
 async function openMemberDetail(id) {
     g_current_member_id = id;
-    
-    // 전역 목록에서 기본 정보 찾기 (속도 향상)
     const m = g_members.find(x => x.id === id);
-    if (!m) { alert("데이터를 찾을 수 없습니다."); return; }
+    if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
 
-    // UI 초기화
+    // 기본 데이터 바인딩
     document.getElementById('md-uid').value = m.id;
-    document.getElementById('md-title').innerText = `${m.name} 님 상세 정보`;
+    document.getElementById('md-title').innerText = `${m.name} 님 상세`;
     document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
-    document.getElementById('md-type-badge').innerText = 
-        (m.join_category === 'org' ? '단체' : (m.join_category === 'family' ? '가족' : '개인'));
-    
-    // 탭 1: 기본 정보 바인딩
+    document.getElementById('md-type-badge').innerText = m.member_type || '개인';
+
     document.getElementById('md-name').value = m.name;
     document.getElementById('md-phone').value = m.phone;
     document.getElementById('md-status').value = m.status;
-    document.getElementById('md-category').value = m.join_category || 'general';
-    document.getElementById('md-addr').value = m.address || '';
+    document.getElementById('md-addr').value = m.address || ''; // 주소
     document.getElementById('md-addr-detail').value = m.address_detail || '';
     document.getElementById('md-memo').value = m.admin_memo || '';
     
-    // 계좌 정보 (마스킹 처리)
+    // 계좌 정보 (실제 DB 칼럼명 반영)
     document.getElementById('md-bank-name').value = m.bank_name || '';
-    document.getElementById('md-bank-owner').value = m.bank_owner || '';
-    document.getElementById('md-bank-account').value = ''; // 항상 빈칸 (보안)
-    const acc = m.bank_account || '';
-    document.getElementById('md-account-display').innerText = acc.length > 4 ? `***-${acc.slice(-4)}` : (acc || '미등록');
+    document.getElementById('md-bank-owner').value = m.account_holder || ''; 
+    document.getElementById('md-bank-account').value = m.account_number || ''; 
 
-    // SNS 상태
-    const sns = m.sns_connected || {};
-    let snsText = [];
-    if(sns.kakao) snsText.push('Kakao');
-    if(sns.naver) snsText.push('Naver');
-    document.getElementById('md-sns-status').innerText = snsText.length > 0 ? snsText.join(', ') + ' 연동됨' : 'SNS 미연동';
+    // 주민번호 파싱 (보여주기용)
+    const rrn = m.rrn_display || '';
+    let genderAge = '정보 없음';
+    if(rrn.length >= 8) {
+        const g = rrn.charAt(7);
+        const yPre = (g === '1' || g === '2') ? '19' : '20';
+        const gender = (g === '1' || g === '3') ? '남성' : '여성';
+        genderAge = `${yPre}${rrn.substr(0,2)}년 ${rrn.substr(2,2)}월 ${rrn.substr(4,2)}일 (${gender})`;
+    }
+    document.getElementById('md-rrn-view').innerText = genderAge;
+    document.getElementById('md-rrn').value = ''; // 수정용은 비워둠
 
-    // 탭 2,3,4 데이터 비동기 로드
-    loadMemberFunds(m.id, m.member_id); // 자금 (출자금 포함)
-    loadMemberFamily(m.id);             // 가족
-    loadConsultLogs(m.id);              // 상담
+    // SNS 아이콘
+    let sns = '';
+    if(m.kakao_id) sns += '<i class="bi bi-chat-fill text-warning me-1"></i>Kakao ';
+    if(m.naver_id) sns += '<i class="bi bi-n-square-fill text-success"></i>Naver';
+    document.getElementById('md-sns-status').innerHTML = sns || '미연동';
+
+    // "읽기 전용" 모드로 초기화
+    toggleEditMode(false);
+
+    // 하위 데이터 로드 (초기화=true)
+    loadMemberFunds(m.id, m.member_id, true);
+    loadConsultLogs(m.id);
 
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
-// 2. 기본 정보 저장
+// [교체] 기본 정보 저장 (모달 알림 및 모드 전환 적용)
 async function saveMemberBasic() {
-    if(!confirm('기본 정보를 수정하시겠습니까?')) return;
+    myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
+        const updates = {
+            p_id: document.getElementById('md-uid').value,
+            p_name: document.getElementById('md-name').value,
+            p_phone: document.getElementById('md-phone').value,
+            p_address: document.getElementById('md-addr').value,
+            p_address_detail: document.getElementById('md-addr-detail').value,
+            p_bank_name: document.getElementById('md-bank-name').value,
+            p_bank_owner: document.getElementById('md-bank-owner').value,     // account_holder
+            p_bank_account: document.getElementById('md-bank-account').value, // account_number
+            p_status: document.getElementById('md-status').value,
+            // p_join_category 등 필요한 필드 추가
+            p_admin_memo: document.getElementById('md-memo').value,
+            p_rrn: document.getElementById('md-rrn').value || null // 주민번호 입력 시에만 전송
+        };
 
-    const updates = {
-        p_id: document.getElementById('md-uid').value,
-        p_name: document.getElementById('md-name').value,
-        p_phone: document.getElementById('md-phone').value,
-        p_address: document.getElementById('md-addr').value,
-        p_address_detail: document.getElementById('md-addr-detail').value,
-        p_bank_name: document.getElementById('md-bank-name').value,
-        p_bank_owner: document.getElementById('md-bank-owner').value,
-        p_bank_account: document.getElementById('md-bank-account').value, // 빈 값이면 무시됨(SQL 처리)
-        p_status: document.getElementById('md-status').value,
-        p_join_category: document.getElementById('md-category').value,
-        p_admin_memo: document.getElementById('md-memo').value
-    };
+        showLoading(true);
+        const { error } = await _supabase.rpc('update_member_details_secure', updates);
+        showLoading(false);
 
-    showLoading(true);
-    const { error } = await _supabase.rpc('update_member_details_secure', updates);
-    showLoading(false);
-
-    if (error) alert('저장 실패: ' + error.message);
-    else {
-        alert('저장되었습니다.');
-        fetchMembers(); // 목록 갱신 (변경된 정보 반영)
-    }
+        if (error) myAlert('저장 실패: ' + error.message, 'error');
+        else {
+            myAlert('저장되었습니다.');
+            toggleEditMode(false); // 다시 읽기 모드로
+            fetchMembers(); // 목록 갱신
+        }
+    });
 }
 
 // 3. 상담 이력 로드
@@ -2929,84 +2999,7 @@ async function loadMemberFamily(uuid) {
 // ================================================================
 
 // 1. [수정] 기존 loadMemberFunds 함수 교체 (버튼 및 기능 연결)
-async function loadMemberFunds(uuid, textId) {
-    // 1-1. 출자금 목록 로드
-    const capitalListEl = document.getElementById('md-capital-list');
-    capitalListEl.innerHTML = '<tr><td colspan="4">로딩중...</td></tr>';
 
-    // [+입금 추가] 버튼에 이벤트 연결 (textId 넘김)
-    const addCapBtn = document.querySelector('#md-tab-funds button[onclick*="Phase 3"]');
-    if(addCapBtn) {
-        addCapBtn.innerText = '+ 입금 추가';
-        addCapBtn.onclick = () => openFundEditor('capital', null, textId); // null=신규
-    } else {
-        // 이미 버튼이 바뀐 경우(재호출 시) 대비
-        const freshBtn = document.querySelector('#md-tab-funds .btn-outline-success');
-        if(freshBtn) freshBtn.onclick = () => openFundEditor('capital', null, textId);
-    }
-
-    if (textId) {
-        const { data: capData } = await _supabase.from('ref_members')
-            .select('*').eq('member_id', textId).order('deposit_date', {ascending: false});
-        
-        if (capData && capData.length > 0) {
-            let capitalHtml = '';
-            capData.forEach(c => {
-                 // 데이터를 JSON 문자열로 인코딩해서 버튼에 심음 (수정 시 꺼내 쓰기 위함)
-                 const rowData = encodeURIComponent(JSON.stringify(c));
-                 capitalHtml += `
-                    <tr>
-                        <td>${c.deposit_date}</td>
-                        <td class="fw-bold">${Number(c.amount).toLocaleString()}</td>
-                        <td class="text-start text-truncate" style="max-width:100px;">${c.note||'-'}</td>
-                        <td>
-                            <button class="btn btn-xs btn-light border py-0" onclick="openFundEditor('capital', '${rowData}')">수정</button>
-                            <button class="btn btn-xs btn-outline-danger border py-0 ms-1" onclick="deleteFundData('capital', ${c.id})">삭제</button>
-                        </td>
-                    </tr>`;
-            });
-            capitalListEl.innerHTML = capitalHtml;
-        } else {
-            capitalListEl.innerHTML = '<tr><td colspan="4" class="text-muted small py-3">출자 내역이 없습니다.</td></tr>';
-        }
-    } else {
-        capitalListEl.innerHTML = '<tr><td colspan="4" class="text-muted small">조합원 번호 없음 (관리 불가)</td></tr>';
-    }
-
-
-    // 1-2. 기부금 목록 로드
-    const donationListEl = document.getElementById('md-donation-list');
-    
-    // [+기부 추가] 버튼 연결
-    const addDonBtn = document.querySelector('#md-tab-funds .btn-outline-primary');
-    if(addDonBtn) {
-        addDonBtn.onclick = () => openFundEditor('donation', null);
-    }
-
-    const { data: donData } = await _supabase.from('coop_donations')
-        .select('*').eq('member_uid', uuid).order('donation_date', {ascending: false});
-    
-    if(donData && donData.length > 0) {
-        let donHtml = '';
-        donData.forEach(d => {
-            const rowData = encodeURIComponent(JSON.stringify(d));
-            donHtml += `
-                <tr>
-                    <td>${d.donation_date}</td>
-                    <td class="fw-bold">${Number(d.amount).toLocaleString()}</td>
-                    <td><span class="badge bg-light text-dark border">${d.payment_method||'-'}</span></td>
-                    <td class="text-start text-truncate" style="max-width:80px;">${d.note||'-'}</td>
-                    <td>
-                        <button class="btn btn-xs btn-light border py-0" onclick="openFundEditor('donation', '${rowData}')">수정</button>
-                        <button class="btn btn-xs btn-outline-danger border py-0 ms-1" onclick="deleteFundData('donation', ${d.id})">삭제</button>
-                    </td>
-                </tr>`;
-        });
-        donationListEl.innerHTML = donHtml;
-    } else {
-        donationListEl.innerHTML = '<tr><td colspan="5" class="text-muted small py-3">기부 내역이 없습니다.</td></tr>';
-    }
-}
 
 
 // 2. 에디터 모달 열기 (신규/수정 공용)
@@ -3131,6 +3124,194 @@ async function deleteFundData(type, id) {
         loadMemberFunds(memberUid, memberTextId);
         loadDashboard(); // 통계 갱신
     }
+}
+        // 1. [유틸] 알럿 -> 모달 대체
+function myAlert(msg, type='success') {
+    const icon = type === 'success' 
+        ? '<i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>' 
+        : '<i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem;"></i>';
+    document.getElementById('alertIcon').innerHTML = icon;
+    document.getElementById('alertText').innerHTML = msg;
+    new bootstrap.Modal(document.getElementById('customAlertModal')).show();
+}
+
+function myConfirm(msg, callback) {
+    document.getElementById('confirmText').innerHTML = msg;
+    const btn = document.getElementById('btnConfirmYes');
+    
+    // 이벤트 리스너 중복 방지를 위한 노드 복제 교체
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    newBtn.onclick = () => {
+        bootstrap.Modal.getInstance(document.getElementById('customConfirmModal')).hide();
+        callback();
+    };
+    new bootstrap.Modal(document.getElementById('customConfirmModal')).show();
+}
+
+// 2. [유틸] 자동 하이픈 (HTML oninput="autoHyphen(this)" 연결 필요)
+function autoHyphen(target) {
+    let val = target.value.replace(/[^0-9]/g, '');
+    if(target.id === 'md-phone') { // 전화번호
+        if(val.length < 4) target.value = val;
+        else if(val.length < 7) target.value = val.substr(0, 3) + '-' + val.substr(3);
+        else if(val.length < 11) target.value = val.substr(0, 3) + '-' + val.substr(3, 3) + '-' + val.substr(6);
+        else target.value = val.substr(0, 3) + '-' + val.substr(3, 4) + '-' + val.substr(7);
+    } else if(target.id === 'md-rrn') { // 주민번호
+        if(val.length < 7) target.value = val;
+        else target.value = val.substr(0, 6) + '-' + val.substr(6, 7);
+    }
+}
+
+// 3. [유틸] 주소 찾기 (카카오)
+function searchAddress() {
+    new daum.Postcode({
+        oncomplete: function(data) {
+            const fullAddr = `(${data.zonecode}) ${data.roadAddress || data.jibunAddress}`;
+            document.getElementById('md-addr').value = fullAddr;
+            document.getElementById('md-addr-detail').focus();
+        }
+    }).open();
+}
+
+// 4. [유틸] 읽기/수정 모드 토글
+function toggleEditMode(isEdit) {
+    // 기본 정보 탭 내의 모든 입력 필드 제어
+    const inputs = document.querySelectorAll('#md-tab-basic input, #md-tab-basic select, #md-tab-basic textarea');
+    const btnEdit = document.getElementById('btn-edit-mode');
+    const btnSaveGroup = document.getElementById('btn-save-group'); // 저장/취소 버튼 감싸는 div
+    const rrnEdit = document.getElementById('rrn-edit-area');
+    const rrnView = document.getElementById('rrn-view-area');
+
+    inputs.forEach(el => {
+        el.disabled = !isEdit;
+        el.classList.toggle('bg-light', !isEdit); // 읽기 모드면 회색 배경
+    });
+
+    if(isEdit) {
+        btnEdit.style.display = 'none';
+        btnSaveGroup.style.display = 'flex';
+        rrnEdit.style.display = 'block'; // 주민번호 수정창 표시
+        rrnView.style.display = 'none';
+    } else {
+        btnEdit.style.display = 'inline-block';
+        btnSaveGroup.style.display = 'none';
+        rrnEdit.style.display = 'none';
+        rrnView.style.display = 'block'; // 84년생... 텍스트 표시
+    }
+}
+        // [교체] 자금 목록 로드 (무한 스크롤 지원)
+async function loadMemberFunds(uuid, textId, reset=false) {
+    const listEl = document.getElementById('md-capital-list');
+    
+    if(reset) {
+        g_fund_page = 0; // 페이지 초기화
+        listEl.innerHTML = '';
+    }
+
+    if(!textId || textId === 'ID없음') return;
+
+    // 페이지네이션 범위 계산
+    const start = g_fund_page * PAGE_SIZE;
+    const end = start + PAGE_SIZE - 1;
+
+    // 출자금 조회
+    const { data } = await _supabase.from('ref_members')
+        .select('*')
+        .eq('member_id', textId)
+        .order('deposit_date', {ascending: false})
+        .range(start, end);
+
+    if(data && data.length > 0) {
+        data.forEach(c => {
+            const json = encodeURIComponent(JSON.stringify(c));
+            listEl.innerHTML += `
+                <tr>
+                    <td>${c.deposit_date}</td>
+                    <td class="fw-bold">${Number(c.amount).toLocaleString()}</td>
+                    <td class="text-start text-truncate" style="max-width:100px;">${c.note||'-'}</td>
+                    <td>
+                        <button class="btn btn-xs btn-light border" onclick="openFundEditor('capital','${json}')">수정</button>
+                    </td>
+                </tr>`;
+        });
+        g_fund_page++; // 다음 페이지 준비
+    } else if(reset) {
+        listEl.innerHTML = '<tr><td colspan="4" class="text-muted small py-3">내역 없음</td></tr>';
+    }
+    
+    // (기부금 로직은 기존 유지 - 페이지네이션 필요 시 동일하게 적용)
+}
+
+// [추가] 무한 스크롤 이벤트 핸들러
+function handleFundScroll(e) {
+    const el = e.target;
+    // 스크롤이 바닥에 거의 닿았을 때 (여유분 10px)
+    if(el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+        const textId = document.getElementById('md-id-text').innerText;
+        const uid = document.getElementById('md-uid').value;
+        loadMemberFunds(uid, textId, false); // false = 추가 로드
+    }
+}
+        // 1. 단체 검색 모달 열기
+function openGroupSearch() {
+    document.getElementById('group-search-input').value = '';
+    document.getElementById('group-search-result').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('groupSearchModal')).show();
+}
+
+// 2. 검색 실행
+async function searchGroups() {
+    const keyword = document.getElementById('group-search-input').value;
+    if(!keyword) return;
+    
+    const { data } = await _supabase.rpc('search_groups', { keyword });
+    const list = document.getElementById('group-search-result');
+    list.innerHTML = '';
+    
+    if(!data || data.length===0) { list.innerHTML = '<div class="p-3 text-center text-muted">결과 없음</div>'; return; }
+
+    data.forEach(g => {
+        // 관리자 정보 표시
+        const status = g.rep_name 
+            ? `<span class="badge bg-warning text-dark">현재 관리자: ${g.rep_name}</span>` 
+            : `<span class="badge bg-success">관리자 없음</span>`;
+        
+        list.innerHTML += `
+            <button class="list-group-item list-group-item-action" onclick="tryConnectGroup('${g.id}', '${g.name}', '${g.rep_name||''}')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">${g.name}</span>
+                    <small>${status}</small>
+                </div>
+            </button>`;
+    });
+}
+
+// 3. 연결 시도
+function tryConnectGroup(groupId, groupName, currentManager) {
+    const myName = document.getElementById('md-name').value;
+    let msg = `'${groupName}'의 관리자로 등록하시겠습니까?`;
+    
+    if(currentManager) {
+        msg = `⚠️ <b>주의:</b> 현재 '${currentManager}'님이 관리자로 되어 있습니다.<br>관리자를 '${myName}'님으로 변경하시겠습니까?`;
+    }
+
+    myConfirm(msg, async () => {
+        showLoading(true);
+        const { error } = await _supabase.rpc('connect_group_manager', { 
+            group_uuid: groupId, 
+            manager_uuid: g_current_member_id 
+        });
+        showLoading(false);
+        
+        if(error) myAlert('연결 실패: ' + error.message, 'error');
+        else {
+            myAlert('연결되었습니다.');
+            bootstrap.Modal.getInstance(document.getElementById('groupSearchModal')).hide();
+            // 필요하다면 가족 리스트 새로고침: loadMemberFamily(g_current_member_id);
+        }
+    });
 }
     </script>
 </body>
