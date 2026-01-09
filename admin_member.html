@@ -65,35 +65,34 @@
             </div>
             
 <div class="sidebar-menu">
-    <a class="nav-link active" onclick="switchTab('dashboard')" id="nav-dashboard">
+    <a class="nav-link active" onclick="switchTab('dashboard')" id="nav-dashboard" style="cursor:pointer;">
         <i class="bi bi-grid-fill"></i> 대시보드
     </a>
 
     <div class="menu-category mt-3">회원 및 자금</div>
     
-    <a class="nav-link" onclick="switchTab('members')" id="nav-members">
-        <i class="bi bi-people-fill"></i> 조합원 관리
+    <a class="nav-link" onclick="switchTab('members')" id="nav-members" style="cursor:pointer;">
+        <i class="bi bi-people-fill"></i> 조합원 명부
     </a>
-    
-    <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit">
+    <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
         <i class="bi bi-cash-coin"></i> 입금 매칭
     </a>
 
     <div class="menu-category">운영 관리</div>
-    <a class="nav-link" onclick="switchTab('notices')" id="nav-notices">
+    <a class="nav-link" onclick="switchTab('notices')" id="nav-notices" style="cursor:pointer;">
         <i class="bi bi-megaphone"></i> 공지사항 관리
     </a>
 
     <div class="menu-category">홈페이지 관리</div>
-    <a class="nav-link" onclick="switchTab('site')" id="nav-site">
+    <a class="nav-link" onclick="switchTab('site')" id="nav-site" style="cursor:pointer;">
         <i class="bi bi-window-sidebar"></i> 사이트 컨텐츠
     </a>
 
     <div class="mt-4 pt-4 border-top border-secondary">
-        <a class="nav-link text-warning" onclick="location.href='index.html'">
+        <a class="nav-link text-warning" onclick="location.href='index.html'" style="cursor:pointer;">
             <i class="bi bi-box-arrow-up-right"></i> 메뉴로 바로가기
         </a>
-        <a class="nav-link text-danger" onclick="logout()">
+        <a class="nav-link text-danger" onclick="logout()" style="cursor:pointer;">
             <i class="bi bi-box-arrow-right"></i> 로그아웃
         </a>
     </div>
@@ -1128,6 +1127,7 @@
             const { data: { session } } = await _supabase.auth.getSession();
             if (session) checkAdmin(session.user);
             else document.getElementById('login-gate').classList.remove('hidden');
+            switchTab('dashboard');
         };
 
 // ★ [공통] 파일 업로드 함수 (한글 깨짐 방지 & 난수 이름 생성)
@@ -1518,32 +1518,7 @@ async function fetchPlants() {
         function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
         function logout() { _supabase.auth.signOut().then(() => location.href='index.html'); }
 // [수정] 탭 전환 함수 (대시보드 로직 추가)
-function switchTab(tabName) {
-    // 1. 모든 탭 내용 숨기기 (.tab-pane 클래스 사용 가정)
-    document.querySelectorAll('.tab-pane').forEach(el => {
-        el.classList.remove('show', 'active');
-    });
 
-    // 2. 선택한 탭 내용 보여주기
-    const target = document.getElementById('tab-' + tabName);
-    if(target) target.classList.add('show', 'active');
-
-    // 3. 사이드바 메뉴 활성화 표시 (색상 변경)
-    document.querySelectorAll('.sidebar .nav-link').forEach(el => {
-        el.classList.remove('active');
-    });
-    const navBtn = document.getElementById('nav-' + tabName);
-    if(navBtn) navBtn.classList.add('active');
-
-    // 4. 탭별 데이터 로드 함수 호출
-    if (tabName === 'dashboard') loadDashboard();     // [신규] 대시보드
-    else if (tabName === 'members') fetchMembers();   // [수정] 조합원 명부
-    
-    // (기존 함수들이 있다면 유지, 없으면 에러 방지 위해 체크)
-    else if (tabName === 'deposit' && typeof fetchPayments === 'function') fetchPayments();
-    else if (tabName === 'notices' && typeof fetchNotices === 'function') fetchNotices();
-    // 사이트 관리 탭은 별도 로드 함수가 없다면 생략 가능
-}
         // ================================================================
         // [기능 5] 섹션(메뉴) 관리 (ON/OFF)
         // ================================================================
@@ -2531,21 +2506,7 @@ async function confirmDelete() {
         // ================================================================
 // [기능 0] 대시보드 로드 및 유틸
 // ================================================================
-async function loadDashboard() {
-    // DB 함수(get_dashboard_stats) 호출
-    const { data, error } = await _supabase.rpc('get_dashboard_stats');
-    
-    if (error) {
-        console.error("대시보드 로드 실패:", error);
-        return;
-    }
 
-    // 숫자 카운팅 애니메이션 적용
-    animateNumber('dash-total', data.total_members);
-    animateNumber('dash-pending', data.pending_members);
-    animateNumber('dash-capital', data.total_capital, true); // true = 원화 표시
-    animateNumber('dash-consult', data.today_consults);
-}
 
 // 승인 대기 카드 클릭 시 조합원 탭으로 이동
 function goToPendingMembers() {
@@ -2591,6 +2552,54 @@ function animateNumber(id, target, isMoney = false) {
 // [기능 1] 조합원 목록 조회 (검색/필터/정렬 완비)
 // ================================================================
 
+
+
+// 테이블 렌더링 함수
+// [수정 1] 탭 전환 함수 (딜레이 없이 즉시 전환)
+function switchTab(tabName) {
+    // 1. 모든 탭 숨김
+    document.querySelectorAll('.tab-pane').forEach(el => {
+        el.classList.remove('show', 'active');
+        el.style.display = 'none'; // 확실하게 숨김
+    });
+
+    // 2. 선택한 탭 보임
+    const target = document.getElementById('tab-' + tabName);
+    if(target) {
+        target.style.display = 'block';
+        // 약간의 딜레이 후 클래스 추가 (부트스트랩 페이드 효과용)
+        setTimeout(() => target.classList.add('show', 'active'), 10); 
+    }
+
+    // 3. 사이드바 활성화
+    document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
+    const navBtn = document.getElementById('nav-' + tabName);
+    if(navBtn) navBtn.classList.add('active');
+
+    // 4. 데이터 로드
+    if (tabName === 'dashboard') loadDashboard();
+    else if (tabName === 'members') fetchMembers();
+    else if (tabName === 'deposit' && typeof fetchPayments === 'function') fetchPayments();
+    else if (tabName === 'notices' && typeof fetchNotices === 'function') fetchNotices();
+}
+
+// [수정 2] 대시보드 로드 (애니메이션 제거 -> 즉시 표시)
+async function loadDashboard() {
+    const { data, error } = await _supabase.rpc('get_dashboard_stats');
+    
+    if (error) {
+        console.error("대시보드 로드 실패:", error);
+        return;
+    }
+
+    // 애니메이션 없이 바로 텍스트 꽂아넣기
+    document.getElementById('dash-total').innerText = data.total_members + '명';
+    document.getElementById('dash-pending').innerText = data.pending_members + '명';
+    document.getElementById('dash-capital').innerText = data.total_capital.toLocaleString() + '원';
+    document.getElementById('dash-consult').innerText = data.today_consults + '건';
+}
+
+// [수정 3] 조합원 명부 로드 (유형, 출자금 문제 해결)
 async function fetchMembers() {
     showLoading(true);
 
@@ -2599,29 +2608,31 @@ async function fetchMembers() {
     const sortOrder = document.getElementById('sort-order').value;
     const keyword = document.getElementById('search-keyword').value.toLowerCase();
 
-    // 1. Supabase 쿼리 빌드
-    let query = _supabase.from('coop_members').select('*');
+    // ★ 수정됨: coop_members 대신 'view_member_list' 뷰를 조회 (출자금 포함됨)
+    let query = _supabase.from('view_member_list').select('*');
 
-    // 2. 필터링 조건
+    // 필터
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
     if (typeFilter !== 'all') query = query.eq('join_category', typeFilter);
 
-    // 3. 정렬 조건 (DB단 정렬)
+    // 정렬
     if (sortOrder === 'name') query = query.order('name', { ascending: true });
     else if (sortOrder === 'join_date') query = query.order('join_date', { ascending: false });
-    
+    else if (sortOrder === 'capital') query = query.order('total_capital', { ascending: false }); // 출자금순 정렬 가능해짐
+
     const { data: members, error } = await query;
     showLoading(false);
 
     if(error) { 
         console.error(error); 
-        alert('데이터 로드 실패');
+        // 뷰가 없어서 에러날 경우를 대비해 안내
+        if(error.code === '42P01') alert("SQL Editor에서 'view_member_list' 생성 쿼리를 먼저 실행해주세요.");
         return; 
     }
 
     let list = members || [];
 
-    // 4. 검색어 필터링 (JS단 처리 - 이름/전화번호/조합원번호)
+    // 검색 필터
     if(keyword) {
         list = list.filter(m => 
             (m.name && m.name.toLowerCase().includes(keyword)) || 
@@ -2630,36 +2641,41 @@ async function fetchMembers() {
         );
     }
 
-    g_members = list; // 전역 변수에 저장 (나중에 모달 띄울 때 사용)
+    g_members = list; // 전역 저장
     renderMemberTable(list);
 }
 
-// 테이블 렌더링 함수
+// [수정 4] 테이블 렌더링 (유형 표시 로직 개선)
 function renderMemberTable(list) {
     const tbody = document.getElementById('memberListBody');
     tbody.innerHTML = '';
 
     if(list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-muted">조건에 맞는 조합원이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="py-5 text-muted">조건에 맞는 조합원이 없습니다.</td></tr>';
         return;
     }
 
     list.forEach((m, idx) => {
-        // 유형 뱃지
+        // 1. 유형 (join_category가 없으면 member_type을 확인)
+        let category = m.join_category || m.member_type || 'general';
         let typeBadge = '<span class="badge bg-secondary">개인</span>';
-        if(m.join_category === 'org') typeBadge = '<span class="badge bg-info">단체</span>';
-        if(m.join_category === 'family') typeBadge = '<span class="badge bg-warning text-dark">자녀</span>';
+        
+        if(category === 'org' || category === '단체') typeBadge = '<span class="badge bg-info">단체</span>';
+        else if(category === 'family' || category === '가족') typeBadge = '<span class="badge bg-warning text-dark">자녀</span>';
 
-        // 상태 뱃지
+        // 2. 상태
         let statusBadge = '<span class="badge bg-success">정상</span>';
-        if(m.status === 'pending') statusBadge = '<span class="badge bg-danger">승인대기</span>';
+        if(m.status === 'pending') statusBadge = '<span class="badge bg-danger blink-badge">승인대기</span>';
         if(m.status === 'withdrawn') statusBadge = '<span class="badge bg-dark">탈퇴</span>';
 
-        // 가입일
-        const joinDate = m.join_date ? m.join_date : '-';
+        // 3. 가입일
+        const joinDate = m.join_date ? m.join_date : (m.created_at ? m.created_at.split('T')[0] : '-');
+
+        // 4. 출자금 (뷰에서 가져온 total_capital 사용)
+        const capital = m.total_capital ? Number(m.total_capital).toLocaleString() + '원' : '0원';
 
         tbody.innerHTML += `
-            <tr>
+            <tr onclick="openMemberDetail('${m.id}')" style="cursor:pointer;">
                 <td>${idx + 1}</td>
                 <td>${typeBadge}</td>
                 <td class="fw-bold text-start ps-4">
@@ -2671,8 +2687,9 @@ function renderMemberTable(list) {
                     <div>${joinDate}</div>
                     <div class="mt-1">${statusBadge}</div>
                 </td>
+                <td class="text-end fw-bold text-primary pe-3">${capital}</td> 
                 <td>
-                    <button class="btn btn-sm btn-outline-dark" onclick="openMemberDetail('${m.id}')">관리</button>
+                    <button class="btn btn-sm btn-outline-dark">관리</button>
                 </td>
             </tr>
         `;
