@@ -743,6 +743,34 @@
             else document.getElementById('login-gate').classList.remove('hidden');
         };
 
+// ★ [공통] 파일 업로드 함수 (한글 깨짐 방지 & 난수 이름 생성)
+async function uploadFileToStorage(file, folderName) {
+    if (!file) return null;
+
+    // 1. 파일명 난수화 (예: '로고.png' -> 'partners/173901_x9z1a.png')
+    const fileExt = file.name.split('.').pop();
+    const randomName = Math.random().toString(36).substring(2, 10);
+    const safeFileName = `${folderName}/${Date.now()}_${randomName}.${fileExt}`;
+
+    // 2. 스토리지 업로드
+    const { error: uploadError } = await _supabase.storage.from('assets').upload(safeFileName, file);
+    if (uploadError) throw uploadError; // 에러 발생 시 호출한 곳으로 던짐
+
+    // 3. 공개 URL 반환
+    const { data } = _supabase.storage.from('assets').getPublicUrl(safeFileName);
+    return data.publicUrl;
+}
+
+// ★ [공통] 기존 파일 삭제 함수
+async function deleteOldFile(fullUrl) {
+    if (!fullUrl) return;
+    try {
+        const path = fullUrl.split('/assets/')[1]; 
+        if (path) await _supabase.storage.from('assets').remove([path]);
+    } catch (e) { console.error("파일 삭제 오류:", e); }
+}
+
+        
         // [권한 체크] RPC 함수로 보안 검증 (무한 루프 방지됨)
         async function checkAdmin(user) {
             showLoading(true);
@@ -1416,6 +1444,7 @@ function askDeletePlant(id) {
 
 
 // [수정] 통합 삭제 실행 함수 (중복 선언 해결 & 뱃지 삭제 추가)
+// [수정] 통합 삭제 실행 함수 (중복 선언 해결 & 뱃지 삭제 추가)
 async function confirmDelete() {
     const id = document.getElementById('delete-target-id').value;
     const modalEl = document.getElementById('deleteConfirmModal');
@@ -1423,7 +1452,7 @@ async function confirmDelete() {
 
     showLoading(true);
     
-    // 삭제 타입에 따라 RPC 함수 결정
+    // 삭제 타입에 따라 RPC 함수 결정 (let 한 번만 선언)
     let rpcName = '';
     if (deleteType === 'history') rpcName = 'delete_document_secure';
     else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
@@ -1738,14 +1767,12 @@ async function confirmDelete() {
         }
         // 2. 파트너 목록 불러오기 (대기/승인 분리)
 // [수정] 파트너 목록 불러오기 (뱃지 DB 매칭 포함)
+// [1] 목록 불러오기 (뱃지 아이콘 매칭 포함)
 async function fetchPartners() {
-    // 1. 파트너 데이터 가져오기
-    const { data: list, error } = await _supabase.from('site_partners')
-        .select('*').order('display_order', { ascending: true });
-
+    const { data: list, error } = await _supabase.from('site_partners').select('*').order('display_order');
     if(error) { console.error(error); return; }
 
-    // 2. 뱃지 정보가 없으면 한번 불러오기 (매칭을 위해 필요)
+    // 뱃지 정보 로드 (없으면 가져오기)
     if (!g_badges || g_badges.length === 0) {
         const { data: bData } = await _supabase.from('site_badges').select('*');
         g_badges = bData || [];
@@ -1755,97 +1782,77 @@ async function fetchPartners() {
     const activeBody = document.getElementById('partnerActiveBody');
     pendingBody.innerHTML = ''; activeBody.innerHTML = '';
 
+    // 상태별 분리
     const pendingList = list.filter(p => p.status === 'pending');
     const activeList = list.filter(p => p.status !== 'pending');
 
-    // (1) 승인 대기 목록 렌더링
-    if(pendingList.length === 0) {
-        pendingBody.innerHTML = '<tr><td class="text-center text-muted py-3 small">승인 대기 중인 신청이 없습니다.</td></tr>';
-    } else {
+    // (A) 대기 목록
+    if(pendingList.length === 0) pendingBody.innerHTML = '<tr><td class="text-center text-muted py-3 small">승인 대기 중인 신청이 없습니다.</td></tr>';
+    else {
         pendingList.forEach(p => {
             pendingBody.innerHTML += `
                 <tr class="bg-warning bg-opacity-10">
                     <td class="align-middle fw-bold ps-3">${p.name}</td>
-                    <td class="align-middle small text-muted">${p.description || '소개 없음'}</td>
+                    <td class="align-middle small text-muted">${p.description || '-'}</td>
                     <td class="align-middle text-end pe-3">
-                        <button class="btn btn-sm btn-primary" onclick="openPartnerModal('${p.id}')">검토 및 승인</button>
+                        <button class="btn btn-sm btn-primary" onclick="openPartnerModal('${p.id}')">승인</button>
                     </td>
-                </tr>
-            `;
+                </tr>`;
         });
     }
 
-    // (2) 등록된 파트너 목록 렌더링
-    if(activeList.length === 0) {
-        activeBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">등록된 파트너가 없습니다.</td></tr>';
-    } else {
+    // (B) 등록 목록
+    if(activeList.length === 0) activeBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">등록된 파트너가 없습니다.</td></tr>';
+    else {
         activeList.forEach(p => {
-            // ★ 뱃지 HTML 생성 (DB에 있는 정보와 매칭)
             let badgesHtml = '';
+            // 뱃지 코드를 아이콘으로 변환
             if(p.badges && p.badges.length > 0) {
                 p.badges.forEach(bCode => {
                     const b = g_badges.find(item => item.code === bCode);
-                    if(b) {
-                        // 아이콘과 이름, 색상 적용
-                        badgesHtml += `<span class="badge bg-${b.color} me-1 text-white fw-normal" title="${b.description}">
-                                        ${b.icon || ''} ${b.name}
-                                      </span>`;
-                    }
+                    if(b) badgesHtml += `<span class="badge bg-${b.color} me-1 fw-normal">${b.icon||''} ${b.name}</span>`;
                 });
             }
-
-            const logoImg = p.logo_url 
-                ? `<img src="${p.logo_url}" style="max-height:40px; max-width:60px;">` 
-                : `<span class="text-muted text-xs">No Img</span>`;
-
+            const logo = p.logo_url ? `<img src="${p.logo_url}" style="max-height:40px;">` : '-';
+            
             activeBody.innerHTML += `
                 <tr>
                     <td class="text-center">${p.display_order}</td>
-                    <td class="text-center">${logoImg}</td>
-                    <td>
-                        <div class="fw-bold">${p.name}</div>
-                        <div class="small text-muted text-truncate" style="max-width:250px;">${p.description || '-'}</div>
-                    </td>
+                    <td class="text-center">${logo}</td>
+                    <td><div class="fw-bold">${p.name}</div><div class="small text-muted text-truncate" style="max-width:200px;">${p.description||'-'}</div></td>
                     <td>${badgesHtml}</td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-light" onclick="openPartnerModal('${p.id}')">수정</button>
                         <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeletePartner('${p.id}')">삭제</button>
                     </td>
-                </tr>
-            `;
+                </tr>`;
         });
     }
 }
         // 3. 모달 열기 (뱃지 체크박스 생성 포함)
 // [수정] 파트너 모달 열기 (뱃지 DB 목록으로 체크박스 생성)
+// [2] 모달 열기 (뱃지 체크박스 생성)
 async function openPartnerModal(id) {
     document.getElementById('pt-id').value = id || '';
     
-    // 1. 뱃지 최신 목록 불러오기 (혹시 모르니 업데이트)
-    const { data: bData } = await _supabase.from('site_badges').select('*').order('display_order');
-    g_badges = bData || [];
-
-    // 2. 뱃지 체크박스 동적 생성
-    const badgeContainer = document.getElementById('badge-checkboxes');
-    badgeContainer.innerHTML = '';
+    // 뱃지 목록 최신화 및 체크박스 생성
+    await fetchBadges();
+    const container = document.getElementById('badge-checkboxes');
+    container.innerHTML = '';
     
     if(g_badges.length === 0) {
-        badgeContainer.innerHTML = '<span class="small text-muted">등록된 뱃지가 없습니다.</span>';
+        container.innerHTML = '<span class="small text-muted">등록된 뱃지가 없습니다.</span>';
     } else {
         g_badges.forEach(b => {
-            badgeContainer.innerHTML += `
-                <div class="form-check form-check-inline m-0 mb-1" title="${b.description || ''}">
+            container.innerHTML += `
+                <div class="form-check form-check-inline m-0 mb-1" title="${b.description||''}">
                     <input class="form-check-input" type="checkbox" id="badge-chk-${b.code}" value="${b.code}">
-                    <label class="form-check-label small" for="badge-chk-${b.code}">
-                        ${b.icon || ''} ${b.name}
-                    </label>
-                </div>
-            `;
+                    <label class="form-check-label small" for="badge-chk-${b.code}">${b.icon||''} ${b.name}</label>
+                </div>`;
         });
     }
 
-    // 3. 수정(Edit) 모드일 경우 데이터 채우기
-    if(id) {
+    if(id) { // 수정 모드
         const { data } = await _supabase.from('site_partners').select('*').eq('id', id).single();
         if(data) {
             document.getElementById('pt-name').value = data.name;
@@ -1855,69 +1862,65 @@ async function openPartnerModal(id) {
             document.getElementById('pt-status').value = data.status || 'active';
             document.getElementById('pt-order').value = data.display_order;
             
-            // 저장된 뱃지 체크하기
+            // 기존 뱃지 체크
             if(data.badges) {
-                data.badges.forEach(code => {
-                    const chk = document.getElementById(`badge-chk-${code}`);
-                    if(chk) chk.checked = true;
+                data.badges.forEach(c => {
+                    const el = document.getElementById(`badge-chk-${c}`);
+                    if(el) el.checked = true;
                 });
             }
-
-            // 이미지 프리뷰
             handleImagePreview('pt', data.logo_url);
         }
-    } else {
-        // 4. 신규(New) 등록일 경우 초기화
+    } else { // 신규 모드
         document.getElementById('pt-name').value = '';
         document.getElementById('pt-member-id').value = '';
         document.getElementById('pt-desc').value = '';
         document.getElementById('pt-link').value = '';
-        document.getElementById('pt-status').value = 'active'; 
-        // 마지막 순서 + 1 (간단 로직)
-        document.getElementById('pt-order').value = 99; 
-        
+        document.getElementById('pt-status').value = 'active';
+        document.getElementById('pt-order').value = 99;
         handleImagePreview('pt', null);
     }
     
-    // 파일 인풋 초기화
     document.getElementById('pt-file').value = '';
     new bootstrap.Modal(document.getElementById('partnerModal')).show();
 }
         // 4. 파트너 저장
+// [3] 저장 함수 (ID 처리 + 공통 파일 함수 사용)
 async function savePartner() {
     const name = document.getElementById('pt-name').value;
     if(!name) return alert('단체명을 입력하세요.');
 
+    // ★ [핵심] 빈 문자열 ID를 NULL로 변환 (BigInt/UUID 에러 방지)
+    let idVal = document.getElementById('pt-id').value;
+    if (!idVal || idVal.trim() === '') idVal = null;
+
     showLoading(true);
 
-    // (1) 이미지 업로드 로직 (기존 savePlant와 유사)
+    // 1. 파일 업로드 (공통 함수 사용으로 코드 대폭 단축)
     const fileInput = document.getElementById('pt-file');
     const originalUrl = document.getElementById('pt-img-original').value;
     let finalImgUrl = document.getElementById('pt-img-url').value;
 
-    if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        const fileName = `partners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const { error: upErr } = await _supabase.storage.from('assets').upload(fileName, file);
-        if (upErr) { showLoading(false); return alert('이미지 업로드 실패'); }
-        
-        const { data: urlData } = _supabase.storage.from('assets').getPublicUrl(fileName);
-        finalImgUrl = urlData.publicUrl;
-        
-        if(originalUrl) await deleteOldFile(originalUrl); // 기존 삭제
-    } else if (originalUrl && !finalImgUrl) {
-        await deleteOldFile(originalUrl); // 삭제 버튼 누른 경우
+    try {
+        if (fileInput.files.length > 0) {
+            // ★ 한글명 걱정 끝! 공통 함수 호출
+            finalImgUrl = await uploadFileToStorage(fileInput.files[0], 'partners');
+            if(originalUrl) await deleteOldFile(originalUrl); // 기존 파일 삭제
+        } else if (originalUrl && !finalImgUrl) {
+            await deleteOldFile(originalUrl); // 삭제 버튼 누른 경우
+        }
+    } catch (e) {
+        showLoading(false);
+        return alert('이미지 업로드 오류: ' + e.message);
     }
 
-    // (2) 뱃지 수집
+    // 2. 뱃지 데이터 수집
     const selectedBadges = [];
-    document.querySelectorAll('#badge-checkboxes input:checked').forEach(cb => {
-        selectedBadges.push(cb.value);
-    });
+    document.querySelectorAll('#badge-checkboxes input:checked').forEach(cb => selectedBadges.push(cb.value));
 
-    // (3) DB 저장
+    // 3. DB 저장 (RPC 호출)
     const updates = {
-        p_id: document.getElementById('pt-id').value || null,
+        p_id: idVal, // NULL 또는 UUID
         p_name: name,
         p_link_url: document.getElementById('pt-link').value,
         p_logo_url: finalImgUrl,
