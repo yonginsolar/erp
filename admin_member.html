@@ -1025,60 +1025,75 @@
 
 
                     <div class="tab-pane fade" id="md-tab-funds">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="fw-bold text-primary mb-0">💰 출자 및 배당 내역</h6>
-        <span class="badge bg-light text-dark border" id="md-total-funds-display">총 출자금: 0원</span>
-    </div>
-    <div class="table-responsive bg-white border rounded" style="max-height: 300px; overflow-y: auto;">
-        <table class="table table-sm table-hover mb-0 text-center small">
-            <thead class="table-light sticky-top">
-                <tr>
-                    <th>날짜</th>
-                    <th>구분</th>
-                    <th>금액</th>
-                    <th>내용</th>
-                </tr>
-            </thead>
-            <tbody id="md-funds-list">
-                <tr><td colspan="4" class="text-muted py-3">데이터 로딩 중...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold m-0 text-success">💰 출자금 내역</h6>
+                            <button class="btn btn-sm btn-outline-success" onclick="alert('Phase 3에서 구현: 출자금 수동 추가')">+ 입금 추가</button>
+                        </div>
+                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
+                            <table class="table table-sm table-hover mb-0 text-center small">
+                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>비고</th><th>관리</th></tr></thead>
+                                <tbody id="md-capital-list"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold m-0 text-primary">🎁 기부금 내역</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="alert('Phase 3: 기부금 추가')">+ 기부 추가</button>
+                        </div>
+                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
+                            <table class="table table-sm table-hover mb-0 text-center small">
+                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>유형</th><th>비고</th><th>관리</th></tr></thead>
+                                <tbody id="md-donation-list"></tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-warning">🪙 포인트/적립금</h6>
+                                <div class="border rounded p-3 text-center bg-light">
+                                    <h4 class="fw-bold mb-0" id="md-point-total">0 P</h4>
+                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 포인트 내역 상세')">내역 보기</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold text-info">💵 미지급 배당금</h6>
+                                <div class="border rounded p-3 text-center bg-light">
+                                    <h4 class="fw-bold mb-0" id="md-dividend-total">0 원</h4>
+                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 배당금 지급 처리')">지급 처리</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="md-tab-family">
+                        <div class="alert alert-light border small">
+                            <i class="bi bi-info-circle"></i> 이 조합원이 관리하는 <strong>가족(자녀)</strong>이나 <strong>단체</strong> 목록입니다.
+                        </div>
+                        <div class="d-flex justify-content-end mb-2">
+                            <button class="btn btn-sm btn-outline-dark" onclick="alert('Phase 3: 자녀 계정 생성')">+ 자녀 계정 추가</button>
+                        </div>
+                        <table class="table table-bordered text-center align-middle">
+                            <thead class="table-light"><tr><th>관계</th><th>이름</th><th>생년월일</th><th>상태</th><th>관리</th></tr></thead>
+                            <tbody id="md-family-list">
+                                <tr><td colspan="5" class="text-muted small py-3">연결된 가족/단체가 없습니다.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="tab-pane fade" id="md-tab-consult">
+                        <div class="input-group mb-3">
+                            <input type="text" id="md-consult-input" class="form-control" placeholder="상담/통화 내용을 입력하세요 (예: 계좌번호 변경 요청)">
+                            <button class="btn btn-dark" onclick="addConsultLog()">등록</button>
+                        </div>
+                        <div class="list-group list-group-flush border rounded overflow-auto" style="max-height: 400px;" id="md-consult-list">
+                            </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<div class="tab-pane fade" id="md-tab-family">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold text-primary mb-0">👨‍👩‍👧‍👦 연결된 계정 목록</h6>
-        <button class="btn btn-sm btn-outline-primary" onclick="openRelationSelectModal()">
-            <i class="bi bi-plus-lg"></i> 가족/단체 추가
-        </button>
-    </div>
 
-    <div class="table-responsive bg-white border rounded">
-        <table class="table table-hover table-sm mb-0 align-middle">
-            <thead class="table-light small">
-                <tr>
-                    <th>관계</th>
-                    <th>이름</th>
-                    <th>생년월일/사업자번호</th>
-                    <th>상태</th>
-                    <th>관리</th>
-                </tr>
-            </thead>
-            <tbody id="md-family-list">
-                <tr><td colspan="5" class="text-center py-3 text-muted">연결된 계정이 없습니다.</td></tr>
-            </tbody>
-        </table>
-    </div>
-    
-    <div class="mt-3 p-3 bg-light rounded small text-secondary">
-        <i class="bi bi-info-circle-fill me-1"></i>
-        자녀 계정은 부모(현재 조합원)가 대리 관리하며, 단체 계정은 대표자로서 관리 권한을 가집니다.
-    </div>
-</div>
 <div class="modal fade" id="fundEditorModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content shadow-lg">
