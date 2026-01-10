@@ -2966,25 +2966,33 @@ function searchAddress() {
     }).open();
 }
 
-// [교체] 저장 (주소 합치기 & 함수 파라미터 매칭)
+// [수정] 기본 정보 저장 (마스킹 된 계좌번호/주민번호 보호 로직 추가)
 async function saveMemberBasic() {
     myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
-        // 1. 주소 합치기 (기본 + 상세)
+        // 1. 주소 합치기
         const basicAddr = document.getElementById('md-addr').value;
         const detailAddr = document.getElementById('md-addr-detail').value;
         const finalAddr = detailAddr ? `${basicAddr} ${detailAddr}` : basicAddr;
 
-        // 2. 파라미터 구성 (새 SQL 함수에 맞춤)
+        // 2. 계좌번호 안전장치 (중요!)
+        let bankAcc = document.getElementById('md-bank-account').value;
+        // 화면에 ***가 포함되어 있다면, 사용자가 수정한 게 아니므로 DB에 보내지 않음 (기존 값 유지)
+        if (bankAcc && bankAcc.includes('*')) {
+            bankAcc = null; 
+        }
+
         const updates = {
             p_id: document.getElementById('md-uid').value,
             p_name: document.getElementById('md-name').value,
             p_phone: document.getElementById('md-phone').value,
-            p_address: finalAddr, // 합친 주소 전송
+            p_address: finalAddr,
             p_bank_name: document.getElementById('md-bank-name').value,
-            p_bank_owner: document.getElementById('md-bank-owner').value,     
-            p_bank_account: document.getElementById('md-bank-account').value, 
+            p_bank_owner: document.getElementById('md-bank-owner').value,
+            
+            p_bank_account: bankAcc, // ★ 수정된 안전한 값 전송 (null이면 DB가 업데이트 건너뜀)
+            
             p_status: document.getElementById('md-status').value,
-            p_member_type: document.getElementById('md-type').value, // p_join_category 아님
+            p_member_type: document.getElementById('md-type').value,
             p_admin_memo: document.getElementById('md-memo').value,
             p_rrn: document.getElementById('md-rrn').value || null 
         };
@@ -2997,7 +3005,7 @@ async function saveMemberBasic() {
         else {
             myAlert('저장되었습니다.');
             toggleEditMode(false); 
-            fetchMembers(); // 목록 갱신
+            fetchMembers(); // 목록 갱신 (마스킹 된 값으로 다시 로드됨)
         }
     });
 }
