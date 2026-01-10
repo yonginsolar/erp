@@ -167,39 +167,38 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 
 <div class="card p-3 mb-3 border-0 bg-light">
-<div class="row g-2 align-items-center">
-<div class="col-md-2">
-<select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
-<option value="all" selected>상태: 전체</option>
-<option value="active">정상 (정조합원)</option>
-<option value="pending">승인 대기</option>
-<option value="withdrawn">탈퇴/제명</option>
-</select>
-</div>
-<div class="col-md-2">
-<select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
-<option value="all">유형: 전체</option>
-<option value="개인">개인</option>
-<option value="단체">단체</option>
-</select>
-</div>
-<div class="col-md-2">
-<select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
-<option value="name">이름순</option>
-<option value="join_date">가입일순 (최신)</option>
-<option value="capital">출자금순 (고액)</option>
-</select>
-</div>
-<div class="col-md-4">
-<div class="input-group input-group-sm">
-<input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
-<button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
-</div>
-</div>
-<div class="col-md-2 text-end">
-<button class="btn btn-sm btn-outline-success" onclick="alert('준비중')">📥 엑셀</button>
-</div>
-</div>
+    <div class="row g-2 align-items-center">
+        <div class="col-md-2">
+            <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="all" selected>상태: 전체</option>
+                <option value="정상">정상 (정조합원)</option>  <option value="승인대기">승인 대기</option>      <option value="탈퇴">탈퇴/제명</option>          </select>
+        </div>
+
+        <div class="col-md-2">
+            <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="all">유형: 전체</option>
+                <option value="개인">개인</option>  <option value="단체">단체</option>  </select>
+        </div>
+
+        <div class="col-md-2">
+            <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
+                <option value="name">이름순</option>
+                <option value="join_date">가입일순 (최신)</option>
+                <option value="capital">출자금순 (고액)</option>
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <div class="input-group input-group-sm">
+                <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
+                <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
+            </div>
+        </div>
+
+        <div class="col-md-2 text-end">
+            <button class="btn btn-sm btn-outline-success" onclick="openExcelModal()">📥 엑셀</button>
+        </div>
+    </div>
 </div>
 
 <div class="table-responsive bg-white border rounded">
