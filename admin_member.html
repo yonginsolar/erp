@@ -2925,7 +2925,7 @@ async function saveMemberBasic() {
             p_status: document.getElementById('md-status').value,
             p_member_type: document.getElementById('md-type').value,
             p_admin_memo: document.getElementById('md-memo').value,
-            p_rrn: document.getElementById('md-rrn').value || null 
+            p_rrn: (document.getElementById('md-rrn').value || '').replace(/[^0-9]/g, '') || null 
         };
 
         showLoading(true);
