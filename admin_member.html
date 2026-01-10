@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+    <script src="../home/badges.js"></script>
 
 <style>
 body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflow: hidden; }
@@ -2320,83 +2321,76 @@ if(activeList.length === 0) activeBody.innerHTML = '<tr><td colspan="5" class="t
 else {
 activeList.forEach(p => {
 let badgesHtml = '';
-// 뱃지 코드를 아이콘으로 변환
-if(p.badges && p.badges.length > 0) {
-p.badges.forEach(bCode => {
-const b = g_badges.find(item => item.code === bCode);
-if(b) badgesHtml += `<span class="badge bg-${b.color} me-1 fw-normal">${b.icon||''} ${b.name}</span>`;
-});
-}
-const logo = p.logo_url ? `<img src="${p.logo_url}" style="max-height:40px;">` : '-';
+// [변경] badges.js 공통 함수 사용하여 HTML 생성
+        if(p.badges && p.badges.length > 0) {
+            p.badges.forEach(bCode => {
+                const b = g_badges.find(item => item.code === bCode);
+                badgesHtml += Badges.renderPill(b); // ★ 여기가 핵심 변경
+            });
+        }
+        const logo = p.logo_url ? `<img src="${p.logo_url}" style="max-height:40px;">` : '-';
 
-activeBody.innerHTML += `
-               <tr>
-                   <td class="text-center">${p.display_order}</td>
-                   <td class="text-center">${logo}</td>
-                   <td><div class="fw-bold">${p.name}</div><div class="small text-muted text-truncate" style="max-width:200px;">${p.description||'-'}</div></td>
-                   <td>${badgesHtml}</td>
-                   <td class="text-center">
-                       <button class="btn btn-sm btn-light" onclick="openPartnerModal('${p.id}')">수정</button>
-                       <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeletePartner('${p.id}')">삭제</button>
-                   </td>
-               </tr>`;
-});
+        activeBody.innerHTML += `
+            <tr>
+                <td class="text-center">${p.display_order}</td>
+                <td class="text-center">${logo}</td>
+                <td><div class="fw-bold">${p.name}</div><div class="small text-muted text-truncate" style="max-width:200px;">${p.description||'-'}</div></td>
+                <td>${badgesHtml}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-light" onclick="openPartnerModal('${p.id}')">수정</button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeletePartner('${p.id}')">삭제</button>
+                </td>
+            </tr>`;
+    });
 }
 }
 // 3. 모달 열기 (뱃지 체크박스 생성 포함)
 // [수정] 파트너 모달 열기 (뱃지 DB 목록으로 체크박스 생성)
 // [2] 모달 열기 (뱃지 체크박스 생성)
+// [2] 모달 열기 (뱃지 체크박스 생성 및 데이터 로드)
 async function openPartnerModal(id) {
-document.getElementById('pt-id').value = id || '';
+    document.getElementById('pt-id').value = id || '';
 
-// 뱃지 목록 최신화 및 체크박스 생성
-await fetchBadges();
-const container = document.getElementById('badge-checkboxes');
-container.innerHTML = '';
+    // 1. 뱃지 목록 최신화 (전역변수 g_badges가 비어있으면 로드)
+    if (!g_badges || g_badges.length === 0) {
+        await fetchBadges();
+    }
 
-if(g_badges.length === 0) {
-container.innerHTML = '<span class="small text-muted">등록된 뱃지가 없습니다.</span>';
-} else {
-g_badges.forEach(b => {
-container.innerHTML += `
-               <div class="form-check form-check-inline m-0 mb-1" title="${b.description||''}">
-                   <input class="form-check-input" type="checkbox" id="badge-chk-${b.code}" value="${b.code}">
-                   <label class="form-check-label small" for="badge-chk-${b.code}">${b.icon||''} ${b.name}</label>
-               </div>`;
-});
-}
+    // 2. 수정 모드
+    if(id) { 
+        const { data } = await _supabase.from('site_partners').select('*').eq('id', id).single();
+        if(data) {
+            document.getElementById('pt-name').value = data.name;
+            document.getElementById('pt-member-id').value = data.member_id || '';
+            document.getElementById('pt-desc').value = data.description || '';
+            document.getElementById('pt-link').value = data.link_url || '';
+            document.getElementById('pt-status').value = data.status || 'active';
+            document.getElementById('pt-order').value = data.display_order;
 
-if(id) { // 수정 모드
-const { data } = await _supabase.from('site_partners').select('*').eq('id', id).single();
-if(data) {
-document.getElementById('pt-name').value = data.name;
-document.getElementById('pt-member-id').value = data.member_id || '';
-document.getElementById('pt-desc').value = data.description || '';
-document.getElementById('pt-link').value = data.link_url || '';
-document.getElementById('pt-status').value = data.status || 'active';
-document.getElementById('pt-order').value = data.display_order;
+            // ★ [핵심] 공통 함수로 체크박스 그리기 (선택된 뱃지 배열 전달)
+            Badges.renderCheckboxes('badge-checkboxes', g_badges, data.badges || []);
+            
+            // 이미지 미리보기 처리
+            handleImagePreview('pt', data.logo_url);
+        }
+    } 
+    // 3. 신규 모드
+    else { 
+        document.getElementById('pt-name').value = '';
+        document.getElementById('pt-member-id').value = '';
+        document.getElementById('pt-desc').value = '';
+        document.getElementById('pt-link').value = '';
+        document.getElementById('pt-status').value = 'active';
+        document.getElementById('pt-order').value = 99; // 기본 순서
 
-// 기존 뱃지 체크
-if(data.badges) {
-data.badges.forEach(c => {
-const el = document.getElementById(`badge-chk-${c}`);
-if(el) el.checked = true;
-});
-}
-handleImagePreview('pt', data.logo_url);
-}
-} else { // 신규 모드
-document.getElementById('pt-name').value = '';
-document.getElementById('pt-member-id').value = '';
-document.getElementById('pt-desc').value = '';
-document.getElementById('pt-link').value = '';
-document.getElementById('pt-status').value = 'active';
-document.getElementById('pt-order').value = 99;
-handleImagePreview('pt', null);
-}
+        // ★ [핵심] 공통 함수로 체크박스 그리기 (선택된 것 없음 = 빈 배열)
+        Badges.renderCheckboxes('badge-checkboxes', g_badges, []);
+        
+        handleImagePreview('pt', null);
+    }
 
-document.getElementById('pt-file').value = '';
-new bootstrap.Modal(document.getElementById('partnerModal')).show();
+    document.getElementById('pt-file').value = '';
+    new bootstrap.Modal(document.getElementById('partnerModal')).show();
 }
 // 4. 파트너 저장
 // [3] 저장 함수 (ID 처리 + 공통 파일 함수 사용)
@@ -2496,33 +2490,33 @@ document.getElementById('pt-img-preview').style.display = 'none';
 document.getElementById('pt-img-placeholder').style.display = 'block';
 }
 // 1. 뱃지 목록 불러오기
+// 1. 뱃지 목록 불러오기
 async function fetchBadges() {
-const { data, error } = await _supabase.from('site_badges').select('*').order('display_order');
-if (error) { console.error(error); return; }
+    // [변경] badges.js 공통 함수 사용
+    g_badges = await Badges.getAll(_supabase);
 
-g_badges = data || []; // 전역 변수 업데이트
-const tbody = document.getElementById('badgeListBody');
-if(tbody) { // 뱃지 관리 탭이 있을 때만 그림
-tbody.innerHTML = '';
-g_badges.forEach(b => {
-tbody.innerHTML += `
-               <tr>
-                   <td>${b.display_order}</td>
-                   <td class="fs-4">${b.icon || ''}</td>
-                   <td class="text-start">
-                       <div class="fw-bold text-${b.color}">${b.name}</div>
-                       <div class="small text-muted">${b.description || '-'}</div>
-                   </td>
-                   <td class="small font-monospace">${b.code}</td>
-                   <td><span class="badge bg-${b.color}">${b.color}</span></td>
-                   <td>
-                       <button class="btn btn-sm btn-light" onclick="openBadgeModal('${b.id}')">수정</button>
-                       <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteBadge('${b.id}')">삭제</button>
-                   </td>
-               </tr>
-           `;
-});
-}
+    const tbody = document.getElementById('badgeListBody');
+    if(tbody) { 
+        tbody.innerHTML = '';
+        g_badges.forEach(b => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${b.display_order}</td>
+                    <td class="fs-4">${b.icon || ''}</td>
+                    <td class="text-start">
+                        <div class="fw-bold text-${b.color}">${b.name}</div>
+                        <div class="small text-muted">${b.description || '-'}</div>
+                    </td>
+                    <td class="small font-monospace">${b.code}</td>
+                    <td><span class="badge bg-${b.color}">${b.color}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-light" onclick="openBadgeModal('${b.id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteBadge('${b.id}')">삭제</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
 }
 
 // 2. 뱃지 모달 열기
