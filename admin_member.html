@@ -1241,6 +1241,56 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 </div>
 
+    <div class="modal fade" id="childRegisterModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning bg-opacity-10">
+                <h6 class="modal-title fw-bold">👶 자녀 조합원 등록</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning small py-2 mb-3">
+                    <i class="bi bi-exclamation-circle-fill me-1"></i>
+                    부모 계정에 종속된 가족 회원을 생성합니다. (별도 로그인 불가)
+                </div>
+                
+                <form id="form-child-add">
+                    <div class="mb-2">
+                        <label class="form-label x-small text-muted mb-0">부모(관리자)</label>
+                        <input type="text" id="child-parent-name" class="form-control form-control-sm bg-light" readonly>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">자녀 이름 <span class="text-danger">*</span></label>
+                        <input type="text" id="child-name" class="form-control" placeholder="이름 입력">
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">주민등록번호 <span class="text-danger">*</span></label>
+                        <input type="text" id="child-rrn" class="form-control" placeholder="숫자만 입력 (13자리)" maxlength="14" oninput="autoHyphen(this)">
+                        <div class="form-text x-small">출자금 배당 및 세무 처리를 위해 필수입니다.</div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">연락처 (부모 번호)</label>
+                        <input type="text" id="child-phone" class="form-control" maxlength="13" oninput="autoHyphen(this)">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">주소 (부모 주소)</label>
+                        <input type="text" id="child-address" class="form-control" placeholder="주소 입력">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light p-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm px-4 fw-bold" onclick="saveChildMember()">자녀 등록 완료</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    
 
 
 
@@ -3586,7 +3636,68 @@ alert("다음 단계: 연결할 단체를 검색하는 창을 띄웁니다.");
 // openOrgSearchModal();
 }
 }
+// [신규] 자녀 등록 폼 열기
+function openChildForm() {
+    // 1. 현재 보고 있는 부모 조합원 정보 찾기
+    const parentId = document.getElementById('md-uid').value;
+    const parent = g_members.find(m => m.id === parentId);
 
+    if(!parent) return myAlert('부모 정보를 찾을 수 없습니다.', 'error');
+
+    // 2. 부모 정보 UI에 바인딩
+    document.getElementById('child-parent-name').value = `${parent.name} (${parent.member_id || '-'})`;
+    
+    // 3. 부모 정보 복사 (연락처, 주소) - 편의성 제공
+    document.getElementById('child-phone').value = parent.phone || '';
+    document.getElementById('child-address').value = parent.address || '';
+    
+    // 4. 나머지 초기화
+    document.getElementById('child-name').value = '';
+    document.getElementById('child-rrn').value = '';
+
+    // 5. 모달 열기
+    new bootstrap.Modal(document.getElementById('childRegisterModal')).show();
+}
+
+// [신규] 자녀 저장 실행
+async function saveChildMember() {
+    const parentId = document.getElementById('md-uid').value;
+    const name = document.getElementById('child-name').value.trim();
+    const rrn = document.getElementById('child-rrn').value.replace(/[^0-9]/g, ''); // 숫자만 추출
+    const phone = document.getElementById('child-phone').value;
+    const address = document.getElementById('child-address').value;
+    
+    // 유효성 검사
+    if(!name) return myAlert("자녀 이름을 입력해주세요.", 'warning');
+    if(rrn.length !== 13) return myAlert("주민번호 13자리를 정확히 입력해주세요.", 'warning');
+
+    myConfirm(`${name} 자녀를 등록하시겠습니까?`, async () => {
+        showLoading(true);
+        
+        const params = {
+            p_manager_id: parentId, // 부모 ID 연결
+            p_name: name,
+            p_rrn: rrn,
+            p_phone: phone,
+            p_address: address,
+            p_memo: '자녀 계정 (부모에 의해 생성됨)'
+        };
+
+        const { error } = await _supabase.rpc('create_child_member', params);
+        showLoading(false);
+
+        if(error) {
+            myAlert("등록 실패: " + error.message, 'error');
+        } else {
+            myAlert("자녀 계정이 등록되었습니다.");
+            // 모달 닫기
+            bootstrap.Modal.getInstance(document.getElementById('childRegisterModal')).hide();
+            
+            // TODO: 가족 목록 리스트를 새로고침해야 함 (다음 단계에서 구현)
+            // loadMemberFamily(parentId); 
+        }
+    });
+}
 
 // ================================================================
 // [초기화] 통합 윈도우 로드 함수 (중복 선언 금지)
