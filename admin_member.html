@@ -109,19 +109,28 @@
 <div class="tab-pane fade show active" id="tab-dashboard">
     <h3 class="fw-bold mb-4" style="font-family:'GmarketSans';">운영 대시보드</h3>
     
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card p-3 border-0 shadow-sm h-100 bg-primary bg-opacity-10">
-                <div class="small text-muted fw-bold">총 조합원</div>
-                <div class="fs-2 fw-bold text-primary" id="dash-total">-</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary bg-opacity-10 border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+                <h6 class="text-primary fw-bold mb-2">총 조합원</h6>
+                <h2 class="display-6 fw-bold mb-0" id="dashboard-total-count">0명</h2>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3 border-0 shadow-sm h-100 bg-warning bg-opacity-10 cursor-pointer" onclick="goToPendingMembers()">
-                <div class="small text-muted fw-bold">승인 대기 (클릭)</div>
-                <div class="fs-2 fw-bold text-warning" id="dash-pending">-</div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card bg-warning bg-opacity-10 border-0 shadow-sm h-100" style="cursor:pointer;" onclick="switchTab('members'); document.getElementById('filter-status').value='승인대기'; fetchMembers();">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-warning text-dark fw-bold mb-0">승인 대기 (클릭)</h6>
+                    <i class="bi bi-arrow-right-circle text-warning text-dark"></i>
+                </div>
+                <h2 class="display-6 fw-bold mb-0" id="dashboard-pending-count">0명</h2>
             </div>
         </div>
+    </div>
+</div>
         <div class="col-md-3">
             <div class="card p-3 border-0 shadow-sm h-100 bg-success bg-opacity-10">
                 <div class="small text-muted fw-bold">누적 출자금</div>
