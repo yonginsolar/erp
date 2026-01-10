@@ -1327,7 +1327,7 @@ async function checkAdmin(user) {
         // 초기 탭이 명부라면 로드 안 함(검색 유도), 대시보드라면 로드
         // (fetchMembers()를 무조건 호출하던 기존 로직을 존중하되, 
         //  아까 변경한 탭 로직과 충돌나지 않게 탭 상태를 보고 결정하거나 일단 호출)
-        fetchMembers(); 
+      //  fetchMembers(); 
 
     } else {
         // 권한 없음 처리
@@ -2721,35 +2721,32 @@ function animateNumber(id, target, isMoney = false) {
 // [수정] 탭 전환 함수 (모든 탭 ID 매칭 보장)
 // 기존 switchTab 함수를 찾아서 이 부분만 바꾸거나 함수 전체를 교체하세요.
 
+// [수정] 탭 전환 함수 (자동 로드 제거 -> 초기화 화면 호출)
 function switchTab(tabName) {
-    // [수정 전] const panes = document.querySelectorAll('.tab-pane'); (모달 탭까지 다 죽임)
-    
-    // [수정 후] 메인 컨텐츠 바로 아래에 있는 탭만 선택 (모달 내부 탭은 건드리지 않음)
+    // 1. 탭 숨김 처리 (기존 코드 유지)
     const panes = document.querySelectorAll('.main-content > .tab-pane'); 
-    
-    panes.forEach(el => {
-        el.classList.remove('show', 'active');
-        el.style.display = 'none'; 
-    });
+    panes.forEach(el => { el.classList.remove('show', 'active'); el.style.display = 'none'; });
 
+    // 2. 탭 보임 처리 (기존 코드 유지)
     const target = document.getElementById('tab-' + tabName);
-    if (target) {
-        target.style.display = 'block';
-        setTimeout(() => target.classList.add('show', 'active'), 10);
-    }
+    if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('show', 'active'), 10); }
 
-    // 사이드바 버튼 활성화 로직
+    // 3. 네비게이션 활성화 (기존 코드 유지)
     document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
     const navBtn = document.getElementById('nav-' + tabName);
     if(navBtn) navBtn.classList.add('active');
 
-    // 데이터 로드 연결
-    if (tabName === 'dashboard') loadDashboard();
-    else if (tabName === 'members') fetchMembers();
-    else if (tabName === 'notices') fetchNotices();
-    
-    // [수정 2번 관련] 사이트 컨텐츠 누르면 데이터 불러오기 추가
-    else if (tabName === 'site') fetchSections(); 
+    // 4. ★ 데이터 로드 로직 변경 (핵심)
+    if (tabName === 'dashboard') {
+        loadDashboard();
+    } 
+    else if (tabName === 'members') {
+        // fetchMembers();  <-- [삭제] 이제 자동으로 안 불러옵니다.
+        renderEmptyState(); // [신규] "검색 조건을 입력하세요" 화면 띄우기
+    }
+    else if (tabName === 'notices') {
+        fetchNotices();
+    }
 }
 
 // [수정 2] 대시보드 로드 (애니메이션 제거 -> 즉시 표시)
@@ -2897,6 +2894,28 @@ function renderMemberTable(list) {
             </tr>
         `;
     });
+}
+
+        // [신규] 조합원 명부 초기 상태 (검색 유도 화면)
+function renderEmptyState() {
+    const tbody = document.getElementById('memberListBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" class="text-center py-5">
+                <div class="text-muted">
+                    <i class="bi bi-search display-4"></i>
+                    <p class="mt-3 mb-0 fw-bold">조합원 검색</p>
+                    <small>상단 필터를 선택하거나 이름을 입력하고 '검색'을 눌러주세요.</small>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // (선택사항) 검색창 비워주기
+    const keywordInput = document.getElementById('search-keyword');
+    if(keywordInput) keywordInput.value = '';
 }
 
 // ================================================================
