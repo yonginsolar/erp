@@ -2966,7 +2966,7 @@ function searchAddress() {
     }).open();
 }
 
-// [수정] 기본 정보 저장 (마스킹 된 계좌번호/주민번호 보호 로직 추가)
+// [수정] 저장 후 리스트 강제 갱신 로직 보강
 async function saveMemberBasic() {
     myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
         // 1. 주소 합치기
@@ -2974,9 +2974,8 @@ async function saveMemberBasic() {
         const detailAddr = document.getElementById('md-addr-detail').value;
         const finalAddr = detailAddr ? `${basicAddr} ${detailAddr}` : basicAddr;
 
-        // 2. 계좌번호 안전장치 (중요!)
+        // 2. 계좌번호 안전장치 (* 포함 시 전송 안 함)
         let bankAcc = document.getElementById('md-bank-account').value;
-        // 화면에 ***가 포함되어 있다면, 사용자가 수정한 게 아니므로 DB에 보내지 않음 (기존 값 유지)
         if (bankAcc && bankAcc.includes('*')) {
             bankAcc = null; 
         }
@@ -2988,9 +2987,7 @@ async function saveMemberBasic() {
             p_address: finalAddr,
             p_bank_name: document.getElementById('md-bank-name').value,
             p_bank_owner: document.getElementById('md-bank-owner').value,
-            
-            p_bank_account: bankAcc, // ★ 수정된 안전한 값 전송 (null이면 DB가 업데이트 건너뜀)
-            
+            p_bank_account: bankAcc,
             p_status: document.getElementById('md-status').value,
             p_member_type: document.getElementById('md-type').value,
             p_admin_memo: document.getElementById('md-memo').value,
@@ -3004,8 +3001,14 @@ async function saveMemberBasic() {
         if (error) myAlert('저장 실패: ' + error.message, 'error');
         else {
             myAlert('저장되었습니다.');
+            
+            // 1. 수정 모드 종료
             toggleEditMode(false); 
-            fetchMembers(); // 목록 갱신 (마스킹 된 값으로 다시 로드됨)
+            
+            // 2. ★ 핵심: 리스트에 변경 사항 즉시 반영 (딜레이 추가로 DB 반영 시간 확보)
+            setTimeout(() => {
+                fetchMembers(); // 전체 목록 새로고침
+            }, 300);
         }
     });
 }
