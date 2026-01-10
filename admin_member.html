@@ -944,25 +944,26 @@
             <label class="form-label small fw-bold text-muted">연락처</label>
             <input type="text" id="md-phone" class="form-control" maxlength="13" oninput="autoHyphen(this)">
         </div>
-<div class="col-md-2">
-    <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
-        <option value="all" selected>상태: 전체</option>
-        <option value="정상">정상 (정조합원)</option>
-        <option value="승인대기">승인 대기</option>
-        <option value="탈퇴">탈퇴/제명</option>
-    </select>
-</div>
-
-<div class="col-md-2">
-    <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
-        <option value="all">유형: 전체</option>
-        <option value="개인">개인</option>
-        <option value="단체">단체</option>
-    </select>
-</div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">상태</label>
+            <select id="md-status" class="form-select">
+                <option value="승인대기">승인 대기</option>
+                <option value="정상">정상 (정조합원)</option>
+                <option value="탈퇴">탈퇴</option>
+                <option value="제명">제명</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">유형</label>
+            <select id="md-type" class="form-select">
+                <option value="개인">개인</option>
+                <option value="단체">단체</option>
+            </select>
+        </div>
+    </div>
 
     <div class="mb-3">
-        <label class="form-label small fw-bold text-muted">생년월일/성별 (주민등록번호)</label>
+        <label class="form-label small fw-bold text-muted">생년월일/성별 (주민/사업자번호)</label>
         <div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
             <span id="md-rrn-view">-</span>
         </div>
@@ -1021,72 +1022,6 @@
         </div>
     </div>
 </div>
-
-                    <div class="tab-pane fade" id="md-tab-funds">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold m-0 text-success">💰 출자금 내역</h6>
-                            <button class="btn btn-sm btn-outline-success" onclick="alert('Phase 3에서 구현: 출자금 수동 추가')">+ 입금 추가</button>
-                        </div>
-                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
-                            <table class="table table-sm table-hover mb-0 text-center small">
-                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>비고</th><th>관리</th></tr></thead>
-                                <tbody id="md-capital-list"></tbody>
-                            </table>
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold m-0 text-primary">🎁 기부금 내역</h6>
-                            <button class="btn btn-sm btn-outline-primary" onclick="alert('Phase 3: 기부금 추가')">+ 기부 추가</button>
-                        </div>
-                        <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
-                            <table class="table table-sm table-hover mb-0 text-center small">
-                                <thead class="table-light sticky-top"><tr><th>날짜</th><th>금액</th><th>유형</th><th>비고</th><th>관리</th></tr></thead>
-                                <tbody id="md-donation-list"></tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="fw-bold text-warning">🪙 포인트/적립금</h6>
-                                <div class="border rounded p-3 text-center bg-light">
-                                    <h4 class="fw-bold mb-0" id="md-point-total">0 P</h4>
-                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 포인트 내역 상세')">내역 보기</button>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="fw-bold text-info">💵 미지급 배당금</h6>
-                                <div class="border rounded p-3 text-center bg-light">
-                                    <h4 class="fw-bold mb-0" id="md-dividend-total">0 원</h4>
-                                    <button class="btn btn-sm btn-link text-decoration-none" onclick="alert('Phase 3: 배당금 지급 처리')">지급 처리</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="tab-pane fade" id="md-tab-family">
-                        <div class="alert alert-light border small">
-                            <i class="bi bi-info-circle"></i> 이 조합원이 관리하는 <strong>가족(자녀)</strong>이나 <strong>단체</strong> 목록입니다.
-                        </div>
-                        <div class="d-flex justify-content-end mb-2">
-                            <button class="btn btn-sm btn-outline-dark" onclick="alert('Phase 3: 자녀 계정 생성')">+ 자녀 계정 추가</button>
-                        </div>
-                        <table class="table table-bordered text-center align-middle">
-                            <thead class="table-light"><tr><th>관계</th><th>이름</th><th>생년월일</th><th>상태</th><th>관리</th></tr></thead>
-                            <tbody id="md-family-list">
-                                <tr><td colspan="5" class="text-muted small py-3">연결된 가족/단체가 없습니다.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="tab-pane fade" id="md-tab-consult">
-                        <div class="input-group mb-3">
-                            <input type="text" id="md-consult-input" class="form-control" placeholder="상담/통화 내용을 입력하세요 (예: 계좌번호 변경 요청)">
-                            <button class="btn btn-dark" onclick="addConsultLog()">등록</button>
-                        </div>
-                        <div class="list-group list-group-flush border rounded overflow-auto" style="max-height: 400px;" id="md-consult-list">
-                            </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
