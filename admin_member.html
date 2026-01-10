@@ -3126,8 +3126,11 @@ document.getElementById('md-sns-status').innerHTML = snsHtml || '<span class="te
 toggleEditMode(false);
 
 // 하위 데이터 로드
-loadMemberFunds(m.id, m.member_id, true);
-loadConsultLogs(m.id);
+loadMemberFunds(m.id, m.member_id, true);    // 자금 내역
+loadConsultLogs(m.id);                        // 상담 이력
+
+    // ★ [추가/활성화] 가족 목록 로드
+    loadMemberFamily(m.id);
 
 new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
@@ -3321,9 +3324,70 @@ loadConsultLogs(null);
 // 5. 자금 로드 (출자금, 기부금 등) - Phase 2에서는 '조회' 위주
 
 
-// 6. 가족 로드 (Placeholder)
-async function loadMemberFamily(uuid) {
-// Phase 3: manager_id 또는 rep_uuid로 연결된 계정 조회 로직 구현
+// [신규] 가족/단체 목록 로드 (내가 관리자인 계정 조회)
+async function loadMemberFamily(parentId) {
+    const tbody = document.getElementById('md-family-list');
+    if (!tbody) return;
+
+    // 1. 로딩 표시
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+
+    // 2. DB 조회 (manager_id가 현재 보고 있는 조합원인 경우)
+    // 뷰에는 manager_id가 없을 수 있으므로 원본 테이블을 조회합니다.
+    const { data: familyList, error } = await _supabase
+        .from('coop_members')
+        .select('id, name, rrn_display, status, member_type, join_category, join_date')
+        .eq('manager_id', parentId)
+        .order('join_date', { ascending: false });
+
+    if (error) {
+        console.error("가족 목록 로드 실패:", error);
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger small py-3">데이터 로드 실패</td></tr>';
+        return;
+    }
+
+    // 3. 데이터 없음 처리
+    if (!familyList || familyList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">연결된 가족이나 단체가 없습니다.</td></tr>';
+        return;
+    }
+
+    // 4. 목록 렌더링
+    tbody.innerHTML = '';
+    
+    familyList.forEach(m => {
+        // 구분 뱃지 (자녀 vs 단체)
+        let typeBadge = '<span class="badge bg-secondary">기타</span>';
+        if (m.member_type === '단체') {
+            typeBadge = '<span class="badge bg-info">🏢 단체</span>';
+        } else if (m.join_category === '가족') {
+            typeBadge = '<span class="badge bg-warning text-dark">👶 자녀</span>';
+        }
+
+        // 주민번호/사업자번호 표시
+        const idNum = m.rrn_display || '-';
+
+        // 상태 뱃지
+        let statusClass = 'bg-success';
+        if (m.status === '승인대기') statusClass = 'bg-danger';
+        else if (m.status === '탈퇴') statusClass = 'bg-secondary';
+        
+        const statusBadge = `<span class="badge ${statusClass}">${m.status}</span>`;
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${typeBadge}</td>
+                <td class="fw-bold">${m.name}</td>
+                <td class="small font-monospace">${idNum}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    <button class="btn btn-xs btn-outline-dark border" onclick="openMemberDetail('${m.id}')">
+                        상세보기
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
 }
 
 // ================================================================
