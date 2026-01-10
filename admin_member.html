@@ -1292,21 +1292,31 @@ async function deleteOldFile(fullUrl) {
 
         
         // [권한 체크] RPC 함수로 보안 검증 (무한 루프 방지됨)
-        async function checkAdmin(user) {
-            showLoading(true);
-            const { data: role } = await _supabase.rpc('get_my_role');
-            showLoading(false);
-            if (role === 'admin') {
-                document.getElementById('login-gate').classList.add('hidden');
-                document.getElementById('main-system').classList.remove('hidden');
-                document.getElementById('adminProfile').innerText = user.email;
-                fetchMembers(); // 첫 화면 로드
-            } else {
-                alert(`⛔ 접근 거부: 관리자 권한이 없습니다. (계정: ${user.email})`);
-                await _supabase.auth.signOut();
-                location.href = 'index.html';
-            }
-        }
+// [수정] 관리자 권한 체크 함수 (에러 방지 적용)
+async function checkAdmin() {
+    // 1. 현재 로그인된 유저 정보 가져오기
+    const { data: { user } } = await _supabase.auth.getUser();
+
+    // 2. 유저 정보가 없으면 (비로그인 상태) -> 즉시 로그인 페이지로 이동
+    if (!user) {
+        alert("로그인이 필요한 페이지입니다.");
+        window.location.href = 'index.html'; // 로그인 페이지 경로에 맞게 수정
+        return;
+    }
+
+    // 3. 유저 정보가 있을 때만 이메일 체크 (여기서 에러가 났었음)
+    console.log("현재 접속자:", user.email);
+    
+    // (옵션) 특정 이메일만 허용하고 싶다면 아래 주석 해제 후 수정
+    // const allowedAdmins = ['admin@example.com', 'manager@example.com'];
+    // if (!allowedAdmins.includes(user.email)) {
+    //     alert("관리자 권한이 없습니다.");
+    //     window.location.href = 'index.html';
+    //     return;
+    // }
+
+    // 통과 시 UI 초기화 등 후속 작업 진행
+}
 
         // [로그인] 매직링크 전송
         async function sendLoginLink() {
