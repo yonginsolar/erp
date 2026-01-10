@@ -2750,19 +2750,36 @@ function switchTab(tabName) {
 }
 
 // [수정 2] 대시보드 로드 (애니메이션 제거 -> 즉시 표시)
+// [수정] 대시보드 통계 로드 (한글 상태값 대응)
 async function loadDashboard() {
-    const { data, error } = await _supabase.rpc('get_dashboard_stats');
-    
-    if (error) {
-        console.error("대시보드 로드 실패:", error);
+    // 1. 총 조합원 수 (전체 카운트)
+    const { count: totalCount, error: err1 } = await _supabase
+        .from('coop_members')
+        .select('*', { count: 'exact', head: true }); // 데이터 안 가져오고 숫자만 셈
+
+    // 2. 승인 대기 수 (조건: status = '승인대기')
+    const { count: pendingCount, error: err2 } = await _supabase
+        .from('coop_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', '승인대기'); // ★ 영어 'pending'을 한글로 수정
+
+    if (err1 || err2) {
+        console.error("대시보드 로드 실패:", err1 || err2);
         return;
     }
 
-    // 애니메이션 없이 바로 텍스트 꽂아넣기
-    document.getElementById('dash-total').innerText = data.total_members + '명';
-    document.getElementById('dash-pending').innerText = data.pending_members + '명';
-    document.getElementById('dash-capital').innerText = data.total_capital.toLocaleString() + '원';
-    document.getElementById('dash-consult').innerText = data.today_consults + '건';
+    // 3. UI 업데이트 (숫자 애니메이션 효과는 선택사항, 여기선 단순 표시)
+    document.querySelector('#dashboard-total-count').innerText = (totalCount || 0) + '명';
+    
+    const pendingEl = document.querySelector('#dashboard-pending-count');
+    pendingEl.innerText = (pendingCount || 0) + '명';
+    
+    // 승인 대기가 있으면 빨간색 강조
+    if (pendingCount > 0) {
+        pendingEl.classList.add('text-danger', 'fw-bold');
+    } else {
+        pendingEl.classList.remove('text-danger', 'fw-bold');
+    }
 }
 
 
