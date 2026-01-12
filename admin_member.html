@@ -2981,6 +2981,11 @@ function renderMemberTable(list) {
     return;
   }
 
+  // onclick용 문자열 안전 처리 (작은따옴표/백슬래시 깨짐 방지)
+  const escForOnclick = (v) => String(v ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+
   list.forEach((m, idx) => {
     const type = m.member_type || m.type || '-';
     const name = m.name || '-';
@@ -3002,14 +3007,18 @@ function renderMemberTable(list) {
       (status === '탈퇴' || status === '제명') ? 'bg-secondary' :
       'bg-light text-dark border';
 
-    // 상세 모달 함수가 있으면 우선 사용, 없으면 기존 수정 모달로 fallback
+    // 상세 모달 키
     const keyForDetail = m.member_uid || m.uid || m.id || memberId;
 
-    const detailBtn = (typeof openMemberDetail === 'function')
-      ? `<button class="btn btn-sm btn-primary" onclick="openMemberDetail('${keyForDetail}')">상세</button>`
-      : `<button class="btn btn-sm btn-primary" onclick="openMemberEdit(${JSON.stringify(m.id)})">수정</button>`;
+    // ✅ 핵심 수정: onclick 인자에 JSON.stringify 쓰지 말고 '...'로 감싸기
+    const safeDetailKey = escForOnclick(keyForDetail);
+    const safeEditId = escForOnclick(m.id);
 
-    const editBtn = `<button class="btn btn-sm btn-light ms-1" onclick="openMemberEdit(${JSON.stringify(m.id)})">수정</button>`;
+    const detailBtn = (typeof openMemberDetail === 'function')
+      ? `<button class="btn btn-sm btn-primary" onclick="openMemberDetail('${safeDetailKey}')">상세</button>`
+      : `<button class="btn btn-sm btn-primary" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
+
+    const editBtn = `<button class="btn btn-sm btn-light ms-1" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
 
     tbody.innerHTML += `
       <tr>
@@ -3033,6 +3042,7 @@ function renderMemberTable(list) {
     `;
   });
 }
+
 
 
 // [신규] 조합원 명부 초기 상태 (검색 유도 화면)
