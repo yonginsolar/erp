@@ -1700,26 +1700,6 @@ document.getElementById('hist-date').value = new Date().toISOString().substring(
 new bootstrap.Modal(document.getElementById('historyModal')).show();
 }
 
-// [수정] 연혁 저장 (텍스트를 -> 예쁜 HTML로 변환해서 저장)
-// [수정] 연혁 모달 열기 (있는 그대로 불러오기)
-async function openHistoryModal(id) {
-document.getElementById('hist-id').value = id || '';
-
-if(id) {
-const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
-if(data) {
-document.getElementById('hist-date').value = data.event_date;
-document.getElementById('hist-title').value = data.title;
-document.getElementById('hist-content').value = data.content || ''; // 변환 없이 그대로 로드
-}
-} else {
-// 신규
-document.getElementById('hist-title').value = '';
-document.getElementById('hist-content').value = '';
-document.getElementById('hist-date').value = new Date().toISOString().substring(0, 10);
-}
-new bootstrap.Modal(document.getElementById('historyModal')).show();
-}
 
 // [수정] 연혁 저장 (있는 그대로 저장하기)
 async function saveHistory() {
@@ -1871,26 +1851,6 @@ document.getElementById('admin-about-img').value = data.image_url || '';
 }
 }
 
-// [누락된 함수 복구] 소개글 저장하기
-async function saveAboutSettings() {
-const updates = {
-p_title: document.getElementById('admin-about-title').value,
-p_subtitle: document.getElementById('admin-about-subtitle').value,
-p_content: document.getElementById('admin-about-content').value,
-p_list_items: document.getElementById('admin-about-list').value,
-p_image_url: document.getElementById('admin-about-img').value
-};
-
-showLoading(true);
-const { error } = await _supabase.rpc('upsert_about_secure', updates);
-showLoading(false);
-
-if(error) alert('저장 실패: ' + error.message);
-else {
-alert('저장되었습니다.');
-fetchAboutSettings(); // 저장 후 다시 불러오기
-}
-}
 
 
 
@@ -2012,19 +1972,7 @@ updateProgressLabel(val);
 
 
 // [신규] 스토리지에서 실제 파일 삭제하는 함수
-async function deleteOldFile(fullUrl) {
-if (!fullUrl) return;
-try {
-// URL에서 파일 경로만 추출 (예: .../assets/plants/abc.jpg -> plants/abc.jpg)
-const path = fullUrl.split('/assets/')[1]; 
-if (path) {
-await _supabase.storage.from('assets').remove([path]);
-console.log("삭제된 파일:", path);
-}
-} catch (e) {
-console.error("파일 삭제 중 오류:", e);
-}
-}
+
 
 // [신규] 사진 삭제 버튼 클릭 시 (화면에서만 먼저 지움)
 function clearPlantImage() {
@@ -2689,41 +2637,55 @@ fetchFaqs();
 
 // 4. 삭제 요청
 function askDeleteFaq(id) {
-confirmWithModal('faq', id);
+  deleteType = 'faq';
+  document.getElementById('delete-target-id').value = id;
+  document.getElementById('btn-real-delete').onclick = confirmDelete;
+  new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
 }
+
 
 // ================================================================
 // [수정] 통합 삭제 함수에 FAQ 추가 (기존 confirmDelete 교체)
 // ================================================================
 async function confirmDelete() {
-const id = document.getElementById('delete-target-id').value;
-const modalEl = document.getElementById('deleteConfirmModal');
-bootstrap.Modal.getInstance(modalEl).hide();
+  const id = document.getElementById('delete-target-id').value;
 
-showLoading(true);
+  const modalEl = document.getElementById('deleteConfirmModal');
+  const inst = bootstrap.Modal.getInstance(modalEl);
+  if (inst) inst.hide();
 
-let rpcName = '';
-// 삭제 타입 분기 처리
-if (deleteType === 'history') rpcName = 'delete_document_secure';
-else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
-else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
-else if (deleteType === 'badge') rpcName = 'delete_badge_secure';
-else if (deleteType === 'faq') rpcName = 'delete_faq_secure'; // ★ 추가됨
+  showLoading(true);
 
-const { error } = await _supabase.rpc(rpcName, { p_id: id });
-showLoading(false);
+  let rpcName = '';
+  if (deleteType === 'history') rpcName = 'delete_document_secure';
+  else if (deleteType === 'plant') rpcName = 'delete_plant_secure';
+  else if (deleteType === 'partner') rpcName = 'delete_partner_secure';
+  else if (deleteType === 'badge') rpcName = 'delete_badge_secure';
+  else if (deleteType === 'faq') rpcName = 'delete_faq_secure';
 
-if (error) {
-alert('삭제 실패: ' + error.message);
-} else {
-// 목록 새로고침
-if (deleteType === 'history') fetchHistory();
-else if (deleteType === 'plant') fetchPlants();
-else if (deleteType === 'partner') fetchPartners();
-else if (deleteType === 'badge') fetchBadges();
-else if (deleteType === 'faq') fetchFaqs(); // ★ 추가됨
+  // ★ 방어: 분기 누락 시 중단
+  if (!rpcName) {
+    showLoading(false);
+    alert('삭제 타입이 정의되지 않았습니다. (deleteType 확인 필요)');
+    return;
+  }
+
+  const { error } = await _supabase.rpc(rpcName, { p_id: id });
+  showLoading(false);
+
+  if (error) {
+    alert('삭제 실패: ' + error.message);
+    return;
+  }
+
+  // 목록 새로고침
+  if (deleteType === 'history') fetchHistory();
+  else if (deleteType === 'plant') fetchPlants();
+  else if (deleteType === 'partner') fetchPartners();
+  else if (deleteType === 'badge') fetchBadges();
+  else if (deleteType === 'faq') fetchFaqs();
 }
-}
+
 // ================================================================
 // [기능 0] 대시보드 로드 및 유틸
 // ================================================================
@@ -2731,16 +2693,17 @@ else if (deleteType === 'faq') fetchFaqs(); // ★ 추가됨
 
 // 승인 대기 카드 클릭 시 조합원 탭으로 이동
 function goToPendingMembers() {
-// 탭 전환
-const tabTrigger = new bootstrap.Tab(document.querySelector('[href="#tab-members"]'));
-tabTrigger.show();
+  // 이 페이지는 Bootstrap Tab이 아니라 switchTab 기반
+  switchTab('members');
 
-// 필터 변경 후 목록 조회
-setTimeout(() => {
-document.getElementById('filter-status').value = '승인대기';
-fetchMembers();
-}, 200);
+  // 필터 적용 후 조회
+  setTimeout(() => {
+    const statusEl = document.getElementById('filter-status');
+    if (statusEl) statusEl.value = '승인대기';
+    fetchMembers();
+  }, 80);
 }
+
 
 // 숫자 애니메이션 효과 함수
 function animateNumber(id, target, isMoney = false) {
@@ -2954,93 +2917,91 @@ async function fetchMembers() {
 // [수정] 테이블 렌더링 (한글 상태값 완벽 대응)
 // [수정] 테이블 렌더링 (주소 컬럼 제거 & 관리 버튼 추가 & 정렬 수정)
 function renderMemberTable(list) {
-    const tbody = document.getElementById('memberListBody');
-    tbody.innerHTML = '';
+  const tbody = document.getElementById('memberListBody');
+  if (!tbody) return;
 
-    // 데이터가 없을 때
-    if(list.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center py-5">
-                    <div class="text-muted">
-                        <i class="bi bi-search display-6"></i>
-                        <p class="mt-3 mb-0">조건에 맞는 조합원이 없습니다.</p>
-                    </div>
-                </td>
-            </tr>`;
-        return;
-    }
+  tbody.innerHTML = '';
 
-    list.forEach((m, idx) => {
-        // 1. 유형 뱃지
-        let typeBadge = '<span class="badge bg-secondary">개인</span>';
-        if (m.member_type === '단체') {
-            typeBadge = '<span class="badge bg-info">단체</span>';
-        }
+  if (!Array.isArray(list) || list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-muted py-5">
+          검색 결과가 없습니다.
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
-        // 2. 상태 뱃지
-        let statusBadge = '<span class="badge bg-success">정상</span>';
-        if (m.status === '승인대기') statusBadge = '<span class="badge bg-danger">승인대기</span>';
-        else if (m.status === '탈퇴') statusBadge = '<span class="badge bg-secondary">탈퇴</span>';
-        else if (m.status === '제명') statusBadge = '<span class="badge bg-dark">제명</span>';
+  list.forEach((m, idx) => {
+    const type = m.member_type || m.type || '-';
+    const name = m.name || '-';
+    const memberId = m.member_id || '';
+    const phone = m.phone || '-';
 
-        // 3. 가입일
-        let joinDate = '-';
-        if (m.join_date) joinDate = m.join_date;
-        else if (m.created_at) joinDate = m.created_at.split('T')[0];
+    const joinRaw = m.join_date || m.created_at || '';
+    const joinDate = (typeof joinRaw === 'string' && joinRaw.includes('T'))
+      ? joinRaw.split('T')[0]
+      : (joinRaw || '-');
 
-        // 4. 출자금
-        const capital = m.total_capital ? Number(m.total_capital).toLocaleString() + '원' : '0원';
+    const status = m.status || '-';
+    const totalCapital = Number(m.total_capital || 0);
+    const capitalText = totalCapital.toLocaleString() + '원';
 
-        // 5. 행 그리기 (컬럼 순서: 번호 | 유형 | 이름 | 연락처 | 가입일/상태 | 출자금 | 관리)
-        tbody.innerHTML += `
-            <tr style="cursor:pointer;" onclick="openMemberDetail('${m.id}')">
-                <td class="text-center">${idx + 1}</td>
-                <td class="text-center">${typeBadge}</td>
-                <td class="fw-bold text-start ps-4">
-                    ${m.name} 
-                    <br><span class="text-muted small">${m.member_id || '-'}</span>
-                </td>
-                <td class="text-center">${m.phone || '-'}</td>
-                
-                <td class="text-center">
-                    <div>${joinDate}</div>
-                    <div class="mt-1">${statusBadge}</div>
-                </td>
-                
-                <td class="text-end fw-bold text-primary pe-4">${capital}</td>
-                
-                <td class="text-center" onclick="event.stopPropagation()">
-                    <button class="btn btn-sm btn-light border" onclick="openMemberDetail('${m.id}')">
-                        상세
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
+    const statusBadgeClass =
+      status === '승인대기' ? 'bg-warning text-dark' :
+      status === '정상' ? 'bg-success' :
+      (status === '탈퇴' || status === '제명') ? 'bg-secondary' :
+      'bg-light text-dark border';
+
+    // 상세 모달 함수가 있으면 우선 사용, 없으면 기존 수정 모달로 fallback
+    const keyForDetail = m.member_uid || m.uid || m.id || memberId;
+
+    const detailBtn = (typeof openMemberDetail === 'function')
+      ? `<button class="btn btn-sm btn-primary" onclick="openMemberDetail('${keyForDetail}')">상세</button>`
+      : `<button class="btn btn-sm btn-primary" onclick="openMemberEdit(${JSON.stringify(m.id)})">수정</button>`;
+
+    const editBtn = `<button class="btn btn-sm btn-light ms-1" onclick="openMemberEdit(${JSON.stringify(m.id)})">수정</button>`;
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${type}</td>
+        <td class="text-start">
+          <div class="fw-bold">${name}</div>
+          <div class="small text-muted">${memberId ? '(' + memberId + ')' : ''}</div>
+        </td>
+        <td>${phone}</td>
+        <td>
+          <div class="small">${joinDate}</div>
+          <span class="badge ${statusBadgeClass}">${status}</span>
+        </td>
+        <td class="fw-bold">${capitalText}</td>
+        <td>
+          ${detailBtn}
+          ${editBtn}
+        </td>
+      </tr>
+    `;
+  });
 }
+
 
 // [신규] 조합원 명부 초기 상태 (검색 유도 화면)
 function renderEmptyState() {
-const tbody = document.getElementById('memberListBody');
-if (!tbody) return;
+  const tbody = document.getElementById('memberListBody');
+  if (!tbody) return;
 
-tbody.innerHTML = `
-       <tr>
-           <td colspan="7" class="text-center py-5">
-               <div class="text-muted">
-                   <i class="bi bi-search display-4"></i>
-                   <p class="mt-3 mb-0 fw-bold">조합원 검색</p>
-                   <small>상단 필터를 선택하거나 이름을 입력하고 '검색'을 눌러주세요.</small>
-               </div>
-           </td>
-       </tr>
-   `;
-
-// (선택사항) 검색창 비워주기
-const keywordInput = document.getElementById('search-keyword');
-if(keywordInput) keywordInput.value = '';
+  g_members = [];
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="7" class="text-center text-muted py-5">
+        🔎 검색 조건을 입력하고 <b>검색</b>을 눌러주세요.
+      </td>
+    </tr>
+  `;
 }
+
 
 // ================================================================
 // [기능 2] 조합원 상세 관리 (슈퍼 모달)
