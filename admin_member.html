@@ -2843,121 +2843,126 @@ async function loadDashboard() {
 }
 
 
-// [교체] 조합원 검색/목록 로드: view_member_list 대신 coop_members 사용 (DB 수정 없음)
+// [수정] 조합원 검색/목록 로드: DB 뷰(view_my_assets) 활용 최적화
 async function fetchMembers() {
-  // ✅ 아래 input id들은 "있으면" 사용하고, 없으면 그냥 공백으로 처리합니다.
-  const $ = (id) => document.getElementById(id);
+    // ✅ DOM 요소 단축 선택자
+    const $ = (id) => document.getElementById(id);
 
-  const keyword =
-    ($('searchKeyword')?.value || $('memberSearchKeyword')?.value || $('keyword')?.value || '').trim();
+    // 1. 검색 조건 수집
+    const keyword =
+        ($('search-keyword')?.value || $('memberSearchKeyword')?.value || '').trim();
+    
+    // 필터 값 수집 (없으면 기본값 처리)
+    const statusEl = $('filter-status') || $('searchStatus');
+    const typeEl = $('filter-type') || $('searchType');
+    const sortEl = $('sort-order');
 
-  const name =
-    ($('searchName')?.value || $('memberSearchName')?.value || '').trim();
+    const status = statusEl ? statusEl.value : 'all';
+    const type = typeEl ? typeEl.value : 'all';
+    const sort = sortEl ? sortEl.value : 'name'; // 정렬 기준 (기본 이름순)
 
-  const memberId =
-    ($('searchMemberId')?.value || $('memberSearchId')?.value || '').trim();
+    try {
+        if (typeof showLoading === 'function') showLoading(true);
 
-  const phone =
-    ($('searchPhone')?.value || $('memberSearchPhone')?.value || '').trim();
+        // 2. coop_members 기본 조회 (필터링)
+        let q = _supabase
+            .from('coop_members')
+            .select([
+                'id',               // UUID (매칭용)
+                'member_id',        // 텍스트 ID
+                'name',
+                'member_type',
+                'phone',
+                'status',
+                'join_date',
+                'created_at',
+                'address',
+                'rrn_display',
+                'bank_name',
+                'account_holder',
+                'account_num_display',
+                'admin_memo',
+                'kakao_id',
+                'naver_id',
+                'join_category',
+                'manager_id'
+            ].join(','));
 
-  const status =
-    ($('searchStatus')?.value || $('memberSearchStatus')?.value || '').trim();
+        // 2-1. 필터 및 정렬 적용
+        if (status && status !== 'all') q = q.eq('status', status);
+        if (type && type !== 'all') q = q.eq('member_type', type);
 
-  const type =
-    ($('searchType')?.value || $('memberSearchType')?.value || '').trim();
+        // 통합 키워드 검색 (이름, 전화번호, 조합원번호 OR 검색)
+        if (keyword) {
+            q = q.or(`member_id.ilike.%${keyword}%,name.ilike.%${keyword}%,phone.ilike.%${keyword}%`);
+        }
 
-  try {
-    if (typeof showLoading === 'function') showLoading(true);
+        // 정렬 조건 적용
+        if (sort === 'join_date') q = q.order('join_date', { ascending: false });
+        else if (sort === 'capital') { /* 출자금 정렬은 아래 병합 후 처리 필요하지만 일단 기본 정렬 */ }
+        else q = q.order('name', { ascending: true }); // 기본: 이름순
 
-    // ✅ 관리자 명부는 coop_members에서 직접 가져옵니다 (view_member_list는 다른 화면에서 그대로 사용)
-    let q = _supabase
-      .from('coop_members')
-      .select([
-        'id',
-        'member_id',
-        'name',
-        'member_type',
-        'phone',
-        'status',
-        'join_date',
-        'created_at',
-        'address',
-        'rrn_display',
-        'bank_name',
-        'account_holder',
-        'account_num_display', // 마스킹 표시용(있으면)
-        'admin_memo',
-        'kakao_id',
-        'naver_id',
-        'join_category',
-        'manager_id'
-      ].join(','))
-      .order('created_at', { ascending: false });
+        const { data: members, error } = await q;
+        if (error) throw error;
 
-    // 개별 필터 (있을 때만 적용)
-    if (memberId) q = q.ilike('member_id', `%${memberId}%`);
-    if (name) q = q.ilike('name', `%${name}%`);
-    if (phone) q = q.ilike('phone', `%${phone}%`);
-    if (status && status !== 'all') q = q.eq('status', status);
-    if (type && type !== 'all') q = q.eq('member_type', type);
+        const list = Array.isArray(members) ? members : [];
 
-    // 통합 키워드(선택): 이름/조합원번호/전화번호에서 OR 검색
-    if (keyword) {
-      q = q.or(`member_id.ilike.%${keyword}%,name.ilike.%${keyword}%,phone.ilike.%${keyword}%`);
+        // 3. [최적화 핵심] view_my_assets를 통한 출자금 조회
+        // 조회된 멤버들의 UUID만 추출
+        const memberUids = list.map(m => m.id).filter(Boolean);
+        let capitalMap = {};
+
+        if (memberUids.length > 0) {
+            // ★ 수정됨: ref_members 전체 조회 -> view_my_assets 요약 조회
+            const { data: assets, error: assetErr } = await _supabase
+                .from('view_my_assets')
+                .select('member_uid, total_capital') // 필요한 컬럼만
+                .in('member_uid', memberUids);       // 검색된 조합원들만 조회
+
+            if (!assetErr && assets) {
+                // UUID를 키(Key)로 하는 맵 생성 { "uuid-123": 500000, ... }
+                assets.forEach(row => {
+                    capitalMap[row.member_uid] = Number(row.total_capital || 0);
+                });
+            } else if (assetErr) {
+                console.warn('자산 뷰 조회 실패(출자금 0으로 표시):', assetErr);
+            }
+        }
+
+        // 4. 데이터 병합 (Members + Capital)
+        g_members = list.map(m => ({
+            ...m,
+            // 맵에서 UUID로 찾아 매칭 (없으면 0원)
+            total_capital: capitalMap[m.id] || 0,
+            account_number: m.account_num_display || null
+        }));
+
+        // (옵션) 만약 정렬 기준이 '출자금순'이라면 JS 레벨에서 재정렬
+        if (sort === 'capital') {
+            g_members.sort((a, b) => b.total_capital - a.total_capital);
+        }
+
+        // 5. 화면 렌더링
+        if (!g_members.length) {
+             // 검색 결과 없음 or 초기 상태
+             if (typeof renderMemberTable === 'function') renderMemberTable([]); 
+             // 또는 renderEmptyState(); 사용 가능
+             return;
+        }
+
+        renderMemberTable(g_members);
+
+    } catch (err) {
+        console.error(err);
+        // Alert 대신 모달 사용 권장 (기존 myAlert 함수가 있다면)
+        if (typeof myAlert === 'function') {
+            myAlert('데이터를 불러오지 못했습니다: ' + (err?.message || err), 'error');
+        } else {
+            alert('데이터 로드 에러: ' + (err?.message || err));
+        }
+    } finally {
+        if (typeof showLoading === 'function') showLoading(false);
     }
-
-    const { data: members, error } = await q;
-    if (error) throw error;
-
-    const list = Array.isArray(members) ? members : [];
-
-    // ✅ total_capital(출자금 합계) 붙이기: ref_members를 한 번에 가져와 JS로 합산 (DB 수정 없음)
-    const memberIds = [...new Set(list.map(m => m.member_id).filter(Boolean))];
-    let capitalMap = {};
-
-    if (memberIds.length) {
-      const { data: funds, error: fundErr } = await _supabase
-        .from('ref_members')
-        .select('member_id, amount')
-        .in('member_id', memberIds);
-
-      if (!fundErr && Array.isArray(funds)) {
-        capitalMap = funds.reduce((acc, row) => {
-          const k = row.member_id;
-          const v = Number(row.amount || 0);
-          acc[k] = (acc[k] || 0) + v;
-          return acc;
-        }, {});
-      } else if (fundErr) {
-        console.warn('출자금 합계 조회 실패(표시는 0으로):', fundErr);
-      }
-    }
-
-    // ✅ 전역 g_members에 반영 + 화면 렌더링
-    g_members = list.map(m => ({
-      ...m,
-      total_capital: capitalMap[m.member_id] || 0,
-      // 기존 코드가 m.account_number를 기대할 수 있어서 안전하게 매핑
-      account_number: m.account_num_display || null
-    }));
-
-    if (!g_members.length) {
-      if (typeof renderEmptyState === 'function') renderEmptyState();
-      else renderMemberTable([]);
-      return;
-    }
-
-    renderMemberTable(g_members);
-
-  } catch (err) {
-    console.error(err);
-    if (typeof myAlert === 'function') myAlert('데이터를 불러오지 못했습니다: ' + (err?.message || err), 'error');
-    else alert('데이터를 불러오지 못했습니다: ' + (err?.message || err));
-
-    if (typeof renderEmptyState === 'function') renderEmptyState();
-  } finally {
-    if (typeof showLoading === 'function') showLoading(false);
-  }
 }
 
 
