@@ -3014,11 +3014,11 @@ function renderMemberTable(list) {
     const safeDetailKey = escForOnclick(keyForDetail);
     const safeEditId = escForOnclick(m.id);
 
-   // const detailBtn = (typeof openMemberDetail === 'function')
-     // ? `<button class="btn btn-sm btn-primary" onclick="openMemberDetail('${safeDetailKey}')">상세</button>`
-    //  : `<button class="btn btn-sm btn-primary" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
+    const detailBtn = (typeof openMemberDetail === 'function')
+      ? `<button class="btn btn-sm btn-primary" onclick="openMemberDetail('${safeDetailKey}')">상세</button>`
+    : `<button class="btn btn-sm btn-primary" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
 
-   // const editBtn = `<button class="btn btn-sm btn-light ms-1" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
+    const editBtn = `<button class="btn btn-sm btn-light ms-1" onclick="openMemberEdit('${safeEditId}')">수정</button>`;
 
     tbody.innerHTML += `
       <tr>
