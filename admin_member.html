@@ -3012,86 +3012,95 @@ let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
 
 // [수정] 상세 모달 열기 (데이터 매칭 및 단체/개인 로직 분기)
 async function openMemberDetail(id) {
-g_current_member_id = id;
+  // 1) 들어온 id가 uuid(id/member_uid/uid)일 수도, member_id(텍스트)일 수도 있어서 안전 매칭
+  const m = g_members.find(x => (x.id || x.member_uid || x.uid) === id)
+        || g_members.find(x => (x.member_id || '') === id);
 
-// 1. 최신 데이터 찾기 (fetchMembers가 실행된 상태여야 함)
-const m = g_members.find(x => x.id === id);
-if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
+  if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
 
-// UI 초기화
-document.getElementById('md-uid').value = m.id;
-document.getElementById('md-title').innerText = `${m.name} 님 상세`;
-document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
+  // 2) 현재 조합원 UUID 확정 (가족/단체 연결 등 RPC에서 필요)
+  const memberUid = m.id || m.member_uid || m.uid || null;
+  if (!memberUid) return myAlert("조합원 UUID를 찾을 수 없습니다.", 'error');
 
-// 뱃지/유형 표시
-let typeStr = m.member_type || '개인';
-document.getElementById('md-type-badge').innerText = typeStr;
+  g_current_member_id = memberUid; // ★ 반드시 UUID로 저장
 
-// 폼 데이터 바인딩
-document.getElementById('md-name').value = m.name;
-document.getElementById('md-phone').value = m.phone;
+  // UI 초기화
+  document.getElementById('md-uid').value = memberUid;
+  document.getElementById('md-title').innerText = `${m.name} 님 상세`;
+  document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
 
-// 상태 (DB값이 '정상', '승인대기' 한글이므로 그대로 넣음)
-document.getElementById('md-status').value = m.status || '승인대기'; 
-document.getElementById('md-type').value = typeStr;
+  // 뱃지/유형 표시
+  let typeStr = m.member_type || m.type || '개인';
+  document.getElementById('md-type-badge').innerText = typeStr;
 
-// 주소 (DB의 전체 주소 표시)
-document.getElementById('md-addr').value = m.address || '';
-document.getElementById('md-addr-detail').value = ''; 
+  // 폼 데이터 바인딩
+  document.getElementById('md-name').value = m.name || '';
+  document.getElementById('md-phone').value = m.phone || '';
 
-// 메모
-document.getElementById('md-memo').value = m.admin_memo || '';
+  // 상태
+  document.getElementById('md-status').value = m.status || '승인대기';
+  document.getElementById('md-type').value = typeStr;
 
-// 계좌
-document.getElementById('md-bank-name').value = m.bank_name || '';
-document.getElementById('md-bank-owner').value = m.account_holder || ''; 
-document.getElementById('md-bank-account').value = m.account_number || ''; 
+  // 주소
+  document.getElementById('md-addr').value = m.address || '';
+  document.getElementById('md-addr-detail').value = '';
 
-// -----------------------------------------------------------
-// ★ [핵심] 주민/사업자 번호 표시 로직 (개인 vs 단체)
-// -----------------------------------------------------------
-const rrn = m.rrn_display || ''; // 마스킹 된 값 (또는 단체 번호)
-let displayInfo = '정보 없음';
+  // 메모
+  document.getElementById('md-memo').value = m.admin_memo || '';
 
-if(typeStr === '단체') {
-// 단체는 있는 그대로 보여줌 (사업자번호)
-displayInfo = rrn ? `${rrn} (사업자)` : '사업자번호 없음';
-} else {
-// 개인은 파싱 (840914-1******)
-if(rrn.length >= 8) {
-// 하이픈(-)이 없을 수도 있으니 숫자만 추출해서 처리
-const cleanRrn = rrn.replace(/-/g, '');
-if(cleanRrn.length >= 7) {
-const yPre = cleanRrn.substr(6,1); // 성별코드
-const year = (yPre === '1' || yPre === '2') ? '19' : '20';
-const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
+  // 계좌
+  document.getElementById('md-bank-name').value = m.bank_name || '';
+  document.getElementById('md-bank-owner').value = m.account_holder || '';
+  document.getElementById('md-bank-account').value = m.account_number || '';
 
-displayInfo = `${year}${cleanRrn.substr(0,2)}년 ${cleanRrn.substr(2,2)}월 ${cleanRrn.substr(4,2)}일 (${gender})`;
+  // -----------------------------------------------------------
+  // ★ [핵심] 주민/사업자 번호 표시 로직 (개인 vs 단체)
+  // -----------------------------------------------------------
+  const rrn = m.rrn_display || ''; // 마스킹 된 값(개인) / 사업자번호(단체일 수도)
+  let displayInfo = '정보 없음';
+
+  // 단체는 아예 표시하지 않음 (값 자체를 보여주지 않기)
+  const isGroup = String(typeStr).includes('단체');
+
+  if (isGroup) {
+    displayInfo = '-'; // ★ 단체는 숨김
+  } else {
+    // 개인은 파싱 (840914-1******)
+    if (rrn) {
+      const cleanRrn = rrn.replace(/[^0-9]/g, ''); // 숫자만
+      if (cleanRrn.length >= 7) {
+        const yPre = cleanRrn.substr(6, 1); // 성별코드
+        const year = (yPre === '1' || yPre === '2') ? '19' : '20';
+        const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
+
+        // YYMMDD만 사용 (원래 로직 유지)
+        displayInfo = `${year}${cleanRrn.substr(0, 2)}년 ${cleanRrn.substr(2, 2)}월 ${cleanRrn.substr(4, 2)}일 (${gender})`;
+      } else {
+        displayInfo = '정보 없음';
+      }
+    }
+  }
+
+  document.getElementById('md-rrn-view').innerText = displayInfo;
+  document.getElementById('md-rrn').value = ''; // 수정용 인풋 초기화
+
+  // SNS 연동 상태
+  let snsHtml = '';
+  if (m.kakao_id) snsHtml += '<span class="badge bg-warning text-dark me-1"><i class="bi bi-chat-fill"></i> Kakao</span>';
+  if (m.naver_id) snsHtml += '<span class="badge bg-success"><i class="bi bi-n-square-fill"></i> Naver</span>';
+  document.getElementById('md-sns-status').innerHTML = snsHtml || '<span class="text-muted small">SNS 미연동</span>';
+
+  // 읽기 전용 모드로 시작
+  toggleEditMode(false);
+
+  // 하위 데이터 로드
+  loadMemberFunds(memberUid, m.member_id, true);  // 자금 내역
+  loadConsultLogs(memberUid);                    // 상담 이력 (내부에서 textId 사용)
+  loadMemberFamily(memberUid);                   // 가족/단체 목록
+
+  new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
-}
-}
 
-document.getElementById('md-rrn-view').innerText = displayInfo;
-document.getElementById('md-rrn').value = ''; // 수정용 인풋 초기화
-
-// SNS 연동 상태
-let snsHtml = '';
-if(m.kakao_id) snsHtml += '<span class="badge bg-warning text-dark me-1"><i class="bi bi-chat-fill"></i> Kakao</span>';
-if(m.naver_id) snsHtml += '<span class="badge bg-success"><i class="bi bi-n-square-fill"></i> Naver</span>';
-document.getElementById('md-sns-status').innerHTML = snsHtml || '<span class="text-muted small">SNS 미연동</span>';
-
-// 읽기 전용 모드로 시작
-toggleEditMode(false);
-
-// 하위 데이터 로드
-loadMemberFunds(m.id, m.member_id, true);    // 자금 내역
-loadConsultLogs(m.id);                        // 상담 이력
-
-    // ★ [추가/활성화] 가족 목록 로드
-    loadMemberFamily(m.id);
-
-new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
-}
 
 // [교체] 수정 모드 토글 (주소찾기 버튼 및 상세주소창 제어 추가)
 function toggleEditMode(isEdit) {
@@ -3190,61 +3199,63 @@ fetchMembers(); // 전체 목록 새로고침
 }
 
 
+// [수정] 상담 이력 로드 (최신이 위로 오도록 정렬 보강)
+async function loadConsultLogs(uuid) { // uuid는 유지(호출부 호환), 내부는 textId 사용
+  const listEl = document.getElementById('md-consult-list');
+  if (!listEl) return;
 
-// 3. 상담 이력 로드
-// 4. 상담 등록
-// [수정] 상담 이력 로드 (UUID 대신 텍스트 ID 사용)
-async function loadConsultLogs(uuid) { // 파라미터 이름은 uuid지만, 내부에서 textId를 구해서 쓸 겁니다.
-const listEl = document.getElementById('md-consult-list');
-if(!listEl) return;
+  const textId = document.getElementById('md-id-text').innerText;
 
-// 화면에 적혀있는 조합원 번호(Text)를 가져옵니다.
-const textId = document.getElementById('md-id-text').innerText;
+  if (!textId || textId === '-' || textId === 'ID없음') {
+    listEl.innerHTML = '<div class="text-center text-muted py-3 small">조합원 번호가 없어 조회할 수 없습니다.</div>';
+    return;
+  }
 
-// 만약 조합원 번호가 없으면 중단
-if(!textId || textId === '-' || textId === 'ID없음') {
-listEl.innerHTML = '<div class="text-center text-muted py-3 small">조합원 번호가 없어 조회할 수 없습니다.</div>';
-return;
+  listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
+
+  const { data, error } = await _supabase.rpc('get_member_consultations', {
+    p_member_id: textId
+  });
+
+  listEl.innerHTML = '';
+
+  if (error) {
+    console.error("상담 로드 에러:", error);
+    listEl.innerHTML = '<div class="text-center text-danger py-3 small">불러오기 실패</div>';
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    listEl.innerHTML = '<div class="text-center text-muted py-3 small">상담 이력이 없습니다.</div>';
+    return;
+  }
+
+  // ★ 핵심: 최근 이력이 위로 오도록(created_at 기준 내림차순)
+  const sorted = [...data].sort((a, b) => {
+    const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bt - at;
+  });
+
+  sorted.forEach(log => {
+    let dateStr = '-';
+    if (log.created_at) {
+      const d = new Date(log.created_at);
+      dateStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    listEl.innerHTML += `
+      <div class="list-group-item bg-light border-0 mb-1 rounded">
+        <div class="d-flex justify-content-between">
+          <small class="fw-bold text-dark">${log.author_email || '관리자'}</small>
+          <small class="text-muted" style="font-size:0.8em">${dateStr}</small>
+        </div>
+        <div class="mt-1 text-secondary" style="font-size:0.9rem; white-space: pre-wrap;">${log.content}</div>
+      </div>
+    `;
+  });
 }
 
-listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
-
-// ★ 핵심 수정: p_member_id에 텍스트 번호를 보냅니다.
-const { data, error } = await _supabase.rpc('get_member_consultations', { 
-p_member_id: textId 
-});
-
-listEl.innerHTML = '';
-
-if (error) { 
-console.error("상담 로드 에러:", error);
-listEl.innerHTML = '<div class="text-center text-danger py-3 small">불러오기 실패</div>';
-return; 
-}
-
-if (!data || data.length === 0) {
-listEl.innerHTML = '<div class="text-center text-muted py-3 small">상담 이력이 없습니다.</div>';
-return;
-}
-
-data.forEach(log => {
-let dateStr = '-';
-if(log.created_at) {
-const d = new Date(log.created_at);
-dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
-}
-
-listEl.innerHTML += `
-           <div class="list-group-item bg-light border-0 mb-1 rounded">
-               <div class="d-flex justify-content-between">
-                   <small class="fw-bold text-dark">${log.author_email || '관리자'}</small>
-                   <small class="text-muted" style="font-size:0.8em">${dateStr}</small>
-               </div>
-               <div class="mt-1 text-secondary" style="font-size:0.9rem; white-space: pre-wrap;">${log.content}</div>
-           </div>
-       `;
-});
-}
 
 // [수정] 상담 등록 (UUID 대신 텍스트 ID 사용)
 async function addConsultLog() {
