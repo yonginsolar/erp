@@ -1552,24 +1552,61 @@ reader.readAsArrayBuffer(file);
 // ================================================================
 // [기능 3] 공지사항 관리
 // ================================================================
+// [수정] 공지사항 목록 불러오기 (삭제 버튼 추가됨)
 async function fetchNotices() {
-// 읽기는 public 정책이 있어서 바로 select 가능
-const { data } = await _supabase.from('coop_notices').select('*').order('created_at', {ascending:false});
-const tbody = document.getElementById('noticeListBody');
-tbody.innerHTML = '';
+    // 읽기는 public 정책이 있어서 바로 select 가능
+    const { data } = await _supabase.from('coop_notices').select('*').order('created_at', {ascending:false});
+    const tbody = document.getElementById('noticeListBody');
+    tbody.innerHTML = '';
 
-if(!data || data.length===0) { tbody.innerHTML='<tr><td colspan="6" class="text-center py-3">글이 없습니다.</td></tr>'; return; }
+    if(!data || data.length===0) { 
+        tbody.innerHTML='<tr><td colspan="6" class="text-center py-3">글이 없습니다.</td></tr>'; 
+        return; 
+    }
 
-data.forEach(n => {
-tbody.innerHTML += `<tr>
-                   <td>${n.created_at.split('T')[0]}</td>
-                   <td>${n.category}</td>
-                   <td>${n.title}</td>
-                   <td>${n.is_popup?'Y':'-'}</td>
-                   <td>${n.status}</td>
-                   <td><button class="btn btn-sm btn-light" onclick="openNoticeModal('${n.id}')">수정</button></td>
-               </tr>`;
-});
+    data.forEach(n => {
+        // 날짜 포맷팅 (YYYY-MM-DD)
+        const dateStr = n.created_at ? n.created_at.split('T')[0] : '-';
+        
+        // 팝업 여부 표시
+        const popupBadge = n.is_popup ? '<span class="badge bg-danger">POP</span>' : '-';
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${dateStr}</td>
+                <td>${n.category}</td>
+                <td class="text-start fw-bold">${n.title}</td>
+                <td>${popupBadge}</td>
+                <td>${n.status}</td>
+                <td>
+                    <button class="btn btn-sm btn-light border" onclick="openNoticeModal('${n.id}')">수정</button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteNotice('${n.id}')">삭제</button>
+                </td>
+            </tr>`;
+    });
+}
+
+    // [신규] 공지사항 삭제 요청 함수
+function askDeleteNotice(id) {
+    if (!id) return;
+
+    myConfirm("정말 이 공지사항을 삭제하시겠습니까?<br><small class='text-danger'>복구할 수 없습니다.</small>", async () => {
+        showLoading(true);
+
+        // 방금 만든 RPC 호출
+        const { error } = await _supabase.rpc('delete_notice_secure', { p_id: Number(id) });
+        
+        showLoading(false);
+
+        if (error) {
+            console.error("삭제 실패:", error);
+            myAlert("삭제 실패: " + error.message, 'error');
+        } else {
+            myAlert("삭제되었습니다.");
+            // 목록 새로고침
+            fetchNotices();
+        }
+    });
 }
 
 let g_current_notice_id = null;
