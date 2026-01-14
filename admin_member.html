@@ -1111,50 +1111,55 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 
 <div class="modal fade" id="fundEditorModal" tabindex="-1" data-bs-backdrop="static">
-<div class="modal-dialog modal-sm modal-dialog-centered">
-<div class="modal-content shadow-lg">
-<div class="modal-header bg-light py-2">
-<h6 class="modal-title fw-bold" id="fund-modal-title">내역 입력</h6>
-<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-</div>
-<div class="modal-body">
-<input type="hidden" id="fund-edit-id">   <input type="hidden" id="fund-edit-type"> <div class="mb-2">
-<label class="form-label small fw-bold text-muted">날짜</label>
-<input type="date" id="fund-date" class="form-control form-control-sm">
-</div>
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content shadow-lg">
+      <div class="modal-header bg-light py-2">
+        <h6 class="modal-title fw-bold" id="fund-modal-title">내역 입력</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      
+      <div class="modal-body">
+        <input type="hidden" id="fund-edit-id">
+        <input type="hidden" id="fund-edit-type">
 
-<div class="mb-2">
-<label class="form-label small fw-bold text-muted">금액</label>
-<input type="number" id="fund-amount" class="form-control form-control-sm" placeholder="숫자만 입력">
-</div>
+        <div class="mb-2">
+          <label class="form-label small fw-bold text-muted">날짜</label>
+          <input type="date" id="fund-date" class="form-control form-control-sm">
+        </div>
 
-<div class="mb-2" id="fund-method-group" style="display:none;">
-<label class="form-label small fw-bold text-muted">입금 방식</label>
-<select id="fund-method" class="form-select form-select-sm">
-<option value="transfer">계좌이체</option>
-<option value="cash">현금</option>
-<option value="card">카드</option>
-<option value="etc">기타</option>
-</select>
-</div>
+        <div class="mb-2">
+          <label class="form-label small fw-bold text-muted">금액</label>
+          <input type="number" id="fund-amount" class="form-control form-control-sm" placeholder="숫자만 입력">
+        </div>
 
-<div class="mb-2" id="fund-depositor-group">
-<label class="form-label small fw-bold text-muted">입금자명</label>
-<input type="text" id="fund-depositor" class="form-control form-control-sm">
-</div>
+        <div class="mb-2" id="fund-method-group" style="display:none;">
+          <label class="form-label small fw-bold text-muted">입금 방식</label>
+          <select id="fund-method" class="form-select form-select-sm">
+            <option value="transfer">계좌이체</option>
+            <option value="cash">현금</option>
+            <option value="card">카드</option>
+            <option value="etc">기타</option>
+          </select>
+        </div>
 
-<div class="mb-3">
-<label class="form-label small fw-bold text-muted">비고 (메모)</label>
-<input type="text" id="fund-note" class="form-control form-control-sm">
-</div>
+        <div class="mb-2" id="fund-depositor-group">
+          <label class="form-label small fw-bold text-muted">입금자명</label>
+          <input type="text" id="fund-depositor" class="form-control form-control-sm">
+        </div>
 
-<button class="btn btn-primary w-100 btn-sm" onclick="saveFundData()">저장하기</button>
-    <button id="btn-fund-delete" class="btn btn-outline-danger w-100 btn-sm" style="display:none;" onclick="deleteFundData()">
-        <i class="bi bi-trash"></i> 이 내역 삭제하기
-    </button>
-</div>
-</div>
-</div>
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-muted">비고 (메모)</label>
+          <input type="text" id="fund-note" class="form-control form-control-sm">
+        </div>
+
+        <button class="btn btn-primary w-100 btn-sm mb-2" onclick="saveFundData()">저장하기</button>
+        
+        <button id="btn-fund-delete" class="btn btn-outline-danger w-100 btn-sm" style="display:none;" onclick="deleteFundData()">
+            <i class="bi bi-trash"></i> 이 내역 삭제하기
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="customAlertModal" tabindex="-1" style="z-index: 9999;">
@@ -3569,26 +3574,26 @@ async function loadMemberFunds(uuid, textId, reset=false) {
     }
 }
 
-// [수정] 자금 내역 삭제 함수 (ID 중복 방어 로직 적용)
+// [최종] 자금 내역 삭제 함수
 async function deleteFundData() {
-    // ★ 핵심 수정: getElementById 대신, 모달 내부에서 정확히 찾기 (querySelector)
+    // 1. HTML에서 hidden input 값 읽기
     const modal = document.getElementById('fundEditorModal');
-    const typeInput = modal.querySelector('#fund-edit-type');
+    // querySelector로 모달 안의 요소를 정확히 찾습니다
+    const typeInput = modal.querySelector('#fund-edit-type'); 
     const idInput = modal.querySelector('#fund-edit-id');
 
     const type = typeInput ? typeInput.value : '';
     const idVal = idInput ? idInput.value : '';
 
-    // 디버깅용 로그 (개발자 도구 콘솔에서 확인 가능)
-    console.log(`삭제 시도 - Type: ${type}, ID: ${idVal}`);
+    // 2. 값 검증 (없으면 모달 경고)
+    if (!idVal) return myAlert("삭제할 내역 정보(ID)가 없습니다.", 'error');
+    if (!type) return myAlert("데이터 타입(출자/기부)을 확인할 수 없습니다.", 'error');
 
-    if (!idVal) return myAlert("삭제할 내역 정보가 없습니다. (ID 미확인)", 'error');
-    if (!type) return myAlert("데이터 타입을 확인할 수 없습니다.", 'error');
-
+    // 3. 삭제 확인 모달
     myConfirm("정말 이 내역을 삭제하시겠습니까?<br><small class='text-danger'>잘못 입력된 내역을 지울 때 사용하세요.</small>", async () => {
         showLoading(true);
 
-        // RPC 이름 결정
+        // 4. 타입에 따라 RPC 함수 선택
         let rpcName = '';
         if (type === 'capital') {
             rpcName = 'delete_capital_secure';
@@ -3596,29 +3601,26 @@ async function deleteFundData() {
             rpcName = 'delete_donation_secure';
         } else {
             showLoading(false);
-            return myAlert(`알 수 없는 데이터 타입입니다: ${type}`, 'error');
+            return myAlert(`오류: 알 수 없는 데이터 타입입니다 (${type})`, 'error');
         }
 
-        // ID 숫자 변환 안전장치
-        const p_id = Number(idVal);
-        if (isNaN(p_id) || p_id === 0) {
-            showLoading(false);
-            return myAlert("유효하지 않은 ID입니다.", 'error');
-        }
-
-        // RPC 호출
-        const { error } = await _supabase.rpc(rpcName, { p_id: p_id });
+        // 5. RPC 호출 (ID를 숫자로 변환하여 전송)
+        const { error } = await _supabase.rpc(rpcName, { p_id: Number(idVal) });
         
         showLoading(false);
 
         if (error) {
             console.error("RPC Error:", error);
-            myAlert(`삭제 실패 (${rpcName}): ` + error.message, 'error');
+            // 에러 메시지도 모달로 표시
+            myAlert(`삭제 실패: ${error.message}`, 'error');
         } else {
+            // 성공 모달
             myAlert("삭제되었습니다.");
+            
+            // 모달 닫기
             bootstrap.Modal.getInstance(document.getElementById('fundEditorModal')).hide();
             
-            // 목록 갱신
+            // 목록 및 통계 갱신
             const memberUid = document.getElementById('md-uid').value;
             const memberTextId = document.getElementById('md-id-text').innerText;
             loadMemberFunds(memberUid, memberTextId, true);
