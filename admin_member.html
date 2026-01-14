@@ -105,10 +105,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </a>
 </div>
 </div>
-
+</div>
 
 <div class="main-content">
-</div>
+
 <div class="tab-pane fade show active" id="tab-dashboard">
     <h3 class="fw-bold mb-4" style="font-family:'GmarketSans';">운영 대시보드</h3>
 
@@ -949,98 +949,109 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
 <div class="tab-content p-4">
 <div class="tab-pane fade show active" id="md-tab-basic">
-<input type="hidden" id="md-uid">
+    <input type="hidden" id="md-uid">
 
-<div class="row g-3 mb-3">
-<div class="col-md-3">
-<label class="form-label small fw-bold text-muted">이름</label>
-<input type="text" id="md-name" class="form-control fw-bold">
-</div>
-<div class="col-md-3">
-<label class="form-label small fw-bold text-muted">연락처</label>
-<input type="text" id="md-phone" class="form-control" maxlength="13" oninput="autoHyphen(this)">
-</div>
-<div class="col-md-3">
-<label class="form-label small fw-bold text-muted">상태</label>
-<select id="md-status" class="form-select">
-<option value="승인대기">승인 대기</option>
-<option value="정상">정상 (정조합원)</option>
-<option value="탈퇴">탈퇴</option>
-<option value="제명">제명</option>
-</select>
-</div>
-<div class="col-md-3">
-<label class="form-label small fw-bold text-muted">유형</label>
-<select id="md-type" class="form-select">
-<option value="개인">개인</option>
-<option value="단체">단체</option>
-</select>
-</div>
-</div>
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">이름</label>
+            <input type="text" id="md-name" class="form-control fw-bold">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">연락처</label>
+            <input type="text" id="md-phone" class="form-control" maxlength="13" oninput="autoHyphen(this)">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">상태</label>
+            <select id="md-status" class="form-select">
+                <option value="승인대기">승인 대기</option>
+                <option value="정상">정상 (정조합원)</option>
+                <option value="탈퇴">탈퇴</option>
+                <option value="제명">제명</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">유형</label>
+            <select id="md-type" class="form-select">
+                <option value="개인">개인</option>
+                <option value="단체">단체</option>
+            </select>
+        </div>
 
-<div class="mb-3">
-<label class="form-label small fw-bold text-muted">생년월일/성별 (주민/사업자번호)</label>
-<div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
-<span id="md-rrn-view">-</span>
-</div>
-<div id="rrn-edit-area" style="display:none;">
-<input type="text" id="md-rrn" class="form-control" placeholder="변경하려면 숫자만 입력하세요" maxlength="14" oninput="autoHyphen(this)">
-</div>
-</div>
+        <div class="col-md-12">
+            <label class="form-label small fw-bold text-muted">생년월일/성별 (주민/사업자번호)</label>
+            <div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
+                <span id="md-rrn-view">-</span>
+            </div>
+            <div id="rrn-edit-area" style="display:none;">
+                <input type="text" id="md-rrn" class="form-control" placeholder="변경하려면 숫자만 입력하세요" maxlength="14"
+                    oninput="autoHyphen(this)">
+            </div>
+        </div>
 
-<div class="mb-3">
-<label class="form-label small fw-bold text-muted">주소</label>
-<div class="input-group mb-1">
-<input type="text" id="md-addr" class="form-control" readonly>
-<button class="btn btn-outline-secondary" type="button" id="btn-addr-search" onclick="searchAddress()" style="display:none;">🔍 검색</button>
-</div>
-<input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소 (수정 시 입력)" style="display:none;">
-</div>
+        <div class="col-md-12">
+            <label class="form-label small fw-bold text-muted">주소</label>
+            <div class="input-group mb-1">
+                <input type="text" id="md-addr" class="form-control" readonly>
+                <button class="btn btn-outline-secondary" type="button" id="btn-addr-search" onclick="searchAddress()"
+                    style="display:none;">🔍 검색</button>
+            </div>
+            <input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소 (수정 시 입력)"
+                style="display:none;">
+        </div>
 
-<div class="mb-3">
-    <label class="form-label small fw-bold text-muted">🏅 보유 뱃지 (내부 관리용)</label>
-    <div class="card p-3 bg-light border-0" style="max-height:150px; overflow-y:auto;">
-        <div id="member-badge-checkboxes" class="d-flex flex-wrap gap-2">
-            <span class="text-muted small">로딩중...</span>
+        <div class="col-md-12">
+            <label class="form-label small fw-bold text-muted">🏅 보유 뱃지 (내부 관리용)</label>
+            <div class="card p-3 bg-light border-0" style="max-height:150px; overflow-y:auto;">
+                <div id="member-badge-checkboxes" class="d-flex flex-wrap gap-2">
+                    <span class="text-muted small">로딩중...</span>
+                </div>
+            </div>
+            <div class="form-text x-small text-end">
+                * 체크박스를 변경하고 아래 '저장 완료'를 누르면 반영됩니다.
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <label class="form-label small fw-bold text-muted">관리자 메모</label>
+            <textarea id="md-memo" class="form-control" rows="2"></textarea>
+        </div>
+
+        <div class="col-12">
+            <hr class="my-2">
+        </div>
+
+        <div class="col-md-12">
+            <h6 class="fw-bold small text-primary mb-2">🏦 환급/배당 계좌 정보</h6>
+            <div class="row g-2 align-items-center bg-light p-3 rounded border">
+                <div class="col-md-3">
+                    <label class="small text-muted">은행명</label>
+                    <input type="text" id="md-bank-name" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted">예금주</label>
+                    <input type="text" id="md-bank-owner" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-4">
+                    <label class="small text-muted">계좌번호</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="md-bank-account" class="form-control" placeholder="숫자만 입력">
+                    </div>
+                </div>
+                <div class="col-md-2 text-end pt-3">
+                    <small class="text-muted fw-bold" id="md-sns-status" style="font-size:0.75rem;">SNS 미연동</small>
+                </div>
+            </div>
+        </div>
+    </div> <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-dark btn-sm" onclick="alert('준비중')">🖨️ 증명서</button>
+        <button id="btn-edit-mode" class="btn btn-primary px-4" onclick="toggleEditMode(true)">✏️ 정보 수정</button>
+        <div id="btn-save-group" style="display:none;">
+            <button class="btn btn-secondary me-2" onclick="toggleEditMode(false)">취소</button>
+            <button class="btn btn-success px-4 fw-bold" onclick="saveMemberBasic()">💾 저장 완료</button>
         </div>
     </div>
-    <div class="form-text x-small text-end">
-        * 체크박스를 변경하고 아래 '저장 완료'를 누르면 반영됩니다.
-    </div>
-</div>
 
-<div class="col-md-12">
-    <label class="form-label small fw-bold text-muted">관리자 메모</label>
-    <textarea id="md-memo" class="form-control" rows="2"></textarea>
-</div>
-    
-    
-
-<div class="col-12"><hr class="my-2"></div>
-
-<div class="col-md-12">
-<h6 class="fw-bold small text-primary mb-2">🏦 환급/배당 계좌 정보</h6>
-<div class="row g-2 align-items-center bg-light p-3 rounded border">
-<div class="col-md-3">
-<label class="small text-muted">은행명</label>
-<input type="text" id="md-bank-name" class="form-control form-control-sm">
-</div>
-<div class="col-md-3">
-<label class="small text-muted">예금주</label>
-<input type="text" id="md-bank-owner" class="form-control form-control-sm">
-</div>
-<div class="col-md-4">
-<label class="small text-muted">계좌번호</label>
-<div class="input-group input-group-sm">
-<input type="text" id="md-bank-account" class="form-control" placeholder="숫자만 입력">
-</div>
-</div>
-<div class="col-md-2 text-end pt-3">
-<small class="text-muted fw-bold" id="md-sns-status" style="font-size:0.75rem;">SNS 미연동</small>
-</div>
-</div>
-</div>
-</div></div>
+</div> 
 
 <div class="d-flex justify-content-between mt-4">
 <button class="btn btn-outline-dark btn-sm" onclick="alert('준비중')">🖨️ 증명서</button>
