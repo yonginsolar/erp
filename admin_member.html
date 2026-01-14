@@ -3569,39 +3569,60 @@ async function loadMemberFunds(uuid, textId, reset=false) {
     }
 }
 
-// [수정] 자금 내역 삭제 함수 (ID 숫자 변환 적용)
+// [수정] 자금 내역 삭제 함수 (ID 중복 방어 로직 적용)
 async function deleteFundData() {
-    const type = document.getElementById('fund-edit-type').value; // capital or donation
-    const idVal = document.getElementById('fund-edit-id').value;
+    // ★ 핵심 수정: getElementById 대신, 모달 내부에서 정확히 찾기 (querySelector)
+    const modal = document.getElementById('fundEditorModal');
+    const typeInput = modal.querySelector('#fund-edit-type');
+    const idInput = modal.querySelector('#fund-edit-id');
 
-    if (!idVal) return myAlert("삭제할 내역 정보가 없습니다.", 'error');
+    const type = typeInput ? typeInput.value : '';
+    const idVal = idInput ? idInput.value : '';
+
+    // 디버깅용 로그 (개발자 도구 콘솔에서 확인 가능)
+    console.log(`삭제 시도 - Type: ${type}, ID: ${idVal}`);
+
+    if (!idVal) return myAlert("삭제할 내역 정보가 없습니다. (ID 미확인)", 'error');
+    if (!type) return myAlert("데이터 타입을 확인할 수 없습니다.", 'error');
 
     myConfirm("정말 이 내역을 삭제하시겠습니까?<br><small class='text-danger'>잘못 입력된 내역을 지울 때 사용하세요.</small>", async () => {
         showLoading(true);
 
-        const rpcName = (type === 'capital') ? 'delete_capital_secure' : 'delete_donation_secure';
-        
-        // ★ 핵심 수정: p_id를 반드시 Number()로 변환해서 전송
-        const { error } = await _supabase.rpc(rpcName, { p_id: Number(idVal) });
+        // RPC 이름 결정
+        let rpcName = '';
+        if (type === 'capital') {
+            rpcName = 'delete_capital_secure';
+        } else if (type === 'donation') {
+            rpcName = 'delete_donation_secure';
+        } else {
+            showLoading(false);
+            return myAlert(`알 수 없는 데이터 타입입니다: ${type}`, 'error');
+        }
+
+        // ID 숫자 변환 안전장치
+        const p_id = Number(idVal);
+        if (isNaN(p_id) || p_id === 0) {
+            showLoading(false);
+            return myAlert("유효하지 않은 ID입니다.", 'error');
+        }
+
+        // RPC 호출
+        const { error } = await _supabase.rpc(rpcName, { p_id: p_id });
         
         showLoading(false);
 
         if (error) {
-            // 에러 메시지가 'function ... without parameters' 라면 함수가 없는 것일 수 있음
-            console.error(error); 
-            myAlert("삭제 실패: " + error.message, 'error');
+            console.error("RPC Error:", error);
+            myAlert(`삭제 실패 (${rpcName}): ` + error.message, 'error');
         } else {
             myAlert("삭제되었습니다.");
-            
             bootstrap.Modal.getInstance(document.getElementById('fundEditorModal')).hide();
             
             // 목록 갱신
             const memberUid = document.getElementById('md-uid').value;
             const memberTextId = document.getElementById('md-id-text').innerText;
             loadMemberFunds(memberUid, memberTextId, true);
-            
-            // 대시보드 통계 갱신
-            loadDashboard(); 
+            loadDashboard();
         }
     });
 }
