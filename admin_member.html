@@ -2814,10 +2814,14 @@ async function loadDashboard() {
         .from('consult_logs').select('*', { count: 'exact', head: true }).gte('created_at', todayStr);
 
     // 4. 출자금 합계
-    let totalCapital = 0;
-    const { data: capitalData } = await _supabase.from('view_member_list').select('total_capital');
-    if (capitalData) totalCapital = capitalData.reduce((sum, row) => sum + (row.total_capital || 0), 0);
+let totalCapital = 0;
+const { data: capitalResult, error: capError } = await _supabase.rpc('get_total_capital_secure');
 
+if (capError) {
+    console.error("출자금 집계 실패:", capError);
+} else {
+    totalCapital = capitalResult || 0;
+}
     // ★ [추가] 파트너 신청/수정 대기 건수 확인
     const { count: partnerPending } = await _supabase
         .from('site_partners')
