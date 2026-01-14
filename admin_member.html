@@ -1043,7 +1043,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="tab-pane fade" id="md-tab-funds">
 <div class="d-flex justify-content-between align-items-center mb-2">
 <h6 class="fw-bold m-0 text-success">💰 출자금 내역</h6>
-<button class="btn btn-sm btn-outline-success" onclick="alert('Phase 3에서 구현: 출자금 수동 추가')">+ 입금 추가</button>
+<button class="btn btn-sm btn-outline-success" onclick="openFundEditor('capital', null)">+ 출자금 추가</button>
 </div>
 <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
 <table class="table table-sm table-hover mb-0 text-center small">
@@ -1054,7 +1054,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
 <div class="d-flex justify-content-between align-items-center mb-2">
 <h6 class="fw-bold m-0 text-primary">🎁 기부금 내역</h6>
-<button class="btn btn-sm btn-outline-primary" onclick="alert('Phase 3: 기부금 추가')">+ 기부 추가</button>
+<button class="btn btn-sm btn-outline-primary" onclick="openFundEditor('donation', null)">+ 기부금 추가</button>
 </div>
 <div class="table-responsive mb-4 border rounded" style="max-height: 200px;">
 <table class="table table-sm table-hover mb-0 text-center small">
@@ -3447,108 +3447,148 @@ async function loadMemberFamily(parentId) {
 
 
 
-// 2. 에디터 모달 열기 (신규/수정 공용)
-function openFundEditor(type, rowDataStr, textId = null) {
-const modalEl = document.getElementById('fundEditorModal');
-const titleEl = document.getElementById('fund-modal-title');
+// [수정] 에디터 모달 열기 (신규/수정 공용)
+function openFundEditor(type, rowDataStr) {
+    const modalEl = document.getElementById('fundEditorModal');
+    const titleEl = document.getElementById('fund-modal-title');
+    
+    // 1. 입력 필드 초기화
+    document.getElementById('fund-edit-type').value = type;
+    document.getElementById('fund-edit-id').value = ''; // 신규일 때 빈값
+    
+    // 날짜: 오늘 날짜 기본 세팅
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fund-date').value = today;
+    
+    document.getElementById('fund-amount').value = '';
+    document.getElementById('fund-note').value = '';
+    document.getElementById('fund-depositor').value = '';
+    
+    // 2. 타입별 UI 설정 (출자금 vs 기부금)
+    if (type === 'capital') {
+        titleEl.innerText = '💰 출자금 입금 내역';
+        titleEl.className = 'modal-title fw-bold text-success';
+        
+        // 출자금은 '입금자명'이 중요, '결제수단'은 숨김
+        document.getElementById('fund-method-group').style.display = 'none';
+        document.getElementById('fund-depositor-group').style.display = 'block';
+        
+        // 신규 등록이면 기본 입금자명에 '조합원 이름' 자동 입력
+        if (!rowDataStr) {
+            document.getElementById('fund-depositor').value = document.getElementById('md-name').value;
+        }
+        
+    } else {
+        titleEl.innerText = '🎁 기부금 내역';
+        titleEl.className = 'modal-title fw-bold text-primary';
+        
+        // 기부금은 '결제수단'이 중요, '입금자명'은 숨김 (RPC에 없음)
+        document.getElementById('fund-method-group').style.display = 'block';
+        document.getElementById('fund-depositor-group').style.display = 'none';
+        document.getElementById('fund-method').value = 'transfer'; // 기본값 계좌이체
+    }
 
-// 필드 초기화
-document.getElementById('fund-edit-type').value = type;
-document.getElementById('fund-edit-id').value = ''; 
-document.getElementById('fund-date').value = new Date().toISOString().split('T')[0]; // 오늘 날짜 기본
-document.getElementById('fund-amount').value = '';
-document.getElementById('fund-note').value = '';
-document.getElementById('fund-depositor').value = '';
+    // 3. 수정 모드일 경우 데이터 채우기
+    if (rowDataStr) {
+        // rowDataStr는 encodeURIComponent(JSON.stringify(row)) 형태로 넘어옴
+        try {
+            const data = JSON.parse(decodeURIComponent(rowDataStr));
+            document.getElementById('fund-edit-id').value = data.id; // 수정 대상 ID
+            
+            // 날짜 (테이블마다 컬럼명이 다를 수 있어서 체크)
+            document.getElementById('fund-date').value = data.deposit_date || data.donation_date || today;
+            document.getElementById('fund-amount').value = data.amount;
+            document.getElementById('fund-note').value = data.note || '';
 
-// UI 분기 (출자금 vs 기부금)
-if(type === 'capital') {
-titleEl.innerText = '💰 출자금 내역 관리';
-titleEl.className = 'modal-title fw-bold text-success';
-document.getElementById('fund-method-group').style.display = 'none';
-document.getElementById('fund-depositor-group').style.display = 'block';
-} else {
-titleEl.innerText = '🎁 기부금 내역 관리';
-titleEl.className = 'modal-title fw-bold text-primary';
-document.getElementById('fund-method-group').style.display = 'block';
-document.getElementById('fund-depositor-group').style.display = 'none';
+            if (type === 'capital') {
+                document.getElementById('fund-depositor').value = data.depositor || '';
+            } else {
+                // 기부금일 때 결제 수단 (DB에 payment_method가 없으면 기본값)
+                document.getElementById('fund-method').value = data.payment_method || 'transfer'; 
+            }
+        } catch (e) {
+            console.error("데이터 파싱 오류:", e);
+        }
+    } 
+
+    // 모달 띄우기 (z-index 보정)
+    modalEl.style.zIndex = 2000; 
+    new bootstrap.Modal(modalEl).show();
 }
 
-// 수정 모드일 경우 데이터 채우기
-if (rowDataStr) {
-const data = JSON.parse(decodeURIComponent(rowDataStr));
-document.getElementById('fund-edit-id').value = data.id;
-document.getElementById('fund-date').value = data.deposit_date || data.donation_date;
-document.getElementById('fund-amount').value = data.amount;
-document.getElementById('fund-note').value = data.note || '';
 
-if(type === 'capital') document.getElementById('fund-depositor').value = data.depositor || '';
-if(type === 'donation') document.getElementById('fund-method').value = data.payment_method || 'transfer';
-} 
-// 신규 모드인데 출자금이면, 입금자명에 기본으로 조합원 이름 넣어주기
-else if (type === 'capital') {
-document.getElementById('fund-depositor').value = document.getElementById('md-name').value;
-}
-
-// 이중 모달 처리를 위해 z-index 조정 (부트스트랩 버그 방지)
-modalEl.style.zIndex = 2000; 
-new bootstrap.Modal(modalEl).show();
-}
-
-
-// 3. 저장 실행
+// [수정] 저장 실행 (RPC 파라미터 매칭 완벽 적용)
 async function saveFundData() {
-const type = document.getElementById('fund-edit-type').value;
-const idVal = document.getElementById('fund-edit-id').value || null; // 빈 문자열이면 null로
-const amount = document.getElementById('fund-amount').value;
-const date = document.getElementById('fund-date').value;
-const note = document.getElementById('fund-note').value;
+    // 1. 폼 데이터 수집
+    const type = document.getElementById('fund-edit-type').value;
+    
+    // ID가 빈 문자열이면 null로 보내야 DB에서 INSERT로 인식함
+    let idVal = document.getElementById('fund-edit-id').value;
+    if (!idVal || idVal.trim() === '') idVal = null;
+    
+    const amount = document.getElementById('fund-amount').value;
+    const date = document.getElementById('fund-date').value;
+    const note = document.getElementById('fund-note').value;
+    
+    // 유효성 검사
+    if (!amount || amount <= 0) return myAlert('정확한 금액을 입력해주세요.', 'warning');
+    if (!date) return myAlert('날짜를 선택해주세요.', 'warning');
 
-// 유효성 검사
-if(!amount || !date) return alert('날짜와 금액을 입력해주세요.');
+    // 현재 상세 모달에 띄워진 조합원 정보 가져오기
+    const memberUid = document.getElementById('md-uid').value;           // UUID
+    const memberTextId = document.getElementById('md-id-text').innerText; // 텍스트 ID (예: 2024-001)
 
-// 현재 열려있는 슈퍼 모달의 조합원 정보 가져오기
-const memberUid = document.getElementById('md-uid').value;
-const memberTextId = document.getElementById('md-id-text').innerText;
+    showLoading(true);
 
-showLoading(true);
-let rpcName = type === 'capital' ? 'manage_capital_secure' : 'manage_donation_secure';
+    let rpcName = '';
+    let params = {};
 
-let params = {};
-if(type === 'capital') {
-params = {
-p_id: idVal,
-p_member_text_id: memberTextId,
-p_amount: amount,
-p_date: date,
-p_note: note,
-p_depositor: document.getElementById('fund-depositor').value
-};
-} else {
-params = {
-p_id: idVal,
-p_member_uid: memberUid,
-p_member_text_id: memberTextId,
-p_amount: amount,
-p_date: date,
-p_method: document.getElementById('fund-method').value,
-p_note: note
-};
+    // 2. 타입별 파라미터 구성 (RPC 명세 준수)
+    if (type === 'capital') {
+        rpcName = 'manage_capital_secure';
+        params = {
+            p_id: idVal,
+            p_member_text_id: memberTextId,  // 출자금은 text id 기준
+            p_amount: Number(amount),
+            p_date: date,
+            p_note: note,
+            p_depositor: document.getElementById('fund-depositor').value
+        };
+    } else {
+        rpcName = 'manage_donation_secure';
+        params = {
+            p_id: idVal,
+            p_member_uid: memberUid,         // 기부금은 UUID 기준
+            p_member_text_id: memberTextId,  // text id도 같이 보냄
+            p_amount: Number(amount),
+            p_date: date,
+            p_method: document.getElementById('fund-method').value, // payment_method
+            p_note: note
+        };
+    }
+
+    // 3. RPC 호출
+    console.log(`Sending to ${rpcName}:`, params); // 디버깅용
+    const { error } = await _supabase.rpc(rpcName, params);
+    
+    showLoading(false);
+
+    if (error) {
+        myAlert('저장 실패: ' + error.message, 'error');
+    } else {
+        myAlert('성공적으로 저장되었습니다.');
+        
+        // 에디터 모달 닫기
+        bootstrap.Modal.getInstance(document.getElementById('fundEditorModal')).hide();
+        
+        // 리스트 새로고침 (현재 보고 있는 조합원 자금 내역)
+        loadMemberFunds(memberUid, memberTextId, true); // true = 리셋 후 로드
+
+        // 대시보드 통계도 갱신 (금액이 변했으므로)
+        loadDashboard();
+    }
 }
 
-const { error } = await _supabase.rpc(rpcName, params);
-showLoading(false);
-
-if (error) {
-alert('저장 실패: ' + error.message);
-} else {
-// 성공 시 에디터 모달 닫고 리스트 새로고침
-bootstrap.Modal.getInstance(document.getElementById('fundEditorModal')).hide();
-loadMemberFunds(memberUid, memberTextId);
-
-// 대시보드 통계도 갱신되면 좋으므로 (선택사항)
-loadDashboard();
-}
-}
 
 
 // 4. 삭제 실행
