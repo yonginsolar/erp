@@ -1713,36 +1713,100 @@ tbody.innerHTML += `<tr>
                </tr>`;
 });
 }
-// [수정] 연혁 모달 열기 (HTML 태그를 -> 편집하기 편한 텍스트로 변환)
-async function openHistoryModal(id) {
-document.getElementById('hist-id').value = id || '';
+// [수정] 상세 내역 모달 열기 (기부금에서 '구분' 칼럼 제거됨)
+function openHistoryModal(type) {
+    const titleEl = document.getElementById('historyModalTitle');
+    const summaryEl = document.getElementById('historyModalSummary');
+    const listEl = document.getElementById('historyModalList');
+    
+    let title = '';
+    let total = 0;
+    let html = '<table class="table table-sm table-striped small"><thead>';
+    
+    // 데이터 소스 선택
+    if(type === 'ledger') {
+        title = '출자금 납입 내역';
+        html += '<tr class="table-success"><th>날짜</th><th class="text-end">금액</th></tr></thead><tbody>';
+        const data = globalHistoryData.ledger || [];
+        total = data.reduce((a,c)=>a+Number(c.amount),0);
+        
+        if(data.length === 0) html += '<tr><td colspan="2" class="text-center py-3">내역 없음</td></tr>';
+        else {
+            data.forEach(item => {
+                html += `<tr>
+                    <td>${item.deposit_date ? item.deposit_date.substring(0,10) : '-'}</td>
+                    <td class="text-end fw-bold">${Number(item.amount).toLocaleString()}원</td>
+                </tr>`;
+            });
+        }
+        summaryEl.innerText = `총 납입액: ${Number(total).toLocaleString()}원`;
 
-if(id) {
-const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
-if(data) {
-document.getElementById('hist-date').value = data.event_date;
-document.getElementById('hist-title').value = data.title;
+    } else if(type === 'donation') {
+        // [수정됨] 구분 칼럼 제거 -> 날짜, 금액만 표시
+        title = '기부금 납부 내역';
+        html += '<tr class="table-danger"><th>날짜</th><th class="text-end">금액</th></tr></thead><tbody>';
+        const data = globalHistoryData.donations || [];
+        total = data.reduce((a,c)=>a+Number(c.amount),0);
 
-// ★ [핵심] DB의 HTML 태그를 사람이 보기 편한 텍스트로 복원
-let rawText = data.content || '';
-rawText = rawText.replaceAll('<br>', '\n');      // 줄바꿈 복원
-rawText = rawText.replaceAll('<ul>', '');        // 리스트 태그 제거
-rawText = rawText.replaceAll('</ul>', '');
-rawText = rawText.replaceAll('<ul class="my-1">', '');
-rawText = rawText.replace(/<li>/g, '- ');        // <li>를 '- '로 변환
-rawText = rawText.replace(/<\/li>/g, '\n');      // </li>를 줄바꿈으로
-rawText = rawText.replace(/\n\s*\n/g, '\n');     // 중복 줄바꿈 제거
+        if(data.length === 0) html += '<tr><td colspan="2" class="text-center py-3">내역 없음</td></tr>'; // colspan 3->2로 변경
+        else {
+            data.forEach(item => {
+                html += `<tr>
+                    <td>${item.donation_date}</td>
+                    <td class="text-end fw-bold">${Number(item.amount).toLocaleString()}원</td>
+                </tr>`;
+            });
+        }
+        summaryEl.innerText = `총 기부액: ${Number(total).toLocaleString()}원`;
 
-document.getElementById('hist-content').value = rawText.trim();
-}
-} else {
-// 신규 등록 시 초기화
-document.getElementById('hist-title').value = '';
-document.getElementById('hist-content').value = '';
-// 날짜는 오늘 날짜로 기본 세팅해주면 편함
-document.getElementById('hist-date').value = new Date().toISOString().substring(0, 10);
-}
-new bootstrap.Modal(document.getElementById('historyModal')).show();
+    } else if(type === 'point') {
+        title = '포인트 적립/사용 내역';
+        html += '<tr class="table-warning"><th>날짜</th><th>내용</th><th class="text-end">변동</th></tr></thead><tbody>';
+        const data = globalHistoryData.points || [];
+        total = data.reduce((a,c)=>a+Number(c.change_amount),0);
+
+        if(data.length === 0) html += '<tr><td colspan="3" class="text-center py-3">내역 없음</td></tr>';
+        else {
+            data.forEach(item => {
+                const isPlus = item.change_amount > 0;
+                const style = isPlus ? 'text-primary' : 'text-danger';
+                const sign = isPlus ? '+' : '';
+                html += `<tr>
+                    <td>${item.created_at ? item.created_at.substring(0,10) : '-'}</td>
+                    <td>${item.reason || item.transaction_type}</td>
+                    <td class="text-end fw-bold ${style}">${sign}${Number(item.change_amount).toLocaleString()}</td>
+                </tr>`;
+            });
+        }
+        summaryEl.innerText = `현재 잔액: ${Number(total).toLocaleString()} P`;
+
+    } else if(type === 'dividend') {
+        title = '배당금 지급 내역';
+        html += '<tr class="table-primary"><th>연도</th><th>지급일</th><th class="text-end">금액(세전)</th></tr></thead><tbody>';
+        const data = globalHistoryData.dividends || [];
+        total = data.reduce((a,c)=>a+Number(c.total_amount),0);
+
+        if(data.length === 0) html += '<tr><td colspan="3" class="text-center py-3">내역 없음</td></tr>';
+        else {
+            data.forEach(item => {
+                html += `<tr>
+                    <td>${item.fiscal_year}년</td>
+                    <td>${item.paid_at ? item.paid_at.substring(0,10) : '-'}</td>
+                    <td class="text-end fw-bold">${Number(item.total_amount).toLocaleString()}원</td>
+                </tr>`;
+            });
+        }
+        summaryEl.innerText = `누적 지급액: ${Number(total).toLocaleString()}원`;
+    }
+
+    html += '</tbody></table>';
+    
+    titleEl.innerText = title;
+    listEl.innerHTML = html;
+    
+    // 모달 표시
+    setModalDepth(true);
+    document.getElementById('historyModalOverlay').style.display = 'flex';
 }
 
 
