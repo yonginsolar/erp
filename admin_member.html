@@ -997,6 +997,24 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <input type="text" id="md-addr-detail" class="form-control" placeholder="상세 주소 (수정 시 입력)" style="display:none;">
 </div>
 
+<div class="mb-3">
+    <label class="form-label small fw-bold text-muted">🏅 보유 뱃지 (내부 관리용)</label>
+    <div class="card p-3 bg-light border-0" style="max-height:150px; overflow-y:auto;">
+        <div id="member-badge-checkboxes" class="d-flex flex-wrap gap-2">
+            <span class="text-muted small">로딩중...</span>
+        </div>
+    </div>
+    <div class="form-text x-small text-end">
+        * 체크박스를 변경하고 '저장 완료'를 누르면 반영됩니다.
+    </div>
+</div>
+
+<div class="col-md-12">
+    <label class="form-label small fw-bold text-muted">관리자 메모</label>
+    <textarea id="md-memo" class="form-control" rows="2"></textarea>
+</div>
+    
+    
 <div class="row g-3 mb-3">
 <div class="col-md-12">
 <label class="form-label small fw-bold text-muted">관리자 메모</label>
@@ -3188,133 +3206,130 @@ function renderEmptyState() {
 let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
 
 
-// [수정] 상세 모달 열기 (데이터 매칭 및 단체/개인 로직 분기)
 async function openMemberDetail(id) {
-  // 1) 들어온 id가 uuid(id/member_uid/uid)일 수도, member_id(텍스트)일 수도 있어서 안전 매칭
-  const m = g_members.find(x => (x.id || x.member_uid || x.uid) === id)
-        || g_members.find(x => (x.member_id || '') === id);
+    // 1) 데이터 매칭
+    const m = g_members.find(x => (x.id || x.member_uid || x.uid) === id)
+           || g_members.find(x => (x.member_id || '') === id);
 
-  if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
+    if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
 
-  // 2) 현재 조합원 UUID 확정 (가족/단체 연결 등 RPC에서 필요)
-  const memberUid = m.id || m.member_uid || m.uid || null;
-  if (!memberUid) return myAlert("조합원 UUID를 찾을 수 없습니다.", 'error');
+    // 2) UUID 확정
+    const memberUid = m.id || m.member_uid || m.uid || null;
+    if (!memberUid) return myAlert("조합원 UUID를 찾을 수 없습니다.", 'error');
 
-  g_current_member_id = memberUid; // ★ 반드시 UUID로 저장
+    g_current_member_id = memberUid;
 
-  // UI 초기화
-  document.getElementById('md-uid').value = memberUid;
-  document.getElementById('md-title').innerText = `${m.name} 님 상세`;
-  document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
-
-  // 뱃지/유형 표시
-  let typeStr = m.member_type || m.type || '개인';
-  document.getElementById('md-type-badge').innerText = typeStr;
-
-  // 폼 데이터 바인딩
-  document.getElementById('md-name').value = m.name || '';
-  document.getElementById('md-phone').value = m.phone || '';
-
-  // 상태
-  document.getElementById('md-status').value = m.status || '승인대기';
-  document.getElementById('md-type').value = typeStr;
-
-  // 주소
-  document.getElementById('md-addr').value = m.address || '';
-  document.getElementById('md-addr-detail').value = '';
-
-  // 메모
-  document.getElementById('md-memo').value = m.admin_memo || '';
-
-  // 계좌
-  document.getElementById('md-bank-name').value = m.bank_name || '';
-  document.getElementById('md-bank-owner').value = m.account_holder || '';
-  document.getElementById('md-bank-account').value = m.account_number || '';
-
-  // -----------------------------------------------------------
-  // ★ [핵심] 주민/사업자 번호 표시 로직 (개인 vs 단체)
-  // -----------------------------------------------------------
-  const rrn = m.rrn_display || ''; // 마스킹 된 값(개인) / 사업자번호(단체일 수도)
-  let displayInfo = '정보 없음';
-
-  // 단체는 아예 표시하지 않음 (값 자체를 보여주지 않기)
-  const isGroup = String(typeStr).includes('단체');
-
-  if (isGroup) {
-    displayInfo = '-'; // ★ 단체는 숨김
-  } else {
-    // 개인은 파싱 (840914-1******)
-    if (rrn) {
-      const cleanRrn = rrn.replace(/[^0-9]/g, ''); // 숫자만
-      if (cleanRrn.length >= 7) {
-        const yPre = cleanRrn.substr(6, 1); // 성별코드
-        const year = (yPre === '1' || yPre === '2') ? '19' : '20';
-        const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
-
-        // YYMMDD만 사용 (원래 로직 유지)
-        displayInfo = `${year}${cleanRrn.substr(0, 2)}년 ${cleanRrn.substr(2, 2)}월 ${cleanRrn.substr(4, 2)}일 (${gender})`;
-      } else {
-        displayInfo = '정보 없음';
-      }
+    // --- (기존 UI 초기화 코드 생략: md-uid, md-title, md-name 등 바인딩 유지) ---
+    document.getElementById('md-uid').value = memberUid;
+    document.getElementById('md-title').innerText = `${m.name} 님 상세`;
+    document.getElementById('md-id-text').innerText = m.member_id || 'ID없음';
+    let typeStr = m.member_type || m.type || '개인';
+    document.getElementById('md-type-badge').innerText = typeStr;
+    document.getElementById('md-name').value = m.name || '';
+    document.getElementById('md-phone').value = m.phone || '';
+    document.getElementById('md-status').value = m.status || '승인대기';
+    document.getElementById('md-type').value = typeStr;
+    document.getElementById('md-addr').value = m.address || '';
+    document.getElementById('md-addr-detail').value = '';
+    document.getElementById('md-memo').value = m.admin_memo || '';
+    document.getElementById('md-bank-name').value = m.bank_name || '';
+    document.getElementById('md-bank-owner').value = m.account_holder || '';
+    document.getElementById('md-bank-account').value = m.account_number || '';
+    
+    // --- (주민번호/SNS 로직 등 기존 코드 유지) ---
+    const rrn = m.rrn_display || '';
+    let displayInfo = '정보 없음';
+    const isGroup = String(typeStr).includes('단체');
+    if (isGroup) {
+        displayInfo = '-';
+    } else {
+        if (rrn) {
+            const cleanRrn = rrn.replace(/[^0-9]/g, '');
+            if (cleanRrn.length >= 7) {
+                const yPre = cleanRrn.substr(6, 1);
+                const year = (yPre === '1' || yPre === '2') ? '19' : '20';
+                const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
+                displayInfo = `${year}${cleanRrn.substr(0, 2)}년 ${cleanRrn.substr(2, 2)}월 ${cleanRrn.substr(4, 2)}일 (${gender})`;
+            }
+        }
     }
-  }
+    document.getElementById('md-rrn-view').innerText = displayInfo;
+    document.getElementById('md-rrn').value = '';
+    let snsHtml = '';
+    if (m.kakao_id) snsHtml += '<span class="badge bg-warning text-dark me-1"><i class="bi bi-chat-fill"></i> Kakao</span>';
+    if (m.naver_id) snsHtml += '<span class="badge bg-success"><i class="bi bi-n-square-fill"></i> Naver</span>';
+    document.getElementById('md-sns-status').innerHTML = snsHtml || '<span class="text-muted small">SNS 미연동</span>';
 
-  document.getElementById('md-rrn-view').innerText = displayInfo;
-  document.getElementById('md-rrn').value = ''; // 수정용 인풋 초기화
 
-  // SNS 연동 상태
-  let snsHtml = '';
-  if (m.kakao_id) snsHtml += '<span class="badge bg-warning text-dark me-1"><i class="bi bi-chat-fill"></i> Kakao</span>';
-  if (m.naver_id) snsHtml += '<span class="badge bg-success"><i class="bi bi-n-square-fill"></i> Naver</span>';
-  document.getElementById('md-sns-status').innerHTML = snsHtml || '<span class="text-muted small">SNS 미연동</span>';
+    // ============================================================
+    // ★ [추가됨] 뱃지 데이터 로드 및 렌더링
+    // ============================================================
+    
+    // 1. 전체 뱃지 마스터 데이터 로드 (없으면)
+    if (!g_badges || g_badges.length === 0) {
+        g_badges = await Badges.getAll(_supabase);
+    }
 
-  // 읽기 전용 모드로 시작
-  toggleEditMode(false);
+    // 2. 이 회원이 보유한 뱃지 ID 목록 조회
+    const { data: myBadges, error: badgeError } = await _supabase
+        .from('coop_member_badges')
+        .select('badge_id')
+        .eq('member_uid', memberUid);
 
-  // 하위 데이터 로드
-  loadMemberFunds(memberUid, m.member_id, true);  // 자금 내역
-  loadConsultLogs(memberUid);                    // 상담 이력 (내부에서 textId 사용)
-  loadMemberFamily(memberUid);                   // 가족/단체 목록
+    const myBadgeIds = (myBadges && !badgeError) ? myBadges.map(row => row.badge_id) : [];
 
-  new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
+    // 3. 체크박스 렌더링 (badges.js 활용)
+    // containerId, allBadges, checkedIds
+    Badges.renderCheckboxes('member-badge-checkboxes', g_badges, myBadgeIds);
+
+    // ============================================================
+
+    // 읽기 전용 모드로 시작
+    toggleEditMode(false);
+
+    // 하위 데이터 로드
+    loadMemberFunds(memberUid, m.member_id, true);
+    loadConsultLogs(memberUid);
+    loadMemberFamily(memberUid);
+
+    new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
 
-// [교체] 수정 모드 토글 (주소찾기 버튼 및 상세주소창 제어 추가)
 function toggleEditMode(isEdit) {
-const inputs = document.querySelectorAll('#md-tab-basic input, #md-tab-basic select, #md-tab-basic textarea');
-const btnSearch = document.getElementById('btn-addr-search'); // 주소검색 버튼
-const addrDetail = document.getElementById('md-addr-detail'); // 상세주소 입력창
+    const inputs = document.querySelectorAll('#md-tab-basic input:not([type=checkbox]), #md-tab-basic select, #md-tab-basic textarea');
+    const btnSearch = document.getElementById('btn-addr-search');
+    const addrDetail = document.getElementById('md-addr-detail');
 
-inputs.forEach(el => {
-// 주소 기본창(md-addr)은 수정 모드여도 직접 타이핑 불가 (검색 버튼 이용)
-if(el.id === 'md-addr') el.disabled = true; 
-else el.disabled = !isEdit;
+    // 1. 일반 입력창 제어
+    inputs.forEach(el => {
+        if(el.id === 'md-addr') el.disabled = true; 
+        else el.disabled = !isEdit;
+        el.classList.toggle('bg-light', !isEdit);
+    });
 
-el.classList.toggle('bg-light', !isEdit);
-});
+    // 2. ★ [추가됨] 뱃지 체크박스 제어
+    const badgeChecks = document.querySelectorAll('#member-badge-checkboxes input[type="checkbox"]');
+    badgeChecks.forEach(chk => {
+        chk.disabled = !isEdit; // 수정 모드일 때만 클릭 가능
+    });
 
-if(isEdit) {
-document.getElementById('btn-edit-mode').style.display = 'none';
-document.getElementById('btn-save-group').style.display = 'flex';
-
-document.getElementById('rrn-edit-area').style.display = 'block';
-document.getElementById('rrn-view-area').style.display = 'none';
-
-// 주소 관련 UI 노출
-btnSearch.style.display = 'inline-block';
-addrDetail.style.display = 'block';
-} else {
-document.getElementById('btn-edit-mode').style.display = 'inline-block';
-document.getElementById('btn-save-group').style.display = 'none';
-
-document.getElementById('rrn-edit-area').style.display = 'none';
-document.getElementById('rrn-view-area').style.display = 'block';
-
-// 주소 관련 UI 숨김
-btnSearch.style.display = 'none';
-addrDetail.style.display = 'none';
-}
+    // 3. UI 버튼 제어
+    if(isEdit) {
+        document.getElementById('btn-edit-mode').style.display = 'none';
+        document.getElementById('btn-save-group').style.display = 'flex';
+        document.getElementById('rrn-edit-area').style.display = 'block';
+        document.getElementById('rrn-view-area').style.display = 'none';
+        btnSearch.style.display = 'inline-block';
+        addrDetail.style.display = 'block';
+    } else {
+        document.getElementById('btn-edit-mode').style.display = 'inline-block';
+        document.getElementById('btn-save-group').style.display = 'none';
+        document.getElementById('rrn-edit-area').style.display = 'none';
+        document.getElementById('rrn-view-area').style.display = 'block';
+        btnSearch.style.display = 'none';
+        addrDetail.style.display = 'none';
+    }
 }
 
 // [교체] 주소 검색 (검색 결과 -> 기본창, 포커스 -> 상세창)
@@ -3329,51 +3344,74 @@ document.getElementById('md-addr-detail').focus();
 }).open();
 }
 
-// [수정] 저장 후 리스트 강제 갱신 로직 보강
 async function saveMemberBasic() {
-myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
-// 1. 주소 합치기
-const basicAddr = document.getElementById('md-addr').value;
-const detailAddr = document.getElementById('md-addr-detail').value;
-const finalAddr = detailAddr ? `${basicAddr} ${detailAddr}` : basicAddr;
+    myConfirm("수정된 정보를 저장하시겠습니까?", async () => {
+        // 1. 주소 합치기
+        const basicAddr = document.getElementById('md-addr').value;
+        const detailAddr = document.getElementById('md-addr-detail').value;
+        const finalAddr = detailAddr ? `${basicAddr} ${detailAddr}` : basicAddr;
 
-// 2. 계좌번호 안전장치 (* 포함 시 전송 안 함)
-let bankAcc = document.getElementById('md-bank-account').value;
-if (bankAcc && bankAcc.includes('*')) {
-bankAcc = null; 
-}
+        // 2. 계좌번호 안전장치
+        let bankAcc = document.getElementById('md-bank-account').value;
+        if (bankAcc && bankAcc.includes('*')) bankAcc = null;
 
-const updates = {
-p_id: document.getElementById('md-uid').value,
-p_name: document.getElementById('md-name').value,
-p_phone: document.getElementById('md-phone').value,
-p_address: finalAddr,
-p_bank_name: document.getElementById('md-bank-name').value,
-p_bank_owner: document.getElementById('md-bank-owner').value,
-p_bank_account: bankAcc,
-p_status: document.getElementById('md-status').value,
-p_member_type: document.getElementById('md-type').value,
-p_admin_memo: document.getElementById('md-memo').value,
-p_rrn: (document.getElementById('md-rrn').value || '').trim() || null 
-};
+        const memberUid = document.getElementById('md-uid').value;
 
-showLoading(true);
-const { error } = await _supabase.rpc('update_member_details_secure', updates);
-showLoading(false);
+        showLoading(true);
 
-if (error) myAlert('저장 실패: ' + error.message, 'error');
-else {
-myAlert('저장되었습니다.');
+        try {
+            // [A] 기본 정보 업데이트 (기존 로직)
+            const updates = {
+                p_id: memberUid,
+                p_name: document.getElementById('md-name').value,
+                p_phone: document.getElementById('md-phone').value,
+                p_address: finalAddr,
+                p_bank_name: document.getElementById('md-bank-name').value,
+                p_bank_owner: document.getElementById('md-bank-owner').value,
+                p_bank_account: bankAcc,
+                p_status: document.getElementById('md-status').value,
+                p_member_type: document.getElementById('md-type').value,
+                p_admin_memo: document.getElementById('md-memo').value,
+                p_rrn: (document.getElementById('md-rrn').value || '').trim() || null
+            };
 
-// 1. 수정 모드 종료
-toggleEditMode(false); 
+            const { error: basicError } = await _supabase.rpc('update_member_details_secure', updates);
+            if (basicError) throw basicError;
 
-// 2. ★ 핵심: 리스트에 변경 사항 즉시 반영 (딜레이 추가로 DB 반영 시간 확보)
-setTimeout(() => {
-fetchMembers(); // 전체 목록 새로고침
-}, 300);
-}
-});
+            // ============================================================
+            // ★ [추가됨] 뱃지 정보 동기화 (Sync)
+            // ============================================================
+            
+            // 1. 체크된 뱃지 ID 수집
+            const selectedBadges = [];
+            document.querySelectorAll('#member-badge-checkboxes input:checked').forEach(cb => {
+                selectedBadges.push(cb.value); // badge_id (UUID)
+            });
+
+            // 2. 동기화 RPC 호출
+            const { error: badgeError } = await _supabase.rpc('sync_member_badges', {
+                p_member_uid: memberUid,
+                p_badge_ids: selectedBadges
+            });
+
+            if (badgeError) throw new Error('뱃지 저장 실패: ' + badgeError.message);
+            // ============================================================
+
+
+            showLoading(false);
+            myAlert('저장되었습니다.');
+
+            toggleEditMode(false);
+            
+            // 리스트 갱신
+            setTimeout(() => { fetchMembers(); }, 300);
+
+        } catch (err) {
+            showLoading(false);
+            console.error(err);
+            myAlert('저장 중 오류 발생: ' + err.message, 'error');
+        }
+    });
 }
 
 
