@@ -3703,26 +3703,6 @@ async function saveFundData() {
 }
 
 
-
-// 4. 삭제 실행
-async function deleteFundData(type, id) {
-if(!confirm('정말 이 내역을 삭제하시겠습니까? (복구 불가)')) return;
-
-showLoading(true);
-const rpcName = type === 'capital' ? 'delete_capital_secure' : 'delete_donation_secure';
-const { error } = await _supabase.rpc(rpcName, { p_id: id });
-showLoading(false);
-
-if(error) {
-alert('삭제 실패: ' + error.message);
-} else {
-// 목록 새로고침
-const memberUid = document.getElementById('md-uid').value;
-const memberTextId = document.getElementById('md-id-text').innerText;
-loadMemberFunds(memberUid, memberTextId);
-loadDashboard(); // 통계 갱신
-}
-}
 // 1. [유틸] 알럿 -> 모달 대체
 function myAlert(msg, type='success') {
 const icon = type === 'success' 
