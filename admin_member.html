@@ -977,14 +977,30 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
             </select>
         </div>
 
-        <div class="col-md-12">
-            <label class="form-label small fw-bold text-muted">생년월일/성별 (주민/사업자번호)</label>
-            <div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
-                <span id="md-rrn-view">-</span>
+<div class="col-md-12">
+            <div id="area-individual">
+                <label class="form-label small fw-bold text-muted">생년월일/성별 (주민/사업자번호)</label>
+                <div id="rrn-view-area" class="p-2 bg-light rounded border text-secondary fw-bold">
+                    <span id="md-rrn-view">-</span>
+                </div>
+                <div id="rrn-edit-area" style="display:none;">
+                    <input type="text" id="md-rrn" class="form-control" placeholder="변경하려면 숫자만 입력하세요" maxlength="14"
+                        oninput="autoHyphen(this)">
+                </div>
             </div>
-            <div id="rrn-edit-area" style="display:none;">
-                <input type="text" id="md-rrn" class="form-control" placeholder="변경하려면 숫자만 입력하세요" maxlength="14"
-                    oninput="autoHyphen(this)">
+
+            <div id="area-group" style="display:none;">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">법인등록번호</label>
+                        <input type="text" id="md-corp-num" class="form-control" placeholder="000000-0000000" disabled>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">사업자(고유)번호</label>
+                        <input type="text" id="md-biz-num" class="form-control" placeholder="000-00-00000" disabled>
+                    </div>
+                </div>
+                <div class="form-text x-small mt-1 text-end">* 단체 정보는 하이픈(-)을 포함하여 입력해주세요.</div>
             </div>
         </div>
 
@@ -3024,6 +3040,8 @@ async function fetchMembers() {
                 'created_at',
                 'address',
                 'rrn_display',
+                'corp_number',      // [추가] 법인등록번호
+                'business_number',  // [추가] 사업자등록번호
                 'bank_name',
                 'account_holder',
                 'account_num_display',
@@ -3207,7 +3225,7 @@ let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
 async function openMemberDetail(id) {
     // 1. 데이터 매칭
     const m = g_members.find(x => (x.id || x.member_uid || x.uid) === id)
-           || g_members.find(x => (x.member_id || '') === id);
+            || g_members.find(x => (x.member_id || '') === id);
 
     if (!m) return myAlert("데이터를 찾을 수 없습니다.", 'error');
 
@@ -3236,28 +3254,56 @@ async function openMemberDetail(id) {
     document.getElementById('md-bank-owner').value = m.account_holder || '';
     document.getElementById('md-bank-account').value = m.account_number || '';
 
-    // 3. 주민번호/사업자번호 표시 로직 (기존 로직 유지)
-    const rrn = m.rrn_display || '';
-    let displayInfo = '정보 없음';
+    // 3. [수정] 개인/단체 구분 표시 로직 (A안 적용)
+    const areaInd = document.getElementById('area-individual');
+    const areaGrp = document.getElementById('area-group');
+    
     const isGroup = String(typeStr).includes('단체');
 
     if (isGroup) {
-        displayInfo = '-'; 
+        // [단체일 때] 
+        if(areaInd) areaInd.style.display = 'none';
+        if(areaGrp) areaGrp.style.display = 'block';
+
+        // DB 값을 그대로 인풋에 입력 (text, 하이픈 포함)
+        document.getElementById('md-corp-num').value = m.corp_number || '';
+        document.getElementById('md-biz-num').value = m.business_number || '';
+        
+        // 개인용 값 초기화
+        document.getElementById('md-rrn-view').innerText = '-';
+        document.getElementById('md-rrn').value = '';
+        
     } else {
-        if (rrn) {
-            const cleanRrn = rrn.replace(/[^0-9]/g, '');
-            if (cleanRrn.length >= 7) {
-                const yPre = cleanRrn.substr(6, 1);
-                const year = (yPre === '1' || yPre === '2') ? '19' : '20';
-                const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
-                displayInfo = `${year}${cleanRrn.substr(0, 2)}년 ${cleanRrn.substr(2, 2)}월 ${cleanRrn.substr(4, 2)}일 (${gender})`;
-            } else {
-                displayInfo = '정보 없음';
+        // [개인일 때]
+        if(areaInd) areaInd.style.display = 'block';
+        if(areaGrp) areaGrp.style.display = 'none';
+
+        // 단체용 값 초기화
+        document.getElementById('md-corp-num').value = '';
+        document.getElementById('md-biz-num').value = '';
+
+        // 주민번호/사업자번호 표시 로직 (기존 유지)
+        const rrn = m.rrn_display || '';
+        let displayInfo = '정보 없음';
+
+        if (isGroup) {
+             displayInfo = '-'; 
+        } else {
+            if (rrn) {
+                const cleanRrn = rrn.replace(/[^0-9]/g, '');
+                if (cleanRrn.length >= 7) {
+                    const yPre = cleanRrn.substr(6, 1);
+                    const year = (yPre === '1' || yPre === '2') ? '19' : '20';
+                    const gender = (yPre === '1' || yPre === '3') ? '남성' : '여성';
+                    displayInfo = `${year}${cleanRrn.substr(0, 2)}년 ${cleanRrn.substr(2, 2)}월 ${cleanRrn.substr(4, 2)}일 (${gender})`;
+                } else {
+                    displayInfo = '정보 없음';
+                }
             }
         }
+        document.getElementById('md-rrn-view').innerText = displayInfo;
+        document.getElementById('md-rrn').value = '';
     }
-    document.getElementById('md-rrn-view').innerText = displayInfo;
-    document.getElementById('md-rrn').value = '';
 
     // 4. SNS 연동 상태 표시 (기존 로직 유지)
     let snsHtml = '';
@@ -3309,8 +3355,15 @@ function toggleEditMode(isEdit) {
     const inputs = document.querySelectorAll('#md-tab-basic input:not([type=checkbox]), #md-tab-basic select, #md-tab-basic textarea');
     inputs.forEach(el => {
         if(el.id === 'md-addr') el.disabled = true; 
-        else el.disabled = !isEdit;
-        el.classList.toggle('bg-light', !isEdit);
+        
+        // [수정] 단체 번호 인풋들은 별도 로직으로 처리하기 위해 스킵 (아래 4번에서 처리)
+        else if(el.id === 'md-corp-num' || el.id === 'md-biz-num') {
+            // pass
+        }
+        else {
+            el.disabled = !isEdit;
+            el.classList.toggle('bg-light', !isEdit);
+        }
     });
 
     // 2. ★ [추가됨] 뱃지 체크박스 제어
@@ -3338,6 +3391,21 @@ function toggleEditMode(isEdit) {
         document.getElementById('rrn-view-area').style.display = 'block';
         btnSearch.style.display = 'none';
         addrDetail.style.display = 'none';
+    }
+
+    // 4. [수정] 단체용 인풋 박스 제어 (Edit 모드일 때 + 단체 영역이 보일 때만)
+    const corpInput = document.getElementById('md-corp-num');
+    const bizInput = document.getElementById('md-biz-num');
+    
+    const isGroupVisible = document.getElementById('area-group').style.display !== 'none';
+
+    if (isGroupVisible) {
+        corpInput.disabled = !isEdit;
+        bizInput.disabled = !isEdit;
+        
+        // 배경색 처리
+        corpInput.classList.toggle('bg-light', !isEdit);
+        bizInput.classList.toggle('bg-light', !isEdit);
     }
 }
 
@@ -3367,7 +3435,11 @@ async function saveMemberBasic() {
         showLoading(true);
 
         try {
-            // 2. 기본 정보 업데이트 (기존 로직 유지)
+            // [수정] 단체 정보도 함께 수집
+            const corpNum = document.getElementById('md-corp-num').value || null;
+            const bizNum = document.getElementById('md-biz-num').value || null;
+
+            // 2. 기본 정보 업데이트 (기존 로직 유지 + 단체 파라미터 추가)
             const updates = {
                 p_id: memberUid,
                 p_name: document.getElementById('md-name').value,
@@ -3379,7 +3451,11 @@ async function saveMemberBasic() {
                 p_status: document.getElementById('md-status').value,
                 p_member_type: document.getElementById('md-type').value,
                 p_admin_memo: document.getElementById('md-memo').value,
-                p_rrn: (document.getElementById('md-rrn').value || '').trim() || null
+                p_rrn: (document.getElementById('md-rrn').value || '').trim() || null,
+                
+                // [신규] 단체 정보 파라미터
+                p_corp_number: corpNum,
+                p_business_number: bizNum
             };
 
             const { error: basicError } = await _supabase.rpc('update_member_details_secure', updates);
