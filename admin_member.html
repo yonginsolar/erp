@@ -200,12 +200,12 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm p-4 mb-3">
+<div class="card border-0 shadow-sm p-4 mb-3">
         <h5 class="fw-bold mb-3">바로가기</h5>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-dark" onclick="openNoticeModal()">📢 공지사항 쓰기</button>
             <button class="btn btn-outline-success" onclick="document.getElementById('nav-members').click()">👥 조합원 검색</button>
-            <button class="btn btn-outline-secondary" onclick="alert('준비중: 관리자 로그 뷰어')">🛡️ 관리자 로그</button>
+            <button class="btn btn-outline-secondary" onclick="openAdminLogModal()">🛡️ 관리자 로그</button>
         </div>
     </div>
 </div>
@@ -1379,6 +1379,82 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
             <div class="modal-footer bg-light p-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
                 <button type="button" class="btn btn-primary btn-sm px-4 fw-bold" onclick="saveChildMember()">자녀 등록 완료</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+    <div class="modal fade" id="adminLogModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill me-2"></i>관리자 활동 로그</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body bg-light">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body py-3">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-2">
+                                <select id="log-filter-type" class="form-select form-select-sm" onchange="g_log_page=0; fetchAdminLogs();">
+                                    <option value="all">모든 활동</option>
+                                    <option value="VIEW">👁️ 조회 (VIEW)</option>
+                                    <option value="EDIT">✏️ 수정 (EDIT)</option>
+                                    <option value="DOWNLOAD">📥 다운로드 (DOWNLOAD)</option>
+                                    <option value="LOGIN">🔑 로그인 (LOGIN)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" id="log-search-keyword" class="form-control form-control-sm" 
+                                       placeholder="대상, 내용, 이메일 검색..." onkeyup="if(event.key=='Enter') { g_log_page=0; fetchAdminLogs(); }">
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-sm btn-dark w-100" onclick="g_log_page=0; fetchAdminLogs()">
+                                    <i class="bi bi-search"></i> 검색
+                                </button>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <small class="text-muted" id="log-total-count">총 0건</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="table-responsive" style="min-height: 400px;">
+                        <table class="table table-hover align-middle mb-0 text-center small">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 150px;">일시</th>
+                                    <th style="width: 150px;">관리자(이메일)</th>
+                                    <th style="width: 100px;">유형</th>
+                                    <th style="width: 150px;">대상</th>
+                                    <th>상세 내용</th>
+                                    <th style="width: 120px;">IP / 정보</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logListBody">
+                                <tr><td colspan="6" class="py-5 text-muted">데이터를 불러오는 중입니다...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="card-footer bg-white border-top-0 d-flex justify-content-center py-3">
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeLogPage(-1)">
+                                <i class="bi bi-chevron-left"></i> 이전
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary disabled fw-bold" id="log-page-num" style="width: 100px;">
+                                Page 1
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeLogPage(1)">
+                                다음 <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4377,6 +4453,139 @@ window.onload = async function() {
         console.log("무한 스크롤 이벤트 연결됨");
     }
 };
+
+    // ================================================================
+// [기능 11] 관리자 로그 뷰어 (신규 추가)
+// ================================================================
+
+// 전역 변수: 로그 페이지 관리용
+let g_log_page = 0;
+const LOG_PAGE_SIZE = 20;
+
+// 1. 로그 뷰어 모달 열기
+function openAdminLogModal() {
+    // 초기화: 첫 페이지, 필터 초기화, 검색어 초기화
+    g_log_page = 0;
+    document.getElementById('log-filter-type').value = 'all';
+    document.getElementById('log-search-keyword').value = '';
+    
+    // 데이터 로드
+    fetchAdminLogs();
+    
+    // 모달 표시
+    new bootstrap.Modal(document.getElementById('adminLogModal')).show();
+}
+
+// 2. 로그 데이터 조회 (Supabase)
+async function fetchAdminLogs() {
+    const tbody = document.getElementById('logListBody');
+    const typeFilter = document.getElementById('log-filter-type').value;
+    const keyword = document.getElementById('log-search-keyword').value.trim();
+    
+    // 로딩 표시
+    tbody.innerHTML = '<tr><td colspan="6" class="py-5"><div class="spinner-border text-primary"></div></td></tr>';
+
+    try {
+        // 쿼리 작성 (최신순 정렬)
+        let query = _supabase
+            .from('admin_logs')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false });
+
+        // 필터 적용: 유형
+        if (typeFilter !== 'all') {
+            query = query.eq('action_type', typeFilter);
+        }
+
+        // 필터 적용: 검색어 (대상, 내용, 이메일 통합 검색)
+        if (keyword) {
+            // ilike를 사용하여 대소문자 구분 없이 검색
+            // target, details, admin_email 칼럼 중 하나라도 포함되면 검색
+            query = query.or(`target.ilike.%${keyword}%,details.ilike.%${keyword}%,admin_email.ilike.%${keyword}%`);
+        }
+
+        // 페이징 적용 (range: 0부터 시작)
+        const from = g_log_page * LOG_PAGE_SIZE;
+        const to = from + LOG_PAGE_SIZE - 1;
+        query = query.range(from, to);
+
+        // 실행
+        const { data, count, error } = await query;
+
+        if (error) throw error;
+
+        // UI 업데이트
+        document.getElementById('log-total-count').innerText = `총 ${count ? count.toLocaleString() : 0}건`;
+        document.getElementById('log-page-num').innerText = `Page ${g_log_page + 1}`;
+
+        // 테이블 렌더링
+        renderLogTable(data);
+
+    } catch (err) {
+        console.error("로그 로드 실패:", err);
+        tbody.innerHTML = `<tr><td colspan="6" class="py-5 text-danger">데이터를 불러오지 못했습니다.<br><small>${err.message}</small></td></tr>`;
+    }
+}
+
+// 3. 로그 테이블 렌더링 (HTML 생성)
+function renderLogTable(list) {
+    const tbody = document.getElementById('logListBody');
+    tbody.innerHTML = '';
+
+    if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-muted">기록된 활동 로그가 없습니다.</td></tr>';
+        return;
+    }
+
+    list.forEach(log => {
+        // 날짜 포맷팅 (YYYY-MM-DD HH:MM:SS)
+        let dateStr = '-';
+        if (log.created_at) {
+            const d = new Date(log.created_at);
+            dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ` +
+                      `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+        }
+
+        // 유형별 뱃지 스타일
+        let typeBadge = `<span class="badge bg-secondary">${log.action_type}</span>`;
+        if (log.action_type === 'DOWNLOAD') typeBadge = `<span class="badge bg-danger">📥 다운로드</span>`;
+        else if (log.action_type === 'EDIT') typeBadge = `<span class="badge bg-primary">✏️ 수정</span>`;
+        else if (log.action_type === 'VIEW') typeBadge = `<span class="badge bg-light text-dark border">👁️ 조회</span>`;
+        else if (log.action_type === 'LOGIN') typeBadge = `<span class="badge bg-success">🔑 로그인</span>`;
+
+        // 이메일 마스킹 (선택 사항이지만 관리자끼리니 일단 다 보여줌)
+        const email = log.admin_email || 'unknown';
+
+        tbody.innerHTML += `
+            <tr>
+                <td class="text-muted small">${dateStr}</td>
+                <td class="fw-bold text-dark">${email}</td>
+                <td>${typeBadge}</td>
+                <td class="text-start">${log.target || '-'}</td>
+                <td class="text-start text-truncate" style="max-width: 300px;" title="${log.details}">
+                    ${log.details || '-'}
+                </td>
+                <td class="text-muted small">${log.ip_address || '-'}</td>
+            </tr>
+        `;
+    });
+}
+
+// 4. 페이지 변경 함수
+function changeLogPage(direction) {
+    const next = g_log_page + direction;
+    if (next < 0) return; // 0페이지 미만 방지
+    
+    // 다음 페이지가 있는지 확인하는 로직은 count를 이용해 정교하게 짤 수도 있지만,
+    // 간단하게는 '현재 리스트가 꽉 찼으면 다음이 있다'고 가정하거나,
+    // fetchAdminLogs 안에서 count를 전역으로 저장해서 비교할 수 있습니다.
+    // 여기서는 일단 요청을 보내고 데이터가 없으면 빈 화면이 나오는 기본 방식으로 처리 후,
+    // 개선한다면 'count'를 확인하여 버튼을 비활성화하는 로직을 추가할 수 있습니다.
+    
+    // 단순화: 일단 이동하고 조회
+    g_log_page = next;
+    fetchAdminLogs();
+}
     
 
 </script>
