@@ -13,6 +13,7 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://yonginsolar.github.io/home/badges.js"></script>
 <script src="https://yonginsolar.github.io/home/cert_generator.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
 
 <style>
@@ -153,73 +154,123 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
         </div>
     </div>
 
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 ps-3">
+                    📊 월별 출자금 및 감자 현황
+                </div>
+                <div class="card-body">
+                    <canvas id="chart-capital"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 ps-3">
+                    👥 조합원 구성 (지역)
+                </div>
+                <div class="card-body">
+                    <canvas id="chart-location" style="max-height: 250px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 ps-3">
+                    🎂 연령대 분포
+                </div>
+                <div class="card-body">
+                    <canvas id="chart-age"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 ps-3">
+                    👋 주요 탈퇴 사유 (Top 5)
+                </div>
+                <div class="card-body">
+                     <canvas id="chart-exit"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card border-0 shadow-sm p-4 mb-3">
         <h5 class="fw-bold mb-3">바로가기</h5>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-dark" onclick="openNoticeModal()">📢 공지사항 쓰기</button>
             <button class="btn btn-outline-success" onclick="document.getElementById('nav-members').click()">👥 조합원 검색</button>
-            <button class="btn btn-outline-primary" onclick="alert('준비중입니다.')">📊 엑셀 업로드</button>
+            <button class="btn btn-outline-secondary" onclick="alert('준비중: 관리자 로그 뷰어')">🛡️ 관리자 로그</button>
         </div>
     </div>
 </div>
 
 <div class="tab-pane fade" id="tab-members">
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-<h3 class="fw-bold m-0" style="font-family:'GmarketSans';">조합원 명부</h3>
-<button class="btn btn-primary" onclick="alert('신규 등록은 신청서를 통해 진행됩니다.')">+ 신규 등록 안내</button>
-</div>
-
-<div class="card p-3 mb-3 border-0 bg-light">
-    <div class="row g-2 align-items-center">
-        <div class="col-md-2">
-            <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
-                <option value="all" selected>상태: 전체</option>
-                <option value="정상">정상 (정조합원)</option>  <option value="승인대기">승인 대기</option>      <option value="탈퇴">탈퇴/제명</option>          </select>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="fw-bold m-0" style="font-family:'GmarketSans';">조합원 명부</h3>
         </div>
 
-        <div class="col-md-2">
-            <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
-                <option value="all">유형: 전체</option>
-                <option value="개인">개인</option>  <option value="단체">단체</option>  </select>
-        </div>
+    <div class="card p-3 mb-3 border-0 bg-light">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2">
+                <select id="filter-status" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="all" selected>상태: 전체</option>
+                    <option value="정상">정상 (정조합원)</option>
+                    <option value="승인대기">승인 대기</option>
+                    <option value="탈퇴">탈퇴/제명</option>
+                </select>
+            </div>
 
-        <div class="col-md-2">
-            <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
-                <option value="name">이름순</option>
-                <option value="join_date">가입일순 (최신)</option>
-                <option value="capital">출자금순 (고액)</option>
-            </select>
-        </div>
+            <div class="col-md-2">
+                <select id="filter-type" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="all">유형: 전체</option>
+                    <option value="개인">개인</option>
+                    <option value="단체">단체</option>
+                </select>
+            </div>
 
-        <div class="col-md-4">
-            <div class="input-group input-group-sm">
-                <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
-                <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
+            <div class="col-md-2">
+                <select id="sort-order" class="form-select form-select-sm" onchange="fetchMembers()">
+                    <option value="name">이름순</option>
+                    <option value="join_date">가입일순 (최신)</option>
+                    <option value="capital">출자금순 (고액)</option>
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <div class="input-group input-group-sm">
+                    <input type="text" id="search-keyword" class="form-control" placeholder="이름 / 전화번호 / 조합원번호" onkeyup="if(event.key=='Enter') fetchMembers()">
+                    <button class="btn btn-secondary" onclick="fetchMembers()">검색</button>
+                </div>
+            </div>
+
+            <div class="col-md-2 text-end">
+                <button class="btn btn-sm btn-outline-success" onclick="openExcelModal()">📥 엑셀</button>
             </div>
         </div>
-
-        <div class="col-md-2 text-end">
-            <button class="btn btn-sm btn-outline-success" onclick="openExcelModal()">📥 엑셀</button>
-        </div>
     </div>
-</div>
 
-<div class="table-responsive bg-white border rounded">
-<table class="table table-hover align-middle mb-0 text-center">
-<thead class="table-light">
-<tr>
-<th>번호</th>
-<th>유형</th>
-<th>이름 (조합원번호)</th>
-<th>연락처</th>
-<th>가입일/상태</th>
-<th>출자금</th>
-<th>관리</th>
-</tr>
-</thead>
-<tbody id="memberListBody"></tbody>
-</table>
-</div>
+    <div class="table-responsive bg-white border rounded">
+        <table class="table table-hover align-middle mb-0 text-center">
+            <thead class="table-light">
+                <tr>
+                    <th>번호</th>
+                    <th>유형</th>
+                    <th>이름 (조합원번호)</th>
+                    <th>연락처</th>
+                    <th>가입일/상태</th>
+                    <th>출자금</th>
+                    <th>관리</th>
+                </tr>
+            </thead>
+            <tbody id="memberListBody"></tbody>
+        </table>
+    </div>
 </div>
 
 <div id="tab-deposit" class="tab-pane">
@@ -1354,6 +1405,17 @@ let g_plants = []; // [추가] 발전소 목록 기억용
 let g_badges = []; // DB에서 불러온 뱃지 목록을 기억해둠
 let g_fund_page = 0; // [추가] 무한 스크롤 페이지 번호
 const PAGE_SIZE = 20; // [추가] 한 번에 불러올 개수
+    
+    // [신규] 보안 엑셀 다운로드용 2차 인증 PIN (관리자가 입력해야 함)
+    const SECURE_PIN = "solar2025!"; 
+
+// [신규] 차트 인스턴스 관리용 (중복 생성 방지)
+let g_charts = {
+    capital: null,
+    location: null,
+    age: null,
+    exit: null
+};
 
 
 
@@ -1384,6 +1446,27 @@ if (path) await _supabase.storage.from('assets').remove([path]);
 } catch (e) { console.error("파일 삭제 오류:", e); }
 }
 
+
+// [신규] 관리자 활동 로그 기록
+async function logAdminAction(type, target, details) {
+    // 1. 현재 접속자 확인
+    const userEmail = document.getElementById('adminProfile') 
+        ? document.getElementById('adminProfile').innerText 
+        : 'unknown';
+
+    // 2. 로그 테이블에 Insert
+    // (에러가 나도 사용자 흐름을 막지 않기 위해 await 없이 실행하거나 catch 처리)
+    _supabase.from('admin_logs').insert({
+        admin_email: userEmail,
+        action_type: type, // VIEW, EDIT, DOWNLOAD, LOGIN
+        target: target,
+        details: details,
+        ip_address: 'client-side' // 클라이언트에서 IP 확인은 어려우므로 일단 마킹
+    }).then(({ error }) => {
+        if(error) console.warn("로그 기록 실패:", error);
+    });
+}
+    
 
 // [권한 체크] RPC 함수로 보안 검증 (무한 루프 방지됨)
 // [수정] 관리자 권한 체크 함수 (에러 방지 적용)
@@ -1504,35 +1587,85 @@ fetchMembers();
 function togglePwd(show) { document.getElementById('pwdArea').style.display = show ? 'block' : 'none'; }
 function openExcelModal() { new bootstrap.Modal(document.getElementById('excelModal')).show(); }
 
+// [수정] 엑셀 다운로드 (보안 모드 RPC 연동 및 로그 기록)
 async function downloadExcel() {
-const type = document.querySelector('input[name="excelOption"]:checked').value;
-let dataToExport = [];
+    const type = document.querySelector('input[name="excelOption"]:checked').value;
+    let dataToExport = [];
+    let fileName = "조합원명부_일반.xlsx";
 
-if(type === 'secret') {
-const pwd = document.getElementById('decryptKey').value;
-if(!pwd) return alert('비밀번호를 입력하세요.');
-// 보안 데이터는 RPC로 가져와야 함 (여기서는 구현 생략 가능하면 생략하겠지만, 완전판 요청이므로 로직만 둡니다)
-// 실제로는 get_decrypted_member 같은 함수가 필요합니다. 
-// 일단은 현재 메모리에 있는 g_members로 진행하되 주민번호는 마스킹된 상태로 나갑니다.
-alert('주의: 현재 보안용 복호화 RPC가 연결되지 않아 기본 정보만 다운로드됩니다.');
-dataToExport = g_members;
-} else {
-dataToExport = g_members;
-}
+    // 1. 보안용 엑셀 다운로드
+    if(type === 'secret') {
+        const inputPin = document.getElementById('decryptKey').value;
+        
+        // PIN 번호 검증 (JS 레벨 2차 인증)
+        if(inputPin !== SECURE_PIN) {
+            return alert('비밀번호가 올바르지 않습니다.');
+        }
 
-const excelData = dataToExport.map(m => ({
-"조합원번호": m.member_id,
-"이름": m.name,
-"연락처": m.phone,
-"상태": m.status,
-"주민/사업자(마스킹)": m.rrn_display
-}));
+        showLoading(true);
 
-const ws = XLSX.utils.json_to_sheet(excelData);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "조합원명부");
-XLSX.writeFile(wb, "조합원명부.xlsx");
-bootstrap.Modal.getInstance(document.getElementById('excelModal')).hide();
+        // 보안 RPC 호출 (DB 내부에서 복호화 수행)
+        const { data, error } = await _supabase.rpc('get_full_members_secure');
+        
+        showLoading(false);
+
+        if(error) {
+            console.error(error);
+            return alert('보안 데이터 로드 실패: ' + error.message);
+        }
+
+        // 데이터 매핑 (복호화된 칼럼 사용)
+        dataToExport = data.map(m => ({
+            "조합원번호": m.member_id,
+            "이름": m.name,
+            "유형": m.member_type,
+            "상태": m.status,
+            "연락처": m.phone,
+            "주소": m.address,
+            "가입일": m.join_date,
+            "주민/사업자번호(전체)": m.decrypted_rrn,    // 복호화된 값
+            "은행명": m.bank_name,
+            "예금주": m.account_holder,
+            "계좌번호(전체)": m.decrypted_account      // 복호화된 값
+        }));
+        
+        fileName = "조합원명부_보안(개인정보포함).xlsx";
+        
+        // 로그 기록
+        logAdminAction('DOWNLOAD', '조합원명부', '보안용(주민/계좌 포함) 다운로드');
+
+    } else {
+        // 2. 일반용 엑셀 다운로드 (기존 g_members 활용)
+        // 화면에 있는 데이터 그대로 사용 (마스킹된 상태)
+        dataToExport = g_members.map(m => ({
+            "조합원번호": m.member_id,
+            "이름": m.name,
+            "유형": m.member_type,
+            "연락처": m.phone,
+            "상태": m.status,
+            "가입일": m.join_date,
+            "출자금": m.total_capital,
+            "주소": m.address
+        }));
+        
+        // 로그 기록
+        logAdminAction('DOWNLOAD', '조합원명부', '일반용 다운로드');
+    }
+
+    // 3. 엑셀 파일 생성 및 다운로드 (SheetJS)
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    
+    // 칼럼 너비 자동 조정 (약간의 편의성)
+    const wscols = Object.keys(dataToExport[0] || {}).map(k => ({wch: 15}));
+    ws['!cols'] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "명부");
+    XLSX.writeFile(wb, fileName);
+    
+    // 모달 닫기 및 초기화
+    document.getElementById('decryptKey').value = '';
+    bootstrap.Modal.getInstance(document.getElementById('excelModal')).hide();
 }
 
 
@@ -2929,76 +3062,135 @@ fetchNotices();
 }
 }
 
-// [수정] 대시보드 데이터 로드 (파트너 대기 알림 추가)
+// [수정] 대시보드 데이터 로드 (통계 차트 연동)
 async function loadDashboard() {
     console.log("대시보드 데이터 로딩 시작...");
 
-    // 1. 총 조합원 수
+    // 1. 기본 카운트 데이터 (기존 로직 유지)
     const { count: totalCount } = await _supabase
         .from('coop_members').select('*', { count: 'exact', head: true });
 
-    // 2. 조합원 승인 대기
     const { count: pendingCount } = await _supabase
         .from('coop_members').select('*', { count: 'exact', head: true }).eq('status', '승인대기');
 
-    // 3. 상담 건수
     const todayStr = new Date().toISOString().split('T')[0];
     const { count: todayConsult } = await _supabase
         .from('consult_logs').select('*', { count: 'exact', head: true }).gte('created_at', todayStr);
 
-    // 4. 출자금 합계
-let totalCapital = 0;
-const { data: capitalResult, error: capError } = await _supabase.rpc('get_total_capital_secure');
+    let totalCapital = 0;
+    const { data: capitalResult, error: capError } = await _supabase.rpc('get_total_capital_secure');
+    if (!capError) totalCapital = capitalResult || 0;
 
-if (capError) {
-    console.error("출자금 집계 실패:", capError);
-} else {
-    totalCapital = capitalResult || 0;
-}
-    // ★ [추가] 파트너 신청/수정 대기 건수 확인
-    const { count: partnerPending } = await _supabase
-        .from('site_partners')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-    // --- UI 업데이트 ---
+    // UI 업데이트 (숫자)
     setText('dashboard-total-count', (totalCount || 0) + '명');
     setText('dash-capital', totalCapital.toLocaleString() + '원');
     setText('dash-consult', (todayConsult || 0) + '건');
 
-    // 조합원 승인 대기 UI
     const pendingEl = document.getElementById('dashboard-pending-count');
     if (pendingEl) {
         pendingEl.innerText = (pendingCount || 0) + '명';
         pendingEl.className = pendingCount > 0 ? "display-6 fw-bold mb-0 text-danger" : "display-6 fw-bold mb-0";
     }
 
-    // ★ [추가] 파트너 알림 (대시보드 상단에 경고창 띄우기)
-    const alertArea = document.getElementById('dashboard-alert-area'); // HTML에 이 ID를 가진 div를 만들어두면 좋습니다.
-    // 만약 HTML 수정이 어렵다면 JS로 동적 생성
-    let partnerAlert = document.getElementById('partner-pending-alert');
-    if (partnerPending > 0) {
-        if (!partnerAlert) {
-            const dashboardTab = document.getElementById('tab-dashboard');
-            partnerAlert = document.createElement('div');
-            partnerAlert.id = 'partner-pending-alert';
-            partnerAlert.className = 'alert alert-warning border-warning d-flex justify-content-between align-items-center shadow-sm mb-4';
-            partnerAlert.innerHTML = `
-                <div>
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    <strong>협력 단체(파트너)</strong> 승인 대기 건이 <strong>${partnerPending}건</strong> 있습니다.
-                </div>
-                <button class="btn btn-sm btn-dark" onclick="switchTab('site'); setTimeout(()=>document.querySelector('[href=\\'#sub-partners\\']').click(), 200);">이동</button>
-            `;
-            dashboardTab.prepend(partnerAlert); // 대시보드 맨 위에 추가
-        } else {
-            partnerAlert.querySelector('strong:nth-of-type(2)').innerText = `${partnerPending}건`;
-        }
-    } else {
-        if (partnerAlert) partnerAlert.remove();
+    // 2. [신규] 통계 차트 데이터 로드
+    const { data: stats, error: statError } = await _supabase.rpc('get_dashboard_stats');
+    
+    if (statError) {
+        console.error("통계 로드 실패:", statError);
+    } else if (stats) {
+        // (1) 월별 출자금 차트 (Line Chart)
+        renderChart('capital', 'chart-capital', 'line', {
+            labels: (stats.monthly_capital || []).reverse().map(x => x.month), // 날짜 오름차순
+            datasets: [{
+                label: '월별 출자금 유입',
+                data: (stats.monthly_capital || []).reverse().map(x => x.total),
+                borderColor: '#198754', // Success Color
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        }, `📉 총 감자액(반환): ${Number(stats.capital_reduction || 0).toLocaleString()}원`);
+
+        // (2) 지역 분포 차트 (Pie Chart)
+        const locLabels = Object.keys(stats.location || {});
+        const locData = Object.values(stats.location || {});
+        renderChart('location', 'chart-location', 'doughnut', {
+            labels: locLabels,
+            datasets: [{
+                data: locData,
+                backgroundColor: ['#0d6efd', '#6610f2', '#fd7e14', '#adb5bd'] // Bootstrap Colors
+            }]
+        });
+
+        // (3) 연령대 분포 (Bar Chart)
+        // 정렬: 10대, 20대... 순서 보장
+        const ageObj = stats.age_group || {};
+        const ageLabels = Object.keys(ageObj).sort();
+        const ageData = ageLabels.map(k => ageObj[k]);
+        
+        renderChart('age', 'chart-age', 'bar', {
+            labels: ageLabels,
+            datasets: [{
+                label: '조합원 수',
+                data: ageData,
+                backgroundColor: '#ffc107' // Warning Color
+            }]
+        });
+
+        // (4) 탈퇴 사유 (Horizontal Bar)
+        const reasons = stats.exit_reasons || []; // [{reason: '...', count: 1}, ...]
+        renderChart('exit', 'chart-exit', 'bar', {
+            labels: reasons.map(r => r.reason || '기타'),
+            datasets: [{
+                label: '건수',
+                data: reasons.map(r => r.count),
+                backgroundColor: '#dc3545', // Danger Color
+            }],
+            indexAxis: 'y' // 가로 막대
+        });
     }
 
-    console.log("대시보드 로딩 완료");
+    // 로그 기록
+    logAdminAction('VIEW', '대시보드', '메인 화면 조회');
+}
+
+// [보조] 차트 렌더링 헬퍼 함수
+function renderChart(key, canvasId, type, data, titleText = null) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    // 기존 차트가 있으면 삭제 (캔버스 재사용 문제 방지)
+    if (g_charts[key]) {
+        g_charts[key].destroy();
+    }
+
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { 
+                display: type !== 'bar' || data.indexAxis === 'y', // 막대그래프는 범례 숨김 (깔끔하게)
+                position: 'bottom' 
+            }
+        }
+    };
+
+    // 제목이 있으면 추가 (예: 감자액 표시용)
+    if (titleText) {
+        options.plugins.title = {
+            display: true,
+            text: titleText,
+            align: 'end',
+            color: '#dc3545',
+            font: { size: 12 }
+        };
+    }
+
+    g_charts[key] = new Chart(ctx, {
+        type: type,
+        data: data,
+        options: options
+    });
 }
 
 // [보조] 텍스트 세팅 헬퍼
@@ -4185,6 +4377,7 @@ window.onload = async function() {
         console.log("무한 스크롤 이벤트 연결됨");
     }
 };
+    
 
 </script>
 </body>
