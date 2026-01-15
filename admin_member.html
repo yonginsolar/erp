@@ -993,11 +993,11 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
                 <div class="row g-2">
                     <div class="col-6">
                         <label class="form-label small fw-bold text-muted">법인등록번호</label>
-                        <input type="text" id="md-corp-num" class="form-control" placeholder="000000-0000000" disabled>
+                        <input type="text" id="md-corp-num" class="form-control" placeholder="000000-0000000" maxlength="14" oninput="autoHyphen(this)" disabled>
                     </div>
                     <div class="col-6">
                         <label class="form-label small fw-bold text-muted">사업자(고유)번호</label>
-                        <input type="text" id="md-biz-num" class="form-control" placeholder="000-00-00000" disabled>
+                        <input type="text" id="md-biz-num" class="form-control" placeholder="000-00-00000" maxlength="12" oninput="autoHyphen(this)" disabled>
                     </div>
                 </div>
                 <div class="form-text x-small mt-1 text-end">* 단체 정보는 하이픈(-)을 포함하여 입력해주세요.</div>
@@ -3959,17 +3959,32 @@ new bootstrap.Modal(document.getElementById('customConfirmModal')).show();
 }
 
 // 2. [유틸] 자동 하이픈 (HTML oninput="autoHyphen(this)" 연결 필요)
+
 function autoHyphen(target) {
-let val = target.value.replace(/[^0-9]/g, '');
-if(target.id === 'md-phone') { // 전화번호
-if(val.length < 4) target.value = val;
-else if(val.length < 7) target.value = val.substr(0, 3) + '-' + val.substr(3);
-else if(val.length < 11) target.value = val.substr(0, 3) + '-' + val.substr(3, 3) + '-' + val.substr(6);
-else target.value = val.substr(0, 3) + '-' + val.substr(3, 4) + '-' + val.substr(7);
-} else if(target.id === 'md-rrn') { // 주민번호
-if(val.length < 7) target.value = val;
-else target.value = val.substr(0, 6) + '-' + val.substr(6, 7);
-}
+    // 숫자만 남기고 제거
+    let val = target.value.replace(/[^0-9]/g, '');
+
+    if(target.id === 'md-phone') { // 전화번호
+        if(val.length < 4) target.value = val;
+        else if(val.length < 7) target.value = val.substr(0, 3) + '-' + val.substr(3);
+        else if(val.length < 11) target.value = val.substr(0, 3) + '-' + val.substr(3, 3) + '-' + val.substr(6);
+        else target.value = val.substr(0, 3) + '-' + val.substr(3, 4) + '-' + val.substr(7);
+    
+    } else if(target.id === 'md-rrn') { // 주민번호 (6-7)
+        if(val.length < 7) target.value = val;
+        else target.value = val.substr(0, 6) + '-' + val.substr(6, 7);
+    
+    } else if(target.id === 'md-corp-num') { // [추가] 법인번호 (6-7)
+        // 예: 110111-1234567
+        if(val.length < 7) target.value = val;
+        else target.value = val.substr(0, 6) + '-' + val.substr(6);
+    
+    } else if(target.id === 'md-biz-num') { // [추가] 사업자번호 (3-2-5)
+        // 예: 123-45-67890
+        if(val.length < 4) target.value = val;
+        else if(val.length < 6) target.value = val.substr(0, 3) + '-' + val.substr(3);
+        else target.value = val.substr(0, 3) + '-' + val.substr(3, 2) + '-' + val.substr(5);
+    }
 }
 
 
