@@ -431,7 +431,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
 <div class="tab-pane fade" id="sub-history">
 <div class="d-flex justify-content-end mb-2">
-<button class="btn btn-sm btn-outline-primary" onclick="openHistoryModal()">+ 연혁 추가</button>
+<button class="btn btn-sm btn-outline-primary" onclick="openSiteHistoryModal()">+ 연혁 추가</button>
 </div>
 <table class="table table-bordered bg-white">
 <thead><tr><th>날짜</th><th>제목</th><th>내용</th><th>관리</th></tr></thead>
@@ -690,7 +690,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="mb-3"><label class="form-label small">제목</label><input type="text" id="hist-title" class="form-control"></div>
 <div class="mb-3"><label class="form-label small">내용 (선택)</label><textarea id="hist-content" class="form-control" rows="3"></textarea></div>
 </div>
-<div class="modal-footer"><button class="btn btn-primary" onclick="saveHistory()">저장</button></div>
+<div class="modal-footer"><button class="btn btn-primary" onclick="saveSiteHistory()">저장</button></div>
 </div>
 </div>
 </div>
@@ -1948,7 +1948,7 @@ tbody.innerHTML += `<tr>
                    <td>${h.title}</td>
                    <td>${h.content || ''}</td>
                    <td>
-                       <button class="btn btn-sm btn-light" onclick="openHistoryModal('${h.id}')">수정</button>
+                       <button class="btn btn-sm btn-light" onclick="openSiteHistoryModal('${h.id}')">수정</button>
                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="askDeleteHistory('${h.id}')">삭제</button>
                    </td>
                </tr>`;
@@ -2051,24 +2051,58 @@ function openHistoryModal(type) {
 }
 
 
-// [수정] 연혁 저장 (있는 그대로 저장하기)
-async function saveHistory() {
-const updates = {
-p_id: document.getElementById('hist-id').value || null,
-p_date: document.getElementById('hist-date').value,
-p_title: document.getElementById('hist-title').value,
-p_content: document.getElementById('hist-content').value // 입력한 그대로 DB에 저장
-};
+// [수정] 사이트 연혁 모달 열기 (이름 변경: openSiteHistoryModal)
+async function openSiteHistoryModal(id) {
+    document.getElementById('hist-id').value = id || '';
 
-showLoading(true);
-const { error } = await _supabase.rpc('upsert_history_secure', updates);
-showLoading(false);
+    if (id) {
+        const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
+        if (data) {
+            document.getElementById('hist-date').value = data.event_date;
+            document.getElementById('hist-title').value = data.title;
 
-if(error) alert('저장 실패: ' + error.message); 
-else { 
-bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide(); 
-fetchHistory(); 
+            // ★ [핵심] DB의 HTML 태그를 사람이 보기 편한 텍스트로 복원
+            let rawText = data.content || '';
+            rawText = rawText.replaceAll('<br>', '\n');      // 줄바꿈 복원
+            rawText = rawText.replaceAll('<ul>', '');        // 리스트 태그 제거
+            rawText = rawText.replaceAll('</ul>', '');
+            rawText = rawText.replaceAll('<ul class="my-1">', '');
+            rawText = rawText.replace(/<li>/g, '- ');        // <li>를 '- '로 변환
+            rawText = rawText.replace(/<\/li>/g, '\n');      // </li>를 줄바꿈으로
+            rawText = rawText.replace(/\n\s*\n/g, '\n');     // 중복 줄바꿈 제거
+
+            document.getElementById('hist-content').value = rawText.trim();
+        }
+    } else {
+        // 신규 등록 시 초기화
+        document.getElementById('hist-title').value = '';
+        document.getElementById('hist-content').value = '';
+        // 날짜는 오늘 날짜로 기본 세팅
+        document.getElementById('hist-date').value = new Date().toISOString().substring(0, 10);
+    }
+    
+    // HTML 모달 ID는 기존 그대로 'historyModal' 사용
+    new bootstrap.Modal(document.getElementById('historyModal')).show();
 }
+
+// [수정] 사이트 연혁 저장 (이름 변경: saveSiteHistory)
+async function saveSiteHistory() {
+    const updates = {
+        p_id: document.getElementById('hist-id').value || null,
+        p_date: document.getElementById('hist-date').value,
+        p_title: document.getElementById('hist-title').value,
+        p_content: document.getElementById('hist-content').value 
+    };
+
+    showLoading(true);
+    const { error } = await _supabase.rpc('upsert_history_secure', updates);
+    showLoading(false);
+
+    if (error) alert('저장 실패: ' + error.message);
+    else {
+        bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
+        fetchHistory(); // 목록 새로고침
+    }
 }
 
 
