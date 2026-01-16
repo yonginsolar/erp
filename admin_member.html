@@ -144,14 +144,14 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
             </div>
         </div>
 
-        <div class="col-md-6 col-lg-3">
-            <div class="card bg-info bg-opacity-10 border-0 shadow-sm h-100">
-                <div class="card-body p-4">
-                    <h6 class="text-info fw-bold mb-2">오늘의 상담</h6>
-                    <h2 class="fs-2 fw-bold mb-0 text-info" id="dash-consult">-</h2>
-                </div>
-            </div>
+<div class="col-md-6 col-lg-3">
+    <div class="card bg-info bg-opacity-10 border-0 shadow-sm h-100" style="cursor: pointer;" onclick="switchTab('site'); setTimeout(() => document.querySelector('a[href=\'#sub-partners\']').click(), 200);">
+        <div class="card-body p-4">
+            <h6 class="text-info fw-bold mb-2">파트너 신청 대기</h6>
+            <h2 class="fs-2 fw-bold mb-0 text-info" id="dash-partner-pending">-</h2>
         </div>
+    </div>
+</div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -3176,29 +3176,36 @@ fetchNotices();
 async function loadDashboard() {
     console.log("대시보드 데이터 로딩 시작...");
 
-    // 1. 기본 카운트 데이터 (기존 로직 유지)
+    // 1. [기존] 총 조합원 수
     const { count: totalCount } = await _supabase
         .from('coop_members').select('*', { count: 'exact', head: true });
 
+    // 2. [기존] 승인 대기 조합원 수
     const { count: pendingCount } = await _supabase
         .from('coop_members').select('*', { count: 'exact', head: true }).eq('status', '승인대기');
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const { count: todayConsult } = await _supabase
-        .from('consult_logs').select('*', { count: 'exact', head: true }).gte('created_at', todayStr);
+    // 3. [변경] 파트너 신청 대기 건수 조회 (consult_logs 대체)
+    // site_partners 테이블에서 status가 'pending'인 것만 카운트
+    const { count: pendingPartners } = await _supabase
+        .from('site_partners')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
 
     let totalCapital = 0;
     const { data: capitalResult, error: capError } = await _supabase.rpc('get_total_capital_secure');
     if (!capError) totalCapital = capitalResult || 0;
 
-    // UI 업데이트 (숫자)
+    // 4. UI 업데이트
     setText('dashboard-total-count', (totalCount || 0) + '명');
     setText('dash-capital', totalCapital.toLocaleString() + '원');
-    setText('dash-consult', (todayConsult || 0) + '건');
+    
+    // [변경] 파트너 대기 건수 표시 (ID 변경됨: dash-consult -> dash-partner-pending)
+    setText('dash-partner-pending', (pendingPartners || 0) + '건');
 
     const pendingEl = document.getElementById('dashboard-pending-count');
     if (pendingEl) {
         pendingEl.innerText = (pendingCount || 0) + '명';
+        // 대기자가 있으면 빨간색 강조
         pendingEl.className = pendingCount > 0 ? "display-6 fw-bold mb-0 text-danger" : "display-6 fw-bold mb-0";
     }
 
