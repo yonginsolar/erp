@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="print_service.js"></script>
   
   <style>
     body { background-color: #f0f2f5; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; padding: 20px; }
@@ -922,6 +923,7 @@ async function reqIssueCert() {
     const thisYear = new Date().getFullYear();
     const { count } = await _supabase.from('log_cert').select('*', { count: 'exact', head: true }).gte('issued_at', `${thisYear}-01-01T00:00:00`);
     const docNum = `인사-${thisYear}-${String((count||0) + 1).padStart(3, '0')}`; 
+    
     await _supabase.from('log_cert').insert({ emp_id: currentEmpId, emp_name: currentEmpName, cert_type: '재직증명서', purpose: purpose, cert_num: docNum });
 
     const hireDate = document.getElementById("viewHireDate").innerText;
@@ -929,14 +931,26 @@ async function reqIssueCert() {
     if(hireDate && hireDate !== '-') {
         const join = new Date(hireDate); const now = new Date(); const diff = now - join; const y = Math.floor(diff / (1000*60*60*24*365)); const m = Math.floor((diff % (1000*60*60*24*365)) / (1000*60*60*24*30)); tenureStr = `${hireDate}~현재 (${y}년 ${m}개월)`;
     }
-    let cleanAddr = (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim();
-    let dept="", pos=""; const { data: empData } = await _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single(); if(empData) { dept = empData.department; pos = empData.position; }
-
+    
     const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
     const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
+    let cleanAddr = (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim();
+    
+    let dept="", pos=""; 
+    const { data: empData } = await _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single(); 
+    if(empData) { dept = empData.department; pos = empData.position; }
 
-    const certData = { type: 'cert', docNum: docNum, logo: companyInfo.logo_horizontal_url || "", name: currentEmpName, birth: birthStr, dept: dept, pos: pos, address: document.getElementById("viewAddress").innerText, tenure: tenureStr, purpose: purpose, today: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }), chairman: ceoName, compName: compName, compAddr: cleanAddr, contact: companyInfo.company_contact, seal: companyInfo.seal_url };
-    printDocument(certData);
+    const certData = { 
+        docNum: docNum, logo: companyInfo.logo_horizontal_url || "", 
+        name: currentEmpName, birth: birthStr, dept: dept, pos: pos, 
+        address: document.getElementById("viewAddress").innerText, tenure: tenureStr, 
+        purpose: purpose, today: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }), 
+        chairman: ceoName, compName: compName, compAddr: cleanAddr, 
+        contact: companyInfo.company_contact, seal: companyInfo.seal_url 
+    };
+    
+    // [변경] 외부 모듈 호출
+    PrintService.printCert(certData);
 }
 
 function printSalaryAdmin() {
@@ -944,12 +958,11 @@ function printSalaryAdmin() {
     const d = currentSalaryDataForPrint;
     const [y, m] = d.year_month.split('-');
     
-    // 스마트 기간 산정 (귀속월 기준, 입/퇴사일 고려)
+    // 스마트 기간 산정
     const getSmartAttribution = (ymStr) => {
         const [yy, mm] = ymStr.split('-').map(Number);
         let startDay = 1;
         let lastDay = new Date(yy, mm, 0).getDate();
-
         if(currentEmpHireDate) {
             const hDate = new Date(currentEmpHireDate);
             if(hDate.getFullYear() === yy && (hDate.getMonth()+1) === mm) startDay = hDate.getDate();
@@ -961,201 +974,84 @@ function printSalaryAdmin() {
         return `${yy}년 ${mm}월<br>(${yy}.${String(mm).padStart(2,'0')}.${String(startDay).padStart(2,'0')} ~ ${yy}.${String(mm).padStart(2,'0')}.${lastDay})`;
     };
 
-    // 지급일: 귀속월의 다음 달 10일
     const payDateObj = new Date(y, Number(m), 10); 
     const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth()+1}월 ${payDateObj.getDate()}일`;
-
-// [수정] 값이 없거나 0이어도 무조건 "0"으로 출력되도록 변경
     const fmt = (n) => Number(n || 0).toLocaleString(); 
     
-    // (참고: fmtFix는 이미 0을 출력하고 있었으므로 fmt와 똑같이 써도 무방합니다)
-    const fmtFix = (n) => Number(n || 0).toLocaleString();
-    
-    // [중요] 회사명/이사장 undefined 방지
+    // 회사 정보 안전하게 참조
     const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
     const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
 
+    // 데이터 패키징
     const salaryData = { 
-        type: 'salary', 
         titleDate: `${y}년 ${Number(m)}월`, 
         attrDate: getSmartAttribution(d.year_month), 
         payDate: payDateStr, 
         empInfo: `${currentEmpId} / ${currentEmpName}`, 
         dept: "", pos: "", 
-        p_basic: fmtFix(d.pay_basic), p_meal: fmtFix(d.pay_meal), p_car: fmtFix(d.pay_car), p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime), p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmtFix(d.pay_total), 
-        d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmtFix(d.ded_total), 
-        net: fmtFix(d.net_pay), 
+        p_basic: fmt(d.pay_basic), p_meal: fmt(d.pay_meal), p_car: fmt(d.pay_car), 
+        p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime), 
+        p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmt(d.pay_total), 
+        d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), 
+        d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), 
+        d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total), 
+        net: fmt(d.net_pay), 
         logo: companyInfo.logo_horizontal_url || "", 
         seal: companyInfo.seal_url, 
-        chairman: ceoName, compName: compName // 변수 전달
+        chairman: ceoName, 
+        compName: compName 
     };
-    _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single().then(({data}) => { if(data) { salaryData.dept = data.department; salaryData.pos = data.position; } printDocument(salaryData); });
+
+    // 부서/직급 조회 후 인쇄 모듈 호출
+    _supabase.from('ref_employees').select('department, position').eq('emp_id', currentEmpId).single().then(({data}) => { 
+        if(data) { salaryData.dept = data.department; salaryData.pos = data.position; } 
+        // [변경] 외부 모듈 호출
+        PrintService.printSalary(salaryData);
+    });
 }
 
 function openLedgerModal() { ledgerModal.show(); }
 async function printLedger() {
-    const ym = document.getElementById("ledgerMonth").value; if(!ym) return showAlert("연월을 선택하세요."); ledgerModal.hide();
+    const ym = document.getElementById("ledgerMonth").value; 
+    if(!ym) return showAlert("연월을 선택하세요."); 
+    ledgerModal.hide();
+
+    // 1. 데이터 조회
     const { data: list, error } = await _supabase.from('hr_salary').select('*').eq('year_month', ym).order('emp_name');
     if(error || !list || list.length === 0) return showAlert("해당 월의 급여 데이터가 없습니다.");
     
+    // 2. 집계 및 테이블 HTML 생성 (기존 로직 유지)
     let t = { basic:0, meal:0, car:0, child:0, pos:0, svc:0, ot:0, bonus:0, p_total:0, pen:0, hlt:0, care:0, emp:0, inc:0, loc:0, adv:0, cap:0, d_total:0, net:0 };
+    
     const rowsHtml = list.map((d, i) => {
-        t.basic+=d.pay_basic; t.meal+=d.pay_meal; t.car+=d.pay_car; t.child+=d.pay_child; t.pos+=(d.pay_position||0); t.svc+=(d.pay_service||0); t.ot+=(d.pay_overtime||0); t.bonus+=(d.pay_bonus||0); t.p_total+=d.pay_total;
-        t.pen+=d.ded_pension; t.hlt+=d.ded_health; t.care+=d.ded_care; t.emp+=d.ded_employ; t.inc+=d.ded_income; t.loc+=d.ded_local; t.adv+=(d.ded_advance||0); t.cap+=(d.ded_capital||0); t.d_total+=d.ded_total; t.net+=d.net_pay;
-        // [수정] 공제계 추가, 실수령액->차인지급액
+        // 합계 누적
+        t.basic+=d.pay_basic; t.meal+=d.pay_meal; t.car+=d.pay_car; t.child+=d.pay_child; 
+        t.pos+=(d.pay_position||0); t.svc+=(d.pay_service||0); t.ot+=(d.pay_overtime||0); t.bonus+=(d.pay_bonus||0); t.p_total+=d.pay_total;
+        t.pen+=d.ded_pension; t.hlt+=d.ded_health; t.care+=d.ded_care; t.emp+=d.ded_employ; 
+        t.inc+=d.ded_income; t.loc+=d.ded_local; t.adv+=(d.ded_advance||0); t.cap+=(d.ded_capital||0); t.d_total+=d.ded_total; t.net+=d.net_pay;
+        
+        // 행 HTML 생성
         return `<tr style="height:30px;"><td class="text-center">${i+1}</td><td class="text-center fw-bold">${d.emp_name}</td><td class="text-end">${Number(d.pay_basic).toLocaleString()}</td><td class="text-end">${Number(d.pay_meal).toLocaleString()}</td><td class="text-end">${Number(d.pay_car).toLocaleString()}</td><td class="text-end">${Number(d.pay_child+(d.pay_position||0)+(d.pay_service||0)+(d.pay_overtime||0)).toLocaleString()}</td><td class="text-end">${Number(d.pay_bonus||0).toLocaleString()}</td><td class="text-end bg-light fw-bold">${Number(d.pay_total).toLocaleString()}</td><td class="text-end">${Number(d.ded_pension).toLocaleString()}</td><td class="text-end">${Number(d.ded_health).toLocaleString()}</td><td class="text-end">${Number(d.ded_care).toLocaleString()}</td><td class="text-end">${Number(d.ded_employ).toLocaleString()}</td><td class="text-end">${Number(d.ded_income).toLocaleString()}</td><td class="text-end">${Number(d.ded_local).toLocaleString()}</td><td class="text-end">${Number((d.ded_advance||0)+(d.ded_capital||0)).toLocaleString()}</td><td class="text-end bg-light fw-bold" style="color:#c62828;">${Number(d.ded_total).toLocaleString()}</td><td class="text-end fw-bold" style="background:#e3f2fd;">${Number(d.net_pay).toLocaleString()}</td></tr>`;
     }).join("");
+
     const totalHtml = `<tr style="background:#eee; font-weight:bold; height:35px;"><td colspan="2" class="text-center">합 계</td><td class="text-end">${t.basic.toLocaleString()}</td><td class="text-end">${t.meal.toLocaleString()}</td><td class="text-end">${t.car.toLocaleString()}</td><td class="text-end">${(t.child+t.pos+t.svc+t.ot).toLocaleString()}</td><td class="text-end">${t.bonus.toLocaleString()}</td><td class="text-end">${t.p_total.toLocaleString()}</td><td class="text-end">${t.pen.toLocaleString()}</td><td class="text-end">${t.hlt.toLocaleString()}</td><td class="text-end">${t.care.toLocaleString()}</td><td class="text-end">${t.emp.toLocaleString()}</td><td class="text-end">${t.inc.toLocaleString()}</td><td class="text-end">${t.loc.toLocaleString()}</td><td class="text-end">${(t.adv+t.cap).toLocaleString()}</td><td class="text-end" style="color:#c62828;">${t.d_total.toLocaleString()}</td><td class="text-end" style="background:#bbdefb;">${t.net.toLocaleString()}</td></tr>`;
 
+    // 3. 인쇄 모듈 호출 (이 부분만 변경됨)
     const [y, m] = ym.split('-');
     const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
     
-    const ledgerData = { type: 'ledger', title: `${y}년 ${Number(m)}월 급여대장`, tableBody: rowsHtml + totalHtml, logo: companyInfo.logo_horizontal_url || "", chairman: ceoName };
-    printDocument(ledgerData);
+    const ledgerData = { 
+        title: `${y}년 ${Number(m)}월 급여대장`, 
+        tableBody: rowsHtml + totalHtml, 
+        logo: companyInfo.logo_horizontal_url || "", 
+        chairman: ceoName 
+    };
+    
+    // 외부 파일(print_service.js)의 함수 호출
+    PrintService.printLedger(ledgerData);
 }
 
-function printDocument(data) {
-    const win = window.open('', '', 'width=900,height=1100');
-    let contentHtml = "";
 
-    const commonCss = `
-        * { box-sizing: border-box; } 
-        body { font-family: "Malgun Gothic", serif; margin: 0; padding: 0; background: #555; }
-        .print-fab { position: fixed; bottom: 30px; right: 30px; background: #fff; padding: 10px 15px; border-radius: 30px; z-index: 9999; display: flex; gap: 10px; border:1px solid #ccc; }
-        @media print { .no-print { display: none !important; } html, body { margin: 0; background: #fff; } }
-    `;
-
-    const portraitCss = `
-        @page { size: A4 portrait; margin: 0; }
-        .page-wrap { width: 210mm; height: 297mm; margin: 0 auto; padding: 15mm; background: white; overflow: hidden !important; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { border: 1px solid #000 !important; }
-        img { max-width: 100%; height: auto; }
-        .print-salary .print-content { zoom: 0.86; width: 100%; }
-        .print-cert .print-content { zoom: 0.98; width: 100%; position: relative; } 
-        .text-end { text-align: right; } .fw-bold { font-weight: bold; }
-    `;
-    
-    const landscapeCss = `
-        @page { size: A4 landscape; margin: 10mm; } 
-        .page-wrap { width: 297mm; min-height: 210mm; padding: 15mm; background: white; margin: 20px auto; } 
-        table { width: 100%; border-collapse: collapse; font-size: 11px; } 
-        th, td { border: 1px solid #999; padding: 4px 6px; } 
-        th { background-color: #f5f5f5; text-align: center; font-weight: bold; white-space: nowrap; } 
-        .text-center { text-align: center; } .text-end { text-align: right; } .fw-bold { font-weight: bold; } .bg-light { background-color: #f9f9f9; }
-    `;
-
-    if (data.type === 'ledger') {
-        contentHtml = `
-        <div style="padding: 10px;">
-            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 20px;">
-                ${data.logo ? `<img src="${data.logo}" style="height:40px;">` : '<div></div>'}
-                <div style="text-align:center;">
-                    <h1 style="margin:0; font-size: 24px; text-decoration: underline;">${data.title}</h1>
-                </div>
-                <table style="width: 200px; border-collapse: collapse; text-align: center; float: right; margin-bottom: 10px;">
-                  <tr><td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px; width:33%;">담당</td><td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px; width:33%;">사무국장</td><td style="border: 1px solid #000; background: #f0f0f0; font-size: 11px; padding: 2px; width:33%;">이사장</td></tr>
-                  <tr><td style="border: 1px solid #000; height: 50px;"></td><td style="border: 1px solid #000; height: 50px;"></td><td style="border: 1px solid #000; height: 50px;"></td></tr>
-                </table>
-            </div>
-            <div style="clear:both;"></div>
-            <table><thead><tr style="background:#e0e0e0;"><th rowspan="2" style="width:30px;">No</th><th rowspan="2" style="width:70px;">성명</th><th colspan="6">지 급 내 역</th><th colspan="7">공 제 내 역</th><th rowspan="2">공제계</th></tr><tr style="background:#f0f0f0;"><th>기본급</th><th>식대</th><th>차량</th><th>기타수당</th><th>상여</th><th style="background:#fff3e0;">지급계</th><th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>소득세</th><th>지방세</th><th>기타공제</th><th>차인지급액</th></tr></thead><tbody>${data.tableBody}</tbody></table>
-        </div>`;
-    } 
-    else if(data.type === 'salary') {
-        contentHtml = `
-        <div class="print-salary" style="padding: 10px; height: 100%;">
-            <h1 style="text-align:center; margin-bottom: 30px; font-size: 28px; margin-top: 50px;">${data.titleDate} 급여명세서</h1>
-            <table style="width:100%; margin-bottom:20px;">
-                <tr><th style="background:#f5f5f5; padding:8px; width:18%;">귀속연월</th><td style="padding:8px; width:32%;">${data.attrDate}</td><th style="background:#f5f5f5; padding:8px; width:18%;">사원번호/명</th><td style="padding:8px;">${data.empInfo}</td></tr>
-                <tr><th style="background:#f5f5f5; padding:8px;">지급일자</th><td style="padding:8px;">${data.payDate}</td><th style="background:#f5f5f5; padding:8px;">소속/직급</th><td style="padding:8px;">${data.dept} / ${data.pos}</td></tr>
-            </table>
-            <div style="display:flex; gap:20px; border-top:2px solid #888; padding-top:10px;">
-                <div style="flex:1;">
-                    <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #0d47a1; color:#0d47a1; margin-bottom:5px;">지급내역</div>
-                    <table style="width:100%;">
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">기본급</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_basic}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">식 대</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_meal}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">차량유지비</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_car}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">직책수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_pos}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">근속수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_svc}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">연장수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_ot}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">육아수당</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_child}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">상여금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.p_bonus}</td></tr>
-                    </table>
-                </div>
-                <div style="flex:1;">
-                    <div style="text-align:center; font-weight:bold; padding:5px; border-bottom:2px solid #b71c1c; color:#b71c1c; margin-bottom:5px;">공제내역</div>
-                    <table style="width:100%;">
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">국민연금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_pen}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">건강보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_hlt}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">장기요양</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_care}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">고용보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_emp}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_inc}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">지방소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_loc}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">가불금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">출자금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_cap}</td></tr>
-                    </table>
-                </div>
-            </div>
-            <div style="border-top:1px solid #999; margin-bottom:20px;"></div>
-            <div style="height:120px; position:relative;">
-                <div style="position:absolute; top:30px; left:20px; color:#666;">노고에 감사드립니다.</div>
-                <table style="position:absolute; right:0; top:0; width:350px; background:#fff;">
-                    <tr><td style="background:#f5f5f5;">지급합계</td><td class="text-end">${data.p_total}</td></tr>
-                    <tr><td style="background:#f5f5f5;">공제합계</td><td class="text-end">${data.d_total}</td></tr>
-                    <tr><td style="background:#f5f5f5;">실지급액</td><td class="text-end" style="font-weight:bold;">${data.net}</td></tr>
-                </table>
-            </div>
-            <div style="text-align:center; margin-top:40px; position:relative;">
-                <span style="font-size:20px; font-weight:600;">${data.compName} 이사장 ${data.chairman}</span>
-                ${data.seal ? `<img src="${data.seal}" style="position:absolute; width:60px; margin-left:-30px; top:-15px; opacity:0.8;">` : ''}
-            </div>
-        </div>`;
-    } 
-    else if(data.type === 'cert') {
-        contentHtml = `
-        <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box; position: relative;">
-            ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
-            <div style="text-align:right; font-size:12px; margin-top:20px; margin-bottom:5px;">www.yonginsolar.kr</div>
-            <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
-            <div style="text-align:right; font-size: 13px; margin-bottom: 20px;">문서번호: ${data.docNum}</div>
-            <div style="text-align:left; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 5px;">1. 인적사항</div>
-            <table style="width:100%;">
-                <tr><th style="background:#f9f9f9; width:100px; padding:6px 10px;">성 명</th><td style="padding:6px 10px;">${data.name}</td><th style="background:#f9f9f9; width:100px; padding:6px 10px;">생년월일</th><td style="padding:6px 10px;">${data.birth}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">소 속</th><td style="padding:6px 10px;">${data.dept}</td><th style="background:#f9f9f9; padding:6px 10px;">직 위</th><td style="padding:6px 10px;">${data.pos}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">주 소</th><td colspan="3" style="padding:6px 10px;">${data.address}</td></tr>
-            </table>
-            <div style="text-align:left; font-weight: bold; font-size: 16px; margin-top: 20px; margin-bottom: 5px;">2. 재직사항</div>
-            <table style="width:100%;">
-                <tr><th style="background:#f9f9f9; width:100px; padding:6px 10px;">재직기간</th><td colspan="3" style="padding:6px 10px;">${data.tenure}</td></tr>
-                <tr><th style="background:#f9f9f9; padding:6px 10px;">용 도</th><td colspan="3" style="padding:6px 10px;">${data.purpose}</td></tr>
-            </table>
-            <div style="text-align:center; margin-top: 60px; font-size: 18px;">위와 같이 재직하고 있음을 증명합니다.</div>
-            <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
-            <div style="text-align:center; margin-top: 60px; position:relative;">
-                <span style="font-size:24px; font-weight:bold; position:relative; z-index:1;">${data.compName} 이사장 ${data.chairman}</span>
-                ${data.seal ? `<img src="${data.seal}" style="position:absolute; margin-left:-50px; top:-20px; width:80px; opacity:0.8; z-index:2;">` : ''}
-            </div>
-            <div style="text-align:center; margin-top: 70px; font-size: 12px; color: #555;">${data.compAddr} ${data.compName}<br>문의: ${data.contact}</div>
-        </div>`;
-    }
-
-    const finalCss = data.type === 'ledger' ? landscapeCss : portraitCss;
-    const pageClass = data.type === 'ledger' ? 'print-ledger' : (data.type === 'salary' ? 'print-salary' : 'print-cert');
-
-    const html = `<html><head><title>인쇄 미리보기</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>${commonCss} ${finalCss}</style></head><body>
-        <div class="print-fab no-print">
-            <span class="small fw-bold">인쇄 미리보기</span>
-            <button class="btn btn-primary btn-sm rounded-pill" onclick="window.print()">🖨️ 인쇄하기</button>
-            <button class="btn btn-secondary btn-sm rounded-pill" onclick="window.close()">닫기</button>
-        </div>
-        <div class="page-wrap ${pageClass}"><div class="print-content">${contentHtml}</div></div>
-    </body></html>`;
-    
-    win.document.write(html);
-    win.document.close();
-}
   // =========================================================
 // [통계 대시보드 로직] - 10년차 시니어 개발자 작성
 // =========================================================
