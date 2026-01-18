@@ -373,7 +373,7 @@ function executeConfirmAction() {
     }
     confirmModal.hide();
 }
-// [수정됨] 재직증명서 발급 실행 (순차 번호 적용 및 발급 이력 저장)
+// [최종 수정] 재직증명서 발급 (DB 함수 사용으로 중복 방지)
 async function runCertIssue() {
     // 1. 용도 확인
     const s = document.getElementById("certPurposeSelect").value;
@@ -382,11 +382,11 @@ async function runCertIssue() {
     if (!purpose) { showAlert("용도를 입력해주세요."); return; }
     purposeModal.hide();
 
-    // 2. 생년월일 조회 (RPC)
-    const { data: birthDate, error } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: myInfo.emp_id });
-    const birthStr = (!error && birthDate) ? birthDate : "미등록";
+    // 2. 생년월일 조회
+    const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: myInfo.emp_id });
+    const birthStr = birthDate || "미등록";
 
-    // 3. 재직 기간 계산
+    // 3. 재직 기간 텍스트 생성
     const today = new Date();
     const dateStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
     let tenureStr = "-";
@@ -398,28 +398,23 @@ async function runCertIssue() {
         tenureStr = `${myInfo.hire_date} ~ 현재 (${y}년 ${m}개월)`;
     }
 
-    // [수정 포인트 1] DB에서 올해 발급된 문서 수 조회 (순차 번호 생성용)
-    const thisYear = today.getFullYear();
-    const { count } = await _supabase
-        .from('log_cert')
-        .select('*', { count: 'exact', head: true })
-        .gte('issued_at', `${thisYear}-01-01T00:00:00`);
-    
-    // 문서번호 생성 (예: 인사-2026-005)
-    const docNum = `인사-${thisYear}-${String((count || 0) + 1).padStart(3, '0')}`;
-
-    // [수정 포인트 2] 발급 이력을 DB에 저장 (이래야 다음 번호가 카운트됨)
-    await _supabase.from('log_cert').insert({
-        emp_id: myInfo.emp_id,
-        emp_name: myInfo.emp_name,
-        cert_type: '재직증명서',
-        purpose: purpose,
-        cert_num: docNum
+    // [핵심 변경] 클라이언트 계산 로직 삭제 -> DB RPC 함수 호출
+    // DB가 알아서 번호 따고, 저장까지 하고, 결과를 리턴해줍니다.
+    const { data: newCert, error } = await _supabase.rpc('issue_certificate', {
+        p_emp_id: myInfo.emp_id,
+        p_emp_name: myInfo.emp_name,
+        p_purpose: purpose,
+        p_type: '재직증명서'
     });
 
-    // 5. 인쇄 데이터 준비
+    if (error) {
+        console.error(error);
+        return showAlert("발급 중 오류 발생: " + error.message);
+    }
+
+    // 4. 인쇄 데이터 준비 (DB에서 받은 cert_num 사용)
     const certData = {
-        docNum: docNum,
+        docNum: newCert.cert_num, // DB가 생성한 안전한 번호
         logo: companyInfo.logo_horizontal_url || "",
         name: myInfo.emp_name,
         birth: birthStr,
