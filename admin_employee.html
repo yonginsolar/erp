@@ -50,7 +50,22 @@
   </div>
 </div>
 
-<div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold">⚙️ 시스템 통합 설정</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" id="settingTab" role="tablist"><li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
+<div class="modal fade" id="settingsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">⚙️ 시스템 통합 설정</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div><div class="modal-body">
+        <div class="d-flex justify-content-end align-items-center mb-3 bg-light p-2 rounded">
+    <label class="small fw-bold me-2">설정 기준 연도:</label>
+    <select id="settingTargetYear" class="form-select form-select-sm w-auto fw-bold text-primary" onchange="loadSettings()">
+        </select>
+</div>
+        <ul class="nav nav-tabs mb-3" id="settingTab" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
 <div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"><option>사원</option><option>대리</option><option>과장</option><option>차장</option><option>부장</option><option>이사</option><option>국장</option><option>이사장</option></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="staff">일반 (Staff)</option><option value="admin">관리자 (Admin)</option></select></div></div><div class="mb-3"><label class="small text-muted ms-1">부서</label><input type="text" id="newDept" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
@@ -390,15 +405,192 @@ function autoHyphen(target) { target.value = target.value.replace(/[^0-9]/g, '')
 function openAddressSearch() { new daum.Postcode({ oncomplete: function(data) { let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress; if(data.buildingName) addr += ' (' + data.buildingName + ')'; document.getElementById("editAddress").value = addr; document.getElementById("editAddressDetail").focus(); } }).open(); }
 
 async function loadList() { const tbody = document.getElementById("empListBody"); tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">로딩 중...</td></tr>'; const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id'); if(error || !list) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>'; return; } tbody.innerHTML = ""; const threeYearsAgo = new Date(); threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3); let expiredCount = 0; list.forEach(u => { let isResigned = !!u.resign_date; let isExpired = false; if (isResigned && new Date(u.resign_date) <= threeYearsAgo) { isExpired = true; expiredCount++; } let statusBadge = isResigned ? (isExpired ? `<span class="badge bg-danger">3년 경과</span>` : `<span class="badge bg-secondary">퇴사</span>`) : `<span class="badge bg-success">재직</span>`; let roleBadge = u.role === 'admin' ? '<span class="badge bg-danger">관리자</span>' : '<span class="badge bg-light text-dark">일반</span>'; const tr = document.createElement("tr"); if(isResigned) tr.style.opacity = "0.7"; if(isExpired) tr.style.backgroundColor = "#fff5f5"; tr.onclick = () => openDetail(u); tr.innerHTML = `<td class="fw-bold text-secondary">${u.emp_id}</td><td><div class="fw-bold">${u.emp_name}</div><div class="small text-muted">${u.department || '-'}</div></td><td>${u.position}</td><td>${statusBadge}</td><td>${roleBadge}</td>`; tbody.appendChild(tr); }); if (expiredCount > 0 && !hasCheckedExpired) { showConfirm(`⚠️ <strong>개인정보 파기 알림</strong><br>퇴사 후 3년 경과자 ${expiredCount}명 발견. 삭제하시겠습니까?`, () => showAlert("목록에서 붉은색 직원을 삭제하세요.")); hasCheckedExpired = true; } }
-async function loadSettings() { const { data } = await _supabase.from('ref_settings').select('item_key, item_value'); if(data) { settings = {}; data.forEach(r => { settings[r.item_key] = r.item_value; }); } document.getElementById("set_pension_total").value = ((settings['pension_rate_emp']||0.045)*200).toFixed(2); document.getElementById("set_health_total").value = ((settings['health_rate_emp']||0.03545)*200).toFixed(2); calcHalf('pension'); calcHalf('health'); }
+
 async function loadCompanyInfo() { const { data } = await _supabase.from('ref_company_info').select('*'); if(data) data.forEach(r => { companyInfo[r.key] = r.value; }); companyInfo.chairman_name = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = logoData.publicUrl; } if (companyInfo.seal_url) { let sealPath = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600); if (sealData) companyInfo.seal_url = sealData.signedUrl; } }
 async function loadAdvancedSettings() { const tbody = document.getElementById("advSettingsBody"); tbody.innerHTML = '<tr><td colspan="3">로딩...</td></tr>'; const { data } = await _supabase.from('ref_settings').select('*').order('category'); if(data) { advancedSettingsRaw = data; tbody.innerHTML = data.map((r, i) => `<tr><td><small class="text-muted">${r.item_key}</small></td><td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}"></td><td><small>${r.description||'-'}</small></td></tr>`).join(""); } }
-function openSettings() { document.getElementById("set_pension_total").value = ((settings['pension_rate_emp']||0.045)*200).toFixed(2); document.getElementById("set_health_total").value = ((settings['health_rate_emp']||0.03545)*200).toFixed(2); calcHalf('pension'); calcHalf('health'); document.getElementById("set_meal").value = settings['limit_meal']||200000; document.getElementById("set_car").value = settings['limit_car']||200000; document.getElementById("set_child").value = settings['limit_child']||200000; document.getElementById("set_orgName").value = companyInfo['orgName']||""; document.getElementById("set_ceoName").value = companyInfo['ceoName']||""; document.getElementById("set_bizNum").value = companyInfo['bizNum']||""; document.getElementById("set_address").value = companyInfo['company_address']||""; settingsModal.show(); }
+
 function calcHalf(type) { document.getElementById(`half_${type}`).innerText = (Number(document.getElementById(`set_${type}_total`).value)/2).toFixed(3); }
-async function saveSettings() { try { const updates = []; const isAdvanced = document.getElementById("setAdvanced").classList.contains("active"); if(isAdvanced) advancedSettingsRaw.forEach((r, i) => updates.push({ item_key: r.item_key, item_value: Number(document.getElementById(`adv_val_${i}`).value) })); else { const pen = Number(document.getElementById("set_pension_total").value)/200; const hlt = Number(document.getElementById("set_health_total").value)/200; updates.push({ item_key:'pension_rate_emp', item_value: pen }, { item_key:'pension_rate_biz', item_value: pen }, { item_key:'health_rate_emp', item_value: hlt }, { item_key:'health_rate_biz', item_value: hlt }, { item_key:'limit_meal', item_value: Number(document.getElementById("set_meal").value) }, { item_key:'limit_car', item_value: Number(document.getElementById("set_car").value) }, { item_key:'limit_child', item_value: Number(document.getElementById("set_child").value) }); } for(const item of updates) await _supabase.from('ref_settings').upsert(item, { onConflict: 'item_key' }); const org = document.getElementById("set_orgName").value; const ceo = document.getElementById("set_ceoName").value; const cUpdates = [{key:'orgName',value:org}, {key:'company_name',value:org}, {key:'ceoName',value:ceo}, {key:'chairman_name',value:ceo}, {key:'bizNum',value:document.getElementById("set_bizNum").value}, {key:'company_address',value:document.getElementById("set_address").value}]; for(const item of cUpdates) await _supabase.from('ref_company_info').upsert(item, { onConflict: 'key' }); await loadSettings(); await loadCompanyInfo(); settingsModal.hide(); showAlert("저장 완료"); } catch(e) { showAlert("오류: "+e.message); } }
+
 function openInviteModal() { inviteModal.show(); }
 async function runInvite() { const name = document.getElementById("newName").value; const email = document.getElementById("newEmail").value; if(!name || !email) return showAlert("이름/이메일 입력 필요"); const year = new Date().getFullYear(); const { count } = await _supabase.from('ref_employees').select('*', {count:'exact', head:true}).like('emp_id', `${year}%`); const empId = `${year}${String((count||0)+1).padStart(3,'0')}`; const { error } = await _supabase.from('ref_employees').insert({ emp_id: empId, emp_name: name, email: email, position: document.getElementById("newRank").value, role: document.getElementById("newRole").value, department: document.getElementById("newDept").value, hire_date: new Date().toISOString().slice(0,10) }); if(error) showAlert("오류: "+error.message); else { showAlert(`등록됨: ${empId}`); inviteModal.hide(); loadList(); } }
+// 1. 설정 모달 열기 (연도 초기화 로직 추가)
+function openSettings() {
+    // 1. 연도 Select 박스 초기화 (올해 ~ 2년 전까지)
+    const yearSel = document.getElementById("settingTargetYear");
+    yearSel.innerHTML = "";
+    const currentYear = new Date().getFullYear();
+    
+    // 올해, 작년, 재작년 옵션 생성
+    for (let y = currentYear; y >= currentYear - 2; y--) {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.text = y + "년 기준";
+        if (y === currentYear) opt.selected = true; // 기본값: 올해
+        yearSel.add(opt);
+    }
 
+    // 2. 데이터 로드 트리거
+    settingsModal.show();
+    loadSettings(); 
+}
+
+// 2. 설정 값 불러오기 (테이블 이원화 적용)
+async function loadSettings() {
+    const selYear = Number(document.getElementById("settingTargetYear").value);
+    const currentYear = new Date().getFullYear();
+    
+    // UI 초기화
+    document.getElementById("advSettingsBody").innerHTML = '<tr><td colspan="3" class="text-center">로딩 중...</td></tr>';
+
+    let data, error;
+
+    // [핵심] 연도에 따라 조회 테이블 분기
+    if (selYear < currentYear) {
+        // 과거 데이터 (History 테이블)
+        console.log(`[설정] ${selYear}년도(과거) 데이터를 불러옵니다.`);
+        const res = await _supabase
+            .from('ref_settings_history')
+            .select('*')
+            .eq('target_year', selYear);
+        data = res.data;
+        error = res.error;
+    } else {
+        // 현재/미래 데이터 (원본 테이블)
+        console.log(`[설정] ${selYear}년도(현재) 데이터를 불러옵니다.`);
+        const res = await _supabase.from('ref_settings').select('*');
+        data = res.data;
+        error = res.error;
+    }
+
+    if (error) return showAlert("설정 로드 실패: " + error.message);
+
+    // 데이터 매핑
+    settings = {};
+    if (data) {
+        data.forEach(r => { settings[r.item_key] = r.item_value; });
+        advancedSettingsRaw = data; // 고급 설정용 원본 데이터 저장
+    }
+
+    // UI 바인딩 (값이 없으면 0 처리)
+    // 4대보험 요율은 퍼센트(%) 단위 변환을 위해 * 200 (emp+biz 합계)
+    document.getElementById("set_pension_total").value = ((settings['pension_rate_emp'] || 0) * 200).toFixed(2);
+    document.getElementById("set_health_total").value = ((settings['health_rate_emp'] || 0) * 200).toFixed(2);
+    calcHalf('pension'); 
+    calcHalf('health');
+
+    document.getElementById("set_meal").value = settings['limit_meal'] || 0;
+    document.getElementById("set_car").value = settings['limit_car'] || 0;
+    document.getElementById("set_child").value = settings['limit_child'] || 0;
+
+    // 고급 설정 탭 리스트 렌더링
+    const tbody = document.getElementById("advSettingsBody");
+    if (data && data.length > 0) {
+        tbody.innerHTML = data.map((r, i) => `
+            <tr>
+                <td><small class="text-muted">${r.item_key}</small></td>
+                <td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}" class="form-control form-control-sm"></td>
+                <td><small>${r.description || '-'}</small></td>
+            </tr>
+        `).join("");
+    } else {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">${selYear}년도 데이터가 없습니다.<br>저장 버튼을 누르면 기본값으로 생성됩니다.</td></tr>`;
+    }
+
+    // 회사 정보는 연도와 무관하게 공통 관리 (원본 그대로 로드)
+    // *회사 정보는 보통 매년 바뀌지 않으므로 ref_company_info 하나만 씁니다.
+    document.getElementById("set_orgName").value = companyInfo['orgName'] || "";
+    document.getElementById("set_ceoName").value = companyInfo['ceoName'] || "";
+    document.getElementById("set_bizNum").value = companyInfo['bizNum'] || "";
+    document.getElementById("set_address").value = companyInfo['company_address'] || "";
+}
+
+// 3. 설정 값 저장하기 (테이블 이원화 적용)
+async function saveSettings() {
+    try {
+        const selYear = Number(document.getElementById("settingTargetYear").value);
+        const currentYear = new Date().getFullYear();
+        const updates = [];
+
+        // UI 값 읽기
+        const isAdvanced = document.getElementById("setAdvanced").classList.contains("active");
+
+        if (isAdvanced && advancedSettingsRaw.length > 0) {
+            // 고급 설정 탭인 경우
+            advancedSettingsRaw.forEach((r, i) => {
+                const val = document.getElementById(`adv_val_${i}`).value;
+                updates.push({ item_key: r.item_key, item_value: Number(val) });
+            });
+        } else {
+            // 일반 설정 탭인 경우 (요율 계산)
+            const pen = Number(document.getElementById("set_pension_total").value) / 200;
+            const hlt = Number(document.getElementById("set_health_total").value) / 200;
+            
+            // 필수 항목들 패키징
+            updates.push(
+                { item_key: 'pension_rate_emp', item_value: pen },
+                { item_key: 'pension_rate_biz', item_value: pen },
+                { item_key: 'health_rate_emp', item_value: hlt },
+                { item_key: 'health_rate_biz', item_value: hlt },
+                { item_key: 'limit_meal', item_value: Number(document.getElementById("set_meal").value) },
+                { item_key: 'limit_car', item_value: Number(document.getElementById("set_car").value) },
+                { item_key: 'limit_child', item_value: Number(document.getElementById("set_child").value) }
+            );
+        }
+
+        // [핵심] 저장할 테이블 분기 처리
+        if (selYear < currentYear) {
+            // 1. 과거 데이터 저장 (History 테이블)
+            console.log(`[저장] ${selYear}년도(과거) - ref_settings_history에 저장합니다.`);
+            
+            // History 테이블은 'target_year' 칼럼이 필수입니다.
+            const historyUpdates = updates.map(u => ({
+                ...u,
+                target_year: selYear, // 연도 명시
+                updated_at: new Date()
+            }));
+
+            // unique 제약조건(target_year + item_key)에 따라 Upsert
+            const { error } = await _supabase
+                .from('ref_settings_history')
+                .upsert(historyUpdates, { onConflict: 'target_year, item_key' });
+            
+            if (error) throw error;
+
+        } else {
+            // 2. 현재 데이터 저장 (Original 테이블)
+            console.log(`[저장] ${selYear}년도(현재) - ref_settings에 저장합니다.`);
+            
+            // Original 테이블은 item_key만 있으면 됨
+            const { error } = await _supabase
+                .from('ref_settings')
+                .upsert(updates, { onConflict: 'item_key' });
+                
+            if (error) throw error;
+        }
+
+        // 3. 회사 정보 저장 (공통)
+        const org = document.getElementById("set_orgName").value;
+        const ceo = document.getElementById("set_ceoName").value;
+        const cUpdates = [
+            { key: 'orgName', value: org },
+            { key: 'company_name', value: org },
+            { key: 'ceoName', value: ceo },
+            { key: 'chairman_name', value: ceo },
+            { key: 'bizNum', value: document.getElementById("set_bizNum").value },
+            { key: 'company_address', value: document.getElementById("set_address").value }
+        ];
+        await _supabase.from('ref_company_info').upsert(cUpdates, { onConflict: 'key' });
+
+        // 마무리
+        await loadSettings(); // 화면 갱신
+        await loadCompanyInfo();
+        settingsModal.hide();
+        showAlert(`${selYear}년도 설정이 저장되었습니다.`);
+
+    } catch (e) {
+        showAlert("저장 중 오류 발생: " + e.message);
+    }
+}
 async function openDetail(u) {
     currentEmpId = u.emp_id; currentEmpName = u.emp_name; 
     currentAnnualSalary = u.base_salary || 0;
