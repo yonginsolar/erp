@@ -373,7 +373,7 @@ function executeConfirmAction() {
     }
     confirmModal.hide();
 }
-// [수정됨] 재직증명서 발급 실행
+// [수정됨] 재직증명서 발급 실행 (순차 번호 적용 및 발급 이력 저장)
 async function runCertIssue() {
     // 1. 용도 확인
     const s = document.getElementById("certPurposeSelect").value;
@@ -398,8 +398,24 @@ async function runCertIssue() {
         tenureStr = `${myInfo.hire_date} ~ 현재 (${y}년 ${m}개월)`;
     }
 
-    // 4. 문서번호 생성
-    const docNum = `인사-${today.getFullYear()}-${myInfo.emp_id}-${today.getMonth() + 1}${today.getDate()}`;
+    // [수정 포인트 1] DB에서 올해 발급된 문서 수 조회 (순차 번호 생성용)
+    const thisYear = today.getFullYear();
+    const { count } = await _supabase
+        .from('log_cert')
+        .select('*', { count: 'exact', head: true })
+        .gte('issued_at', `${thisYear}-01-01T00:00:00`);
+    
+    // 문서번호 생성 (예: 인사-2026-005)
+    const docNum = `인사-${thisYear}-${String((count || 0) + 1).padStart(3, '0')}`;
+
+    // [수정 포인트 2] 발급 이력을 DB에 저장 (이래야 다음 번호가 카운트됨)
+    await _supabase.from('log_cert').insert({
+        emp_id: myInfo.emp_id,
+        emp_name: myInfo.emp_name,
+        cert_type: '재직증명서',
+        purpose: purpose,
+        cert_num: docNum
+    });
 
     // 5. 인쇄 데이터 준비
     const certData = {
@@ -420,7 +436,7 @@ async function runCertIssue() {
         seal: companyInfo.seal_url
     };
 
-    // [변경] 모듈 호출
+    // 모듈 호출
     PrintService.printCert(certData);
 }
   // [공통] 입력 시 자동 하이픈 추가 (2025-24-0002 형식)
