@@ -4863,7 +4863,7 @@ function changeLogPage(direction) {
     g_log_page = next;
     fetchAdminLogs();
 }
-// [수정] 자산수증이익(기부금) 전체 조회 (안전한 매핑 방식 적용)
+// [수정] 자산수증이익(기부금) 전체 조회 (Member ID 기준 매핑으로 변경)
 async function fetchGlobalDonations() {
     const startDate = document.getElementById('don-date-start').value;
     const endDate = document.getElementById('don-date-end').value;
@@ -4871,7 +4871,7 @@ async function fetchGlobalDonations() {
     
     tbody.innerHTML = '<tr><td colspan="5" class="py-5"><div class="spinner-border text-primary"></div></td></tr>';
 
-    // 1. 기부금 내역 먼저 조회 (조인 없이)
+    // 1. 기부금 내역 조회
     const { data: donations, error } = await _supabase
         .from('coop_donations')
         .select('*')
@@ -4891,20 +4891,20 @@ async function fetchGlobalDonations() {
         return;
     }
 
-    // 2. 관련된 회원 정보 별도 조회 (Application-side Join)
-    // 기부금 내역에 있는 member_uid만 수집 (중복 제거)
-    const memberUids = [...new Set(donations.map(d => d.member_uid).filter(Boolean))];
-    let memberMap = {}; // { "uuid": { name: "홍길동", member_id: "2024-001" } }
+    // 2. ★ [핵심 수정] UUID가 아닌 member_id(조합원번호)로 회원 정보 조회
+    // 기부금 데이터에서 member_id만 추출 (중복 제거)
+    const memberIds = [...new Set(donations.map(d => d.member_id).filter(Boolean))];
+    let memberMap = {}; // { "2024-001": "홍길동" }
 
-    if (memberUids.length > 0) {
+    if (memberIds.length > 0) {
         const { data: members, error: memberError } = await _supabase
             .from('coop_members')
-            .select('id, name, member_id')
-            .in('id', memberUids);
+            .select('member_id, name') // 이름과 ID만 필요
+            .in('member_id', memberIds);
         
         if (!memberError && members) {
             members.forEach(m => {
-                memberMap[m.id] = { name: m.name, member_id: m.member_id };
+                memberMap[m.member_id] = m.name;
             });
         }
     }
@@ -4922,15 +4922,16 @@ async function fetchGlobalDonations() {
         else if(d.type === 'card') methodBadge = '<span class="badge bg-warning bg-opacity-10 text-dark">카드</span>';
         else if(d.type === 'cash') methodBadge = '<span class="badge bg-success bg-opacity-10 text-dark">현금</span>';
 
-        // 맵에서 회원 정보 찾기 (없으면 미확인/삭제됨 처리)
-        const memberInfo = memberMap[d.member_uid] || { name: '미확인(삭제됨)', member_id: '-' };
+        // ★ 수정됨: member_id로 맵에서 이름 찾기
+        // 맵에 없으면(탈퇴/삭제 등) 그냥 '미확인' 대신 빈 문자열 처리하거나 원본 표시
+        const name = memberMap[d.member_id] || '미확인';
 
         tbody.innerHTML += `
             <tr>
                 <td>${d.donation_date}</td>
                 <td class="text-start ps-4">
-                    <span class="fw-bold">${memberInfo.name}</span> 
-                    <small class="text-muted">(${memberInfo.member_id})</small>
+                    <span class="fw-bold">${name}</span> 
+                    <small class="text-muted">(${d.member_id})</small>
                 </td>
                 <td class="fw-bold text-end pe-4">${Number(d.amount).toLocaleString()}</td>
                 <td>${methodBadge}</td>
@@ -4943,16 +4944,14 @@ async function fetchGlobalDonations() {
     document.getElementById('don-total-sum').innerText = totalSum.toLocaleString();
 }
 
-// [수정] 이용고배당(포인트) 전체 조회 (coop_points 스키마 적용)
+// [수정] 이용고배당(포인트) 전체 조회 (Member ID 기준 매핑으로 변경)
 async function fetchGlobalDividends() {
     const keyword = document.getElementById('div-search-keyword').value.trim();
     const tbody = document.getElementById('dividendGlobalBody');
     
-    // 로딩 스피너 표시 (칼럼 수: 5개 - 일시, 조합원, 구분, 변동액, 사유)
     tbody.innerHTML = '<tr><td colspan="5" class="py-5"><div class="spinner-border text-info"></div></td></tr>';
 
-    // 1. coop_points 테이블 조회 (최신순 100건)
-    // Join 대신 App-side Join 사용 (관계 설정 에러 방지)
+    // 1. coop_points 테이블 조회
     const { data: points, error } = await _supabase
         .from('coop_points')
         .select('*')
@@ -4970,28 +4969,28 @@ async function fetchGlobalDividends() {
         return;
     }
 
-    // 2. 조합원 이름 매핑을 위해 member_uid 수집 (중복 제거)
-    const memberUids = [...new Set(points.map(p => p.member_uid).filter(Boolean))];
+    // 2. ★ [핵심 수정] UUID가 아닌 member_id로 이름 조회
+    const memberIds = [...new Set(points.map(p => p.member_id).filter(Boolean))];
     let memberMap = {};
 
-    if (memberUids.length > 0) {
+    if (memberIds.length > 0) {
         const { data: members, error: mErr } = await _supabase
             .from('coop_members')
-            .select('id, name')
-            .in('id', memberUids);
+            .select('member_id, name')
+            .in('member_id', memberIds);
         
         if (!mErr && members) {
-            members.forEach(m => memberMap[m.id] = m.name);
+            members.forEach(m => memberMap[m.member_id] = m.name);
         }
     }
 
     // 3. 필터링 및 렌더링
     tbody.innerHTML = '';
     
-    // 검색어 필터링 (이름 또는 ID 포함 여부)
     const filtered = points.filter(p => {
         if(!keyword) return true;
-        const name = memberMap[p.member_uid] || '';
+        // 검색 시 맵에 있는 이름이나, ID 텍스트로 검색
+        const name = memberMap[p.member_id] || '';
         const idText = p.member_id || '';
         return name.includes(keyword) || idText.includes(keyword);
     });
@@ -5002,13 +5001,10 @@ async function fetchGlobalDividends() {
     }
 
     filtered.forEach(p => {
-        // 날짜 포맷팅 (YYYY-MM-DD HH:MM)
         const dateStr = p.created_at ? p.created_at.substring(0, 16).replace('T', ' ') : '-';
-        
-        // 금액 포맷팅
         const amt = Number(p.change_amount || 0);
         
-        // 유형별 뱃지 및 색상 처리
+        // 뱃지 처리
         let typeBadge = `<span class="badge bg-light text-dark border">${p.transaction_type}</span>`;
         let colorClass = 'text-dark';
         let sign = '';
@@ -5020,9 +5016,6 @@ async function fetchGlobalDividends() {
         } else if (p.transaction_type === 'use') {
             typeBadge = '<span class="badge bg-danger bg-opacity-10 text-danger">차감(Use)</span>';
             colorClass = 'text-danger fw-bold';
-            // change_amount가 음수로 들어오는지 양수로 들어오는지에 따라 부호 처리
-            // 보통 use는 음수로 저장되거나, 양수로 저장하고 로직에서 뺄 수 있음.
-            // 여기서는 DB값 그대로 표시하되, 음수가 아니면 - 붙여줌 (UI 명확성)
             if (amt > 0) sign = '-'; 
         } else if (p.transaction_type === 'withdraw') {
             typeBadge = '<span class="badge bg-secondary">출금</span>';
@@ -5030,8 +5023,8 @@ async function fetchGlobalDividends() {
             typeBadge = '<span class="badge bg-success">환불</span>';
         }
 
-        // 이름 매핑
-        const memberName = memberMap[p.member_uid] || '미확인';
+        // ★ 수정됨: 이름 매핑 (member_id 기준)
+        const memberName = memberMap[p.member_id] || '미확인';
         const memberTextId = p.member_id || '-';
 
         tbody.innerHTML += `
