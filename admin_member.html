@@ -4787,11 +4787,7 @@ function changeLogPage(direction) {
     g_log_page = next;
     fetchAdminLogs();
 }
-// ================================================================
-// [기능: 자산수증이익(기부) 및 이용고배당 관리]
-// ================================================================
-
-// 1. 자산수증이익(기부금) 전체 조회
+// [수정] 자산수증이익(기부금) 전체 조회 (안전한 매핑 방식 적용)
 async function fetchGlobalDonations() {
     const startDate = document.getElementById('don-date-start').value;
     const endDate = document.getElementById('don-date-end').value;
@@ -4799,13 +4795,10 @@ async function fetchGlobalDonations() {
     
     tbody.innerHTML = '<tr><td colspan="5" class="py-5"><div class="spinner-border text-primary"></div></td></tr>';
 
-    // DB 조회: 기부금 테이블 + 조합원 이름 조인
-    const { data, error } = await _supabase
+    // 1. 기부금 내역 먼저 조회 (조인 없이)
+    const { data: donations, error } = await _supabase
         .from('coop_donations')
-        .select(`
-            *,
-            coop_members:member_uid ( name, member_id )
-        `)
+        .select('*')
         .gte('donation_date', startDate)
         .lte('donation_date', endDate)
         .order('donation_date', { ascending: false });
@@ -4816,16 +4809,35 @@ async function fetchGlobalDonations() {
         return;
     }
 
-    if (!data || data.length === 0) {
+    if (!donations || donations.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-5">해당 기간의 자산수증(기부) 내역이 없습니다.</td></tr>';
         document.getElementById('don-total-sum').innerText = '0';
         return;
     }
 
+    // 2. 관련된 회원 정보 별도 조회 (Application-side Join)
+    // 기부금 내역에 있는 member_uid만 수집 (중복 제거)
+    const memberUids = [...new Set(donations.map(d => d.member_uid).filter(Boolean))];
+    let memberMap = {}; // { "uuid": { name: "홍길동", member_id: "2024-001" } }
+
+    if (memberUids.length > 0) {
+        const { data: members, error: memberError } = await _supabase
+            .from('coop_members')
+            .select('id, name, member_id')
+            .in('id', memberUids);
+        
+        if (!memberError && members) {
+            members.forEach(m => {
+                memberMap[m.id] = { name: m.name, member_id: m.member_id };
+            });
+        }
+    }
+
+    // 3. 데이터 병합 및 렌더링
     let totalSum = 0;
     tbody.innerHTML = '';
 
-    data.forEach(d => {
+    donations.forEach(d => {
         totalSum += Number(d.amount);
         
         // 결제수단 뱃지
@@ -4834,15 +4846,15 @@ async function fetchGlobalDonations() {
         else if(d.type === 'card') methodBadge = '<span class="badge bg-warning bg-opacity-10 text-dark">카드</span>';
         else if(d.type === 'cash') methodBadge = '<span class="badge bg-success bg-opacity-10 text-dark">현금</span>';
 
-        const memberName = d.coop_members ? d.coop_members.name : '미확인';
-        const memberIdText = d.coop_members ? d.coop_members.member_id : '-';
+        // 맵에서 회원 정보 찾기 (없으면 미확인/삭제됨 처리)
+        const memberInfo = memberMap[d.member_uid] || { name: '미확인(삭제됨)', member_id: '-' };
 
         tbody.innerHTML += `
             <tr>
                 <td>${d.donation_date}</td>
                 <td class="text-start ps-4">
-                    <span class="fw-bold">${memberName}</span> 
-                    <small class="text-muted">(${memberIdText})</small>
+                    <span class="fw-bold">${memberInfo.name}</span> 
+                    <small class="text-muted">(${memberInfo.member_id})</small>
                 </td>
                 <td class="fw-bold text-end pe-4">${Number(d.amount).toLocaleString()}</td>
                 <td>${methodBadge}</td>
@@ -4855,26 +4867,22 @@ async function fetchGlobalDonations() {
     document.getElementById('don-total-sum').innerText = totalSum.toLocaleString();
 }
 
-// 2. 이용고배당(구 포인트) 전체 조회
+// [수정] 이용고배당(구 포인트) 전체 조회 (안전한 매핑 방식 적용)
 async function fetchGlobalDividends() {
     const keyword = document.getElementById('div-search-keyword').value.trim();
     const tbody = document.getElementById('dividendGlobalBody');
     
-    // 로딩 표시
     tbody.innerHTML = '<tr><td colspan="6" class="py-5"><div class="spinner-border text-info"></div></td></tr>';
 
-    // ★ DB 테이블명: coop_point_logs 사용 (기존 로직 따름)
-    // 실제로는 '이용고배당'이지만 DB 칼럼은 여전히 point 관련일 가능성이 높으므로 그대로 유지
+    // 1. 로그 테이블 조회 (조인 없이)
+    // ★ DB 테이블명: coop_point_logs 사용 (에러 시 테이블명 확인 필요)
     let query = _supabase
         .from('coop_point_logs')
-        .select(`
-            *,
-            coop_members:member_uid ( name, member_id )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
-        .limit(100); // 성능 고려 최근 100건만
+        .limit(100);
 
-    const { data, error } = await query;
+    const { data: logs, error } = await query;
 
     if (error) {
         console.error("이용고배당 로그 조회 실패:", error);
@@ -4882,19 +4890,39 @@ async function fetchGlobalDividends() {
         return;
     }
 
-    if (!data || data.length === 0) {
+    if (!logs || logs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-muted py-5">이용고배당 변동 내역이 없습니다.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = '';
-    
-    // JS단 필터링 (검색어)
-    const filtered = data.filter(p => {
+    // 2. 관련된 회원 정보 별도 조회
+    const memberUids = [...new Set(logs.map(l => l.member_uid).filter(Boolean))];
+    let memberMap = {};
+
+    if (memberUids.length > 0) {
+        const { data: members, error: memberError } = await _supabase
+            .from('coop_members')
+            .select('id, name, member_id')
+            .in('id', memberUids);
+        
+        if (!memberError && members) {
+            members.forEach(m => {
+                memberMap[m.id] = { name: m.name, member_id: m.member_id };
+            });
+        }
+    }
+
+    // 3. 병합 및 필터링 (검색어 적용)
+    // 데이터에 회원 정보를 붙임
+    const enrichedLogs = logs.map(l => {
+        const info = memberMap[l.member_uid] || { name: '삭제된회원', member_id: '-' };
+        return { ...l, member_name: info.name, member_text_id: info.member_id };
+    });
+
+    // 검색어 필터링 (이름이나 ID에 포함된 경우)
+    const filtered = enrichedLogs.filter(item => {
         if(!keyword) return true;
-        const mName = p.coop_members ? p.coop_members.name : '';
-        const mId = p.coop_members ? p.coop_members.member_id : '';
-        return mName.includes(keyword) || mId.includes(keyword);
+        return item.member_name.includes(keyword) || item.member_text_id.includes(keyword);
     });
 
     if (filtered.length === 0) {
@@ -4902,26 +4930,23 @@ async function fetchGlobalDividends() {
         return;
     }
 
+    // 4. 렌더링
+    tbody.innerHTML = '';
     filtered.forEach(p => {
         const dateStr = p.created_at ? p.created_at.substring(0, 16).replace('T', ' ') : '-';
         const amt = Number(p.change_amount || p.amount || 0); 
         
-        // 스타일링: 양수면 파랑, 음수면 빨강
         const colorClass = amt > 0 ? 'text-primary' : 'text-danger';
         const sign = amt > 0 ? '+' : '';
         
-        // 잔액(balance) 칼럼이 있다면 표시, 없으면 '-'
         const balance = (p.current_balance !== undefined && p.current_balance !== null) 
             ? Number(p.current_balance).toLocaleString() 
             : '-';
 
-        const memberName = p.coop_members ? p.coop_members.name : '삭제된회원';
-        const memberIdText = p.coop_members ? p.coop_members.member_id : '-';
-
         tbody.innerHTML += `
             <tr>
                 <td class="small text-secondary">${dateStr}</td>
-                <td class="fw-bold">${memberName} <span class="small text-muted">(${memberIdText})</span></td>
+                <td class="fw-bold">${p.member_name} <span class="small text-muted">(${p.member_text_id})</span></td>
                 <td><span class="badge bg-light text-dark border">${p.type || '배당'}</span></td>
                 <td class="fw-bold ${colorClass} text-end pe-3">${sign}${amt.toLocaleString()}</td>
                 <td class="text-secondary">${balance}</td>
