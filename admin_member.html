@@ -306,11 +306,11 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
                         <label class="small fw-bold text-muted">조회 종료일</label>
                         <input type="date" id="don-date-end" class="form-control form-control-sm">
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button class="btn btn-sm btn-dark w-100" onclick="fetchGlobalDonations()">
-                            <i class="bi bi-search"></i> 조회
-                        </button>
-                    </div>
+<div class="col-md-2 d-flex align-items-end mt-auto"> 
+    <button class="btn btn-sm btn-dark w-100" onclick="fetchGlobalDonations()">
+        <i class="bi bi-search"></i> 조회
+    </button>
+</div>
                     <div class="col-md-4 text-end d-flex align-items-center justify-content-end">
                         <div class="text-end">
                             <small class="text-muted d-block">기간 내 총 모금액</small>
@@ -376,34 +376,99 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
     </div>
 </div>
 
-<div class="modal fade" id="dividendModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
+<div class="modal fade" id="dividendModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h6 class="modal-title fw-bold">📉 이용고배당 수동 관리</h6>
+                <h6 class="modal-title fw-bold">📉 이용고배당 지급/차감</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="mb-2">
-                    <label class="small fw-bold text-muted">대상 조합원 (ID)</label>
-                    <input type="text" id="dv-member-id" class="form-control form-control-sm" placeholder="예: 2024-001">
+            
+            <div class="modal-body p-0">
+                <ul class="nav nav-tabs nav-justified" id="dividendTab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active rounded-0" data-bs-toggle="tab" data-bs-target="#tab-div-single" type="button">👤 개별 지급</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link rounded-0" data-bs-toggle="tab" data-bs-target="#tab-div-batch" type="button">📊 엑셀 일괄 지급</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3">
+                    <div class="tab-pane fade show active" id="tab-div-single">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">대상 조합원</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="dv-member-id" class="form-control" placeholder="ID 입력 또는 검색" readonly>
+                                <input type="text" id="dv-member-name" class="form-control bg-white" placeholder="이름" readonly>
+                                <button class="btn btn-secondary" type="button" onclick="openMemberSearch('dividend')">🔍 찾기</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">변동 금액</label>
+                            <input type="number" id="dv-amount" class="form-control form-control-sm" placeholder="지급: 1000, 차감: -1000">
+                            <div class="form-text x-small text-end">단위: 원</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">사유</label>
+                            <input type="text" id="dv-reason" class="form-control form-control-sm" placeholder="예: 2025년 이용실적 배당">
+                        </div>
+                        <button class="btn btn-primary w-100 btn-sm" onclick="submitDividendGrant()">적용하기</button>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-div-batch">
+                        <div class="alert alert-light border small mb-3">
+                            <i class="bi bi-info-circle-fill"></i> 다수의 조합원에게 배당금을 한 번에 지급합니다.
+                            <div class="mt-2 text-end">
+                                <button class="btn btn-xs btn-outline-success border" onclick="downloadDividendTemplate()">
+                                    <i class="bi bi-file-earmark-excel"></i> 양식 다운로드
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">엑셀 파일 선택</label>
+                            <input type="file" id="div-excel-file" class="form-control form-control-sm" accept=".xlsx, .xls" onchange="readDividendExcel(this)">
+                        </div>
+
+                        <div id="div-excel-preview" style="display:none;">
+                            <h6 class="small fw-bold text-primary">미리보기 (상위 5건)</h6>
+                            <table class="table table-bordered table-sm x-small text-center">
+                                <thead class="table-light"><tr><th>ID</th><th>이름</th><th>금액</th><th>사유</th></tr></thead>
+                                <tbody id="div-excel-tbody"></tbody>
+                            </table>
+                            <div class="text-end small text-muted mb-2" id="div-excel-count"></div>
+                            
+                            <button class="btn btn-success w-100 btn-sm fw-bold" onclick="submitDividendBatch()">
+                                <i class="bi bi-check-lg"></i> 일괄 적용하기
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-2">
-                    <label class="small fw-bold text-muted">변동 금액</label>
-                    <input type="number" id="dv-amount" class="form-control form-control-sm" placeholder="지급: 1000, 차감: -1000">
-                    <div class="form-text x-small text-end">단위: 원(또는 P)</div>
-                </div>
-                <div class="mb-2">
-                    <label class="small fw-bold text-muted">사유</label>
-                    <input type="text" id="dv-reason" class="form-control form-control-sm" placeholder="예: 2025년 1분기 이용실적 배당">
-                </div>
-            </div>
-            <div class="modal-footer p-2">
-                <button class="btn btn-primary w-100 btn-sm" onclick="submitDividendGrant()">적용하기</button>
             </div>
         </div>
     </div>
-</div>    
+</div>
+
+<div class="modal fade" id="memberSearchModal" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-light py-2">
+                <h6 class="modal-title fw-bold">🔍 조합원 찾기</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group input-group-sm mb-3">
+                    <input type="text" id="ms-keyword" class="form-control" placeholder="이름 입력" onkeyup="if(event.key=='Enter') searchMemberForModal()">
+                    <button class="btn btn-dark" onclick="searchMemberForModal()">검색</button>
+                </div>
+                <div class="list-group list-group-flush border rounded" id="ms-result-list" style="max-height: 250px; overflow-y: auto;">
+                    <div class="text-center py-4 text-muted x-small">이름을 입력하세요.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>   
 
 <div id="tab-deposit" class="tab-pane">
 <div class="content-header"><h3>💰 입금 내역 매칭</h3></div>
@@ -4974,11 +5039,22 @@ async function fetchGlobalDividends() {
     });
 }
 
-// 3. 이용고배당 수동 지급 모달 열기
+// 기존 openDividendModal 함수 교체
 function openDividendModal() {
+    // 필드 초기화
     document.getElementById('dv-member-id').value = '';
+    document.getElementById('dv-member-name').value = '';
     document.getElementById('dv-amount').value = '';
     document.getElementById('dv-reason').value = '';
+    
+    // 엑셀 탭 초기화
+    document.getElementById('div-excel-file').value = '';
+    document.getElementById('div-excel-preview').style.display = 'none';
+    
+    // 첫 번째 탭 선택
+    const firstTab = new bootstrap.Tab(document.querySelector('#dividendTab button[data-bs-target="#tab-div-single"]'));
+    firstTab.show();
+
     new bootstrap.Modal(document.getElementById('dividendModal')).show();
 }
 
@@ -5014,6 +5090,177 @@ async function submitDividendGrant() {
         }
     });
 }    
+    let g_excel_data = []; // 업로드한 데이터 임시 저장
+
+// 엑셀 양식 다운로드
+function downloadDividendTemplate() {
+    const ws_data = [
+        ["조합원ID", "금액", "사유"], // 헤더
+        ["2024-001", "1000", "2025년 배당금"], // 예시
+        ["2024-002", "500", "행사 참여"]
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "배당일괄지급");
+    XLSX.writeFile(wb, "이용고배당_일괄지급_양식.xlsx");
+}
+
+// 엑셀 파일 읽기
+function readDividendExcel(input) {
+    const file = input.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet); // 첫 줄 헤더 자동 인식
+
+        if(json.length === 0) {
+            alert('데이터가 없는 엑셀입니다.');
+            return;
+        }
+
+        g_excel_data = json; // 전역 변수에 저장
+        
+        // 미리보기 렌더링 (최대 5개)
+        const tbody = document.getElementById('div-excel-tbody');
+        tbody.innerHTML = '';
+        
+        // 헤더 매핑 유연하게 (조합원ID, ID, 아이디 / 금액, point, amount / 사유, reason)
+        const previewList = json.slice(0, 5);
+        previewList.forEach(row => {
+            const id = row['조합원ID'] || row['ID'] || row['아이디'] || '-';
+            // 이름은 엑셀에 없을 수도 있음. 여기선 ID가 핵심.
+            const amt = row['금액'] || row['amount'] || 0;
+            const reason = row['사유'] || row['비고'] || '-';
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${id}</td>
+                    <td>-</td> 
+                    <td>${Number(amt).toLocaleString()}</td>
+                    <td>${reason}</td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('div-excel-count').innerText = `총 ${json.length}건 대기 중`;
+        document.getElementById('div-excel-preview').style.display = 'block';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// 엑셀 데이터 일괄 적용
+async function submitDividendBatch() {
+    if(g_excel_data.length === 0) return alert("데이터가 없습니다.");
+
+    myConfirm(`총 ${g_excel_data.length}건의 배당을 지급하시겠습니까?<br><small>시간이 조금 걸릴 수 있습니다.</small>`, async () => {
+        showLoading(true);
+        
+        let successCnt = 0;
+        let failCnt = 0;
+        const adminEmail = document.getElementById('adminProfile').innerText;
+
+        // ★ 한 건씩 순차 처리 (Batch RPC가 없으므로 반복 호출)
+        // 100건 이상이면 느릴 수 있지만 가장 안전함.
+        for (const row of g_excel_data) {
+            const id = row['조합원ID'] || row['ID'] || row['아이디'];
+            const amt = row['금액'] || row['amount'];
+            const reason = row['사유'] || row['비고'] || '일괄지급';
+
+            if(id && amt) {
+                const { error } = await _supabase.rpc('grant_dividend_manual', {
+                    p_member_text_id: String(id),
+                    p_amount: Number(amt),
+                    p_reason: String(reason),
+                    p_admin_email: adminEmail
+                });
+                
+                if(error) {
+                    console.error(`ID ${id} 실패:`, error);
+                    failCnt++;
+                } else {
+                    successCnt++;
+                }
+            } else {
+                failCnt++;
+            }
+        }
+        
+        showLoading(false);
+        myAlert(`완료되었습니다.<br>성공: ${successCnt}건, 실패: ${failCnt}건`);
+        
+        bootstrap.Modal.getInstance(document.getElementById('dividendModal')).hide();
+        fetchGlobalDividends();
+    });
+}
+    let g_search_target = ''; // 검색 요청한 출처 (dividend 등)
+
+// 검색 모달 열기
+function openMemberSearch(target) {
+    g_search_target = target;
+    document.getElementById('ms-keyword').value = '';
+    document.getElementById('ms-result-list').innerHTML = '<div class="text-center py-4 text-muted x-small">이름을 입력하세요.</div>';
+    new bootstrap.Modal(document.getElementById('memberSearchModal')).show();
+    setTimeout(() => document.getElementById('ms-keyword').focus(), 500);
+}
+
+// 조합원 검색 실행 (메모리상 데이터 g_members 활용)
+function searchMemberForModal() {
+    const keyword = document.getElementById('ms-keyword').value.trim();
+    const listEl = document.getElementById('ms-result-list');
+    
+    if(!keyword) return;
+
+    // g_members가 비어있다면 한번 로드 시도 (또는 DB 직접 조회)
+    // 여기서는 안전하게 RPC 대신 DB 직접 조회 (이름만)
+    // 100명 이하라면 g_members 써도 되지만, 안전하게 DB 검색
+    
+    listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
+    
+    _supabase
+        .from('coop_members')
+        .select('id, name, member_id, phone, status')
+        .ilike('name', `%${keyword}%`)
+        .limit(10)
+        .then(({ data, error }) => {
+            if(error || !data || data.length === 0) {
+                listEl.innerHTML = '<div class="text-center py-3 text-muted x-small">검색 결과가 없습니다.</div>';
+                return;
+            }
+            
+            listEl.innerHTML = '';
+            data.forEach(m => {
+                const phoneEnd = m.phone ? m.phone.slice(-4) : '????';
+                listEl.innerHTML += `
+                    <button class="list-group-item list-group-item-action py-2" onclick="selectMemberForModal('${m.member_id}', '${m.name}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold small">${m.name}</span>
+                            <span class="badge bg-light text-dark border">${m.status}</span>
+                        </div>
+                        <div class="d-flex justify-content-between x-small text-muted mt-1">
+                            <span>ID: ${m.member_id}</span>
+                            <span>☎ ${phoneEnd}</span>
+                        </div>
+                    </button>
+                `;
+            });
+        });
+}
+
+// 조합원 선택 시 처리
+function selectMemberForModal(id, name) {
+    if(g_search_target === 'dividend') {
+        document.getElementById('dv-member-id').value = id;
+        document.getElementById('dv-member-name').value = name;
+    }
+    // 다른 곳에서 쓸 경우 else if 추가
+
+    // 모달 닫기
+    bootstrap.Modal.getInstance(document.getElementById('memberSearchModal')).hide();
+}
 
 </script>
 </body>
