@@ -4254,16 +4254,14 @@ function openFundEditor(type, rowDataStr) {
     new bootstrap.Modal(modalEl).show();
 }
 
-// [수정] 자금 목록 로드 (출자금 + 기부금 모두 조회)
+// [수정] 자금 목록 로드 (조회 기준 변경: UUID -> Member ID 우선)
 async function loadMemberFunds(uuid, textId, reset=false) {
-    // 1. 출자금 리스트 처리
+    // 1. 출자금 리스트 처리 (기존 유지)
     const capListEl = document.getElementById('md-capital-list');
     if (capListEl) {
         if (reset) capListEl.innerHTML = '';
         
-        // textId가 있을 때만 조회
         if (textId && textId !== 'ID없음') {
-             // 출자금 조회 (ref_members)
             const { data: caps, error: capErr } = await _supabase
                 .from('ref_members')
                 .select('*')
@@ -4272,8 +4270,7 @@ async function loadMemberFunds(uuid, textId, reset=false) {
 
             if (capErr) console.error("출자금 로드 실패:", capErr);
             
-            // 렌더링
-            capListEl.innerHTML = ''; // 전체 다시 그리기 (단순화)
+            capListEl.innerHTML = '';
             if (!caps || caps.length === 0) {
                 capListEl.innerHTML = '<tr><td colspan="4" class="text-muted small py-3">내역 없음</td></tr>';
             } else {
@@ -4293,17 +4290,26 @@ async function loadMemberFunds(uuid, textId, reset=false) {
         }
     }
 
-    // 2. ★ [추가됨] 기부금 리스트 처리
+    // 2. ★ [핵심 수정] 기부금 리스트 처리
     const donListEl = document.getElementById('md-donation-list');
     if (donListEl) {
         if (reset) donListEl.innerHTML = '';
         
-        // 기부금 조회 (coop_donations) - UUID 기준 조회 권장
-        // (만약 UUID가 없으면 textId로 백업 조회)
+        // 기부금 조회 (coop_donations)
         let query = _supabase.from('coop_donations').select('*').order('donation_date', {ascending: false});
         
-        if (uuid) query = query.eq('member_uid', uuid);
-        else if (textId) query = query.eq('member_id', textId);
+        // [변경 전 로직] UUID가 있으면 무조건 UUID로 검색해서 문제 발생
+        // if (uuid) query = query.eq('member_uid', uuid);
+        // else if (textId) query = query.eq('member_id', textId);
+
+        // [변경 후 로직] member_id(텍스트 ID)가 가장 확실하므로 이것을 최우선으로 검색
+        if (textId && textId !== 'ID없음' && textId !== '-') {
+            query = query.eq('member_id', textId);
+        } 
+        // 텍스트 ID가 없는 특수한 경우에만 UUID 사용 (백업 로직)
+        else if (uuid) {
+            query = query.eq('member_uid', uuid);
+        }
         
         const { data: dons, error: donErr } = await query;
 
@@ -4316,6 +4322,7 @@ async function loadMemberFunds(uuid, textId, reset=false) {
         } else {
             dons.forEach(d => {
                 const json = encodeURIComponent(JSON.stringify(d));
+                
                 // 결제 수단 뱃지
                 let methodBadge = '<span class="badge bg-light text-dark border">기타</span>';
                 if(d.type === 'transfer') methodBadge = '<span class="badge bg-info bg-opacity-10 text-dark">계좌</span>';
