@@ -82,6 +82,9 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <a class="nav-link" onclick="switchTab('members')" id="nav-members" style="cursor:pointer;">
 <i class="bi bi-people-fill"></i> 조합원 명부
 </a>
+<a class="nav-link" onclick="switchTab('funds-manage')" id="nav-funds-manage" style="cursor:pointer;">
+    <i class="bi bi-piggy-bank-fill"></i> 자금 및 이용고 배당 관리
+</a>
 <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
 <i class="bi bi-cash-coin"></i> 입금 매칭
 </a>
@@ -272,6 +275,136 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
         </table>
     </div>
 </div>
+
+<div class="tab-pane fade" id="tab-funds-manage">
+    <div class="content-header">
+        <h3 class="fw-bold m-0" style="font-family:'GmarketSans';">💰 운영자금(자산수증) 및 이용고배당</h3>
+    </div>
+
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#sub-tab-donations" type="button" onclick="fetchGlobalDonations()">
+                🎁 자산수증이익 (운영기금)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sub-tab-dividends" type="button" onclick="fetchGlobalDividends()">
+                📈 이용고배당 관리
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="sub-tab-donations">
+            <div class="card border-0 shadow-sm p-3 mb-3 bg-light">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-3">
+                        <label class="small fw-bold text-muted">조회 시작일</label>
+                        <input type="date" id="don-date-start" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small fw-bold text-muted">조회 종료일</label>
+                        <input type="date" id="don-date-end" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-sm btn-dark w-100" onclick="fetchGlobalDonations()">
+                            <i class="bi bi-search"></i> 조회
+                        </button>
+                    </div>
+                    <div class="col-md-4 text-end d-flex align-items-center justify-content-end">
+                        <div class="text-end">
+                            <small class="text-muted d-block">기간 내 총 모금액</small>
+                            <span class="fs-4 fw-bold text-primary" id="don-total-sum">0</span>
+                            <span class="small fw-bold text-primary">원</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive bg-white border rounded" style="max-height: 550px; overflow-y: auto;">
+                <table class="table table-hover align-middle mb-0 text-center small">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>날짜</th>
+                            <th>이름 (조합원번호)</th>
+                            <th class="text-end">금액</th>
+                            <th>유형</th>
+                            <th>비고(메모)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="donationGlobalBody">
+                        <tr><td colspan="5" class="py-5 text-muted">조회 기간을 선택하고 검색해주세요.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="sub-tab-dividends">
+            <div class="alert alert-info border-0 bg-info bg-opacity-10 small mb-3">
+                <i class="bi bi-info-circle-fill me-1"></i>
+                <strong>이용고배당이란?</strong> 조합원의 사업 이용 실적(전기 사용량 등)에 따라 배분되는 배당금입니다. (구 포인트)
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="input-group" style="width: 350px;">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" id="div-search-keyword" class="form-control form-control-sm border-start-0" placeholder="이름 또는 ID 검색" onkeyup="if(event.key=='Enter') fetchGlobalDividends()">
+                    <button class="btn btn-sm btn-dark" onclick="fetchGlobalDividends()">검색</button>
+                </div>
+                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="openDividendModal()">
+                    + 이용고배당 수동 지급/차감
+                </button>
+            </div>
+
+            <div class="table-responsive bg-white border rounded" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-hover align-middle mb-0 text-center small">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>발생 일시</th>
+                            <th>조합원</th>
+                            <th>구분</th>
+                            <th class="text-end">변동액</th>
+                            <th>잔액(누적)</th>
+                            <th>사유</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dividendGlobalBody">
+                        <tr><td colspan="6" class="py-5 text-muted">로딩 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dividendModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h6 class="modal-title fw-bold">📉 이용고배당 수동 관리</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="small fw-bold text-muted">대상 조합원 (ID)</label>
+                    <input type="text" id="dv-member-id" class="form-control form-control-sm" placeholder="예: 2024-001">
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold text-muted">변동 금액</label>
+                    <input type="number" id="dv-amount" class="form-control form-control-sm" placeholder="지급: 1000, 차감: -1000">
+                    <div class="form-text x-small text-end">단위: 원(또는 P)</div>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold text-muted">사유</label>
+                    <input type="text" id="dv-reason" class="form-control form-control-sm" placeholder="예: 2025년 1분기 이용실적 배당">
+                </div>
+            </div>
+            <div class="modal-footer p-2">
+                <button class="btn btn-primary w-100 btn-sm" onclick="submitDividendGrant()">적용하기</button>
+            </div>
+        </div>
+    </div>
+</div>    
 
 <div id="tab-deposit" class="tab-pane">
 <div class="content-header"><h3>💰 입금 내역 매칭</h3></div>
@@ -3144,32 +3277,59 @@ requestAnimationFrame(update);
 // [수정] 탭 전환 함수 (모든 탭 ID 매칭 보장)
 // 기존 switchTab 함수를 찾아서 이 부분만 바꾸거나 함수 전체를 교체하세요.
 
-// [수정] 탭 전환 함수 (자동 로드 제거 -> 초기화 화면 호출)
+// [수정] 탭 전환 함수 (전체 코드)
 function switchTab(tabName) {
-// 1. 탭 숨김 처리 (기존 코드 유지)
-const panes = document.querySelectorAll('.main-content > .tab-pane'); 
-panes.forEach(el => { el.classList.remove('show', 'active'); el.style.display = 'none'; });
+    // 1. 모든 탭 숨김 처리
+    const panes = document.querySelectorAll('.main-content > .tab-pane');
+    panes.forEach(el => {
+        el.classList.remove('show', 'active');
+        el.style.display = 'none';
+    });
 
-// 2. 탭 보임 처리 (기존 코드 유지)
-const target = document.getElementById('tab-' + tabName);
-if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('show', 'active'), 10); }
+    // 2. 선택한 탭 보임 처리
+    const target = document.getElementById('tab-' + tabName);
+    if (target) {
+        target.style.display = 'block';
+        setTimeout(() => target.classList.add('show', 'active'), 10);
+    }
 
-// 3. 네비게이션 활성화 (기존 코드 유지)
-document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
-const navBtn = document.getElementById('nav-' + tabName);
-if(navBtn) navBtn.classList.add('active');
+    // 3. 사이드바 네비게이션 활성화 표시
+    document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
+    const navBtn = document.getElementById('nav-' + tabName);
+    if (navBtn) navBtn.classList.add('active');
 
-// 4. ★ 데이터 로드 로직 변경 (핵심)
-if (tabName === 'dashboard') {
-loadDashboard();
-} 
-else if (tabName === 'members') {
-// fetchMembers();  <-- [삭제] 이제 자동으로 안 불러옵니다.
-renderEmptyState(); // [신규] "검색 조건을 입력하세요" 화면 띄우기
-}
-else if (tabName === 'notices') {
-fetchNotices();
-}
+    // 4. 탭별 데이터 로드 로직
+    if (tabName === 'dashboard') {
+        loadDashboard();
+    } 
+    else if (tabName === 'members') {
+        // 회원 탭은 자동 조회 대신 '검색 유도 화면' 표시 (부하 방지)
+        renderEmptyState();
+    } 
+    else if (tabName === 'notices') {
+        fetchNotices();
+    } 
+    // ★ [신규] 자금 및 배당 관리 탭 진입 시
+    else if (tabName === 'funds-manage') {
+        // 날짜 인풋 요소 찾기
+        const startEl = document.getElementById('don-date-start');
+        const endEl = document.getElementById('don-date-end');
+
+        // 값이 비어있을 때만 기본값(올해 1월 1일 ~ 오늘) 세팅
+        if (startEl && !startEl.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+
+            startEl.value = `${yyyy}-01-01`; // 시작일: 1월 1일
+            endEl.value = `${yyyy}-${mm}-${dd}`; // 종료일: 오늘
+            
+            // 초기 데이터 로드 (자산수증이익)
+            fetchGlobalDonations();
+        }
+    }
+    // 'deposit'(입금매칭), 'site'(홈페이지관리) 등은 별도 초기 로드 함수 없이 UI만 전환됨
 }
 
 // [수정] 대시보드 데이터 로드 (통계 차트 연동)
@@ -4627,7 +4787,190 @@ function changeLogPage(direction) {
     g_log_page = next;
     fetchAdminLogs();
 }
+// ================================================================
+// [기능: 자산수증이익(기부) 및 이용고배당 관리]
+// ================================================================
+
+// 1. 자산수증이익(기부금) 전체 조회
+async function fetchGlobalDonations() {
+    const startDate = document.getElementById('don-date-start').value;
+    const endDate = document.getElementById('don-date-end').value;
+    const tbody = document.getElementById('donationGlobalBody');
     
+    tbody.innerHTML = '<tr><td colspan="5" class="py-5"><div class="spinner-border text-primary"></div></td></tr>';
+
+    // DB 조회: 기부금 테이블 + 조합원 이름 조인
+    const { data, error } = await _supabase
+        .from('coop_donations')
+        .select(`
+            *,
+            coop_members:member_uid ( name, member_id )
+        `)
+        .gte('donation_date', startDate)
+        .lte('donation_date', endDate)
+        .order('donation_date', { ascending: false });
+
+    if (error) {
+        console.error(error);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-4">데이터 로드 실패: ${error.message}</td></tr>`;
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-5">해당 기간의 자산수증(기부) 내역이 없습니다.</td></tr>';
+        document.getElementById('don-total-sum').innerText = '0';
+        return;
+    }
+
+    let totalSum = 0;
+    tbody.innerHTML = '';
+
+    data.forEach(d => {
+        totalSum += Number(d.amount);
+        
+        // 결제수단 뱃지
+        let methodBadge = '<span class="badge bg-light text-dark border">기타</span>';
+        if(d.type === 'transfer') methodBadge = '<span class="badge bg-info bg-opacity-10 text-dark">계좌</span>';
+        else if(d.type === 'card') methodBadge = '<span class="badge bg-warning bg-opacity-10 text-dark">카드</span>';
+        else if(d.type === 'cash') methodBadge = '<span class="badge bg-success bg-opacity-10 text-dark">현금</span>';
+
+        const memberName = d.coop_members ? d.coop_members.name : '미확인';
+        const memberIdText = d.coop_members ? d.coop_members.member_id : '-';
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${d.donation_date}</td>
+                <td class="text-start ps-4">
+                    <span class="fw-bold">${memberName}</span> 
+                    <small class="text-muted">(${memberIdText})</small>
+                </td>
+                <td class="fw-bold text-end pe-4">${Number(d.amount).toLocaleString()}</td>
+                <td>${methodBadge}</td>
+                <td class="text-start text-muted small">${d.note || '-'}</td>
+            </tr>
+        `;
+    });
+
+    // 총액 업데이트
+    document.getElementById('don-total-sum').innerText = totalSum.toLocaleString();
+}
+
+// 2. 이용고배당(구 포인트) 전체 조회
+async function fetchGlobalDividends() {
+    const keyword = document.getElementById('div-search-keyword').value.trim();
+    const tbody = document.getElementById('dividendGlobalBody');
+    
+    // 로딩 표시
+    tbody.innerHTML = '<tr><td colspan="6" class="py-5"><div class="spinner-border text-info"></div></td></tr>';
+
+    // ★ DB 테이블명: coop_point_logs 사용 (기존 로직 따름)
+    // 실제로는 '이용고배당'이지만 DB 칼럼은 여전히 point 관련일 가능성이 높으므로 그대로 유지
+    let query = _supabase
+        .from('coop_point_logs')
+        .select(`
+            *,
+            coop_members:member_uid ( name, member_id )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100); // 성능 고려 최근 100건만
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error("이용고배당 로그 조회 실패:", error);
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger py-4">조회 실패: ${error.message}</td></tr>`;
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-muted py-5">이용고배당 변동 내역이 없습니다.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    
+    // JS단 필터링 (검색어)
+    const filtered = data.filter(p => {
+        if(!keyword) return true;
+        const mName = p.coop_members ? p.coop_members.name : '';
+        const mId = p.coop_members ? p.coop_members.member_id : '';
+        return mName.includes(keyword) || mId.includes(keyword);
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-muted py-5">검색 결과가 없습니다.</td></tr>';
+        return;
+    }
+
+    filtered.forEach(p => {
+        const dateStr = p.created_at ? p.created_at.substring(0, 16).replace('T', ' ') : '-';
+        const amt = Number(p.change_amount || p.amount || 0); 
+        
+        // 스타일링: 양수면 파랑, 음수면 빨강
+        const colorClass = amt > 0 ? 'text-primary' : 'text-danger';
+        const sign = amt > 0 ? '+' : '';
+        
+        // 잔액(balance) 칼럼이 있다면 표시, 없으면 '-'
+        const balance = (p.current_balance !== undefined && p.current_balance !== null) 
+            ? Number(p.current_balance).toLocaleString() 
+            : '-';
+
+        const memberName = p.coop_members ? p.coop_members.name : '삭제된회원';
+        const memberIdText = p.coop_members ? p.coop_members.member_id : '-';
+
+        tbody.innerHTML += `
+            <tr>
+                <td class="small text-secondary">${dateStr}</td>
+                <td class="fw-bold">${memberName} <span class="small text-muted">(${memberIdText})</span></td>
+                <td><span class="badge bg-light text-dark border">${p.type || '배당'}</span></td>
+                <td class="fw-bold ${colorClass} text-end pe-3">${sign}${amt.toLocaleString()}</td>
+                <td class="text-secondary">${balance}</td>
+                <td class="text-start small">${p.reason || p.note || '-'}</td>
+            </tr>
+        `;
+    });
+}
+
+// 3. 이용고배당 수동 지급 모달 열기
+function openDividendModal() {
+    document.getElementById('dv-member-id').value = '';
+    document.getElementById('dv-amount').value = '';
+    document.getElementById('dv-reason').value = '';
+    new bootstrap.Modal(document.getElementById('dividendModal')).show();
+}
+
+// 4. 이용고배당 지급 실행 (RPC)
+async function submitDividendGrant() {
+    const textId = document.getElementById('dv-member-id').value;
+    const amount = document.getElementById('dv-amount').value;
+    const reason = document.getElementById('dv-reason').value;
+
+    if(!textId || !amount || !reason) return myAlert("모든 항목을 입력해주세요.", "warning");
+
+    // 용어 통일: 포인트 -> 이용고배당
+    myConfirm(`[${textId}] 조합원에게 <br>이용고배당 <b>${amount}</b>원을 적용하시겠습니까?`, async () => {
+        showLoading(true);
+        
+        // ★ 중요: RPC 함수명은 기존에 생성된 것이 있다면 그대로 씁니다.
+        // 만약 'grant_point_manual'을 사용 중이라면 그대로 두고 UI만 배당으로 표시합니다.
+        const { error } = await _supabase.rpc('grant_point_manual', {
+            p_member_text_id: textId,
+            p_amount: Number(amount),
+            p_reason: reason,
+            p_admin_email: document.getElementById('adminProfile').innerText
+        });
+
+        showLoading(false);
+
+        if(error) {
+            myAlert("처리 실패: " + error.message, "error");
+        } else {
+            myAlert("이용고배당 적용이 완료되었습니다.");
+            bootstrap.Modal.getInstance(document.getElementById('dividendModal')).hide();
+            fetchGlobalDividends(); // 목록 새로고침
+        }
+    });
+}    
 
 </script>
 </body>
