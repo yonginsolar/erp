@@ -642,7 +642,7 @@ function toggleCard() {
     else { sel.classList.add("hidden"); sel.value=""; sel.required = false; }
 }
 
-// 5. 전표 저장 로직 (문법 오류 수정 및 기존 로직 100% 보존)
+// 5. 전표 저장 로직 (구조 개선: 안전한 분기 처리)
 async function handleFormSubmit(e) {
     e.preventDefault();
     const item = document.getElementById("hiddenItem").value;
@@ -678,100 +678,93 @@ async function handleFormSubmit(e) {
     let entries = [];
     const writer = myInfo ? myInfo.emp_name : "WebUser";
 
-    // --- [1] 특수 분개 로직 ---
-    
-    // [수정됨] 여기가 'else if'가 아니라 'if'로 시작해야 합니다.
-    if (specialCode === 'insurance') { // 4대보험 납부 (부채 상환 및 차액 정산)
-        const bookYesu = Number(document.getElementById("hiddenYesu").value);
-        const bookMigigeub = Number(document.getElementById("hiddenMigigeub").value);
-        const bookTotal = bookYesu + bookMigigeub;
+    // ==========================================
+    // [1] 특수 분개 모드인지 확인 (Special Mode)
+    // ==========================================
+    if (specialCode && specialCode !== '') {
         
-        // 조회 없이 저장 누르는 것 방지
-        if (bookTotal === 0 && totalAmt > 0) {
-            return showAlert("오류", "먼저 [장부 조회] 버튼을 눌러 부채 내역을 불러오세요.");
-        }
-        
-        // 차액 계산 (실제납부 - 장부상부채)
-        const diff = totalAmt - bookTotal; 
+        if (specialCode === 'insurance') { // 4대보험 납부
+            const bookYesu = Number(document.getElementById("hiddenYesu").value);
+            const bookMigigeub = Number(document.getElementById("hiddenMigigeub").value);
+            const bookTotal = bookYesu + bookMigigeub;
+            
+            if (bookTotal === 0 && totalAmt > 0) return showAlert("오류", "먼저 [장부 조회] 버튼을 눌러 부채 내역을 불러오세요.");
+            
+            const diff = totalAmt - bookTotal; 
 
-        // 1. (차변) 예수금 상환 (직원부담분 부채 감소)
-        if (bookYesu > 0) {
-            entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `${finalDesc} (직원분 상환)`, Debit: bookYesu, Credit: 0, Project: project, Operator: writer });
-        }
+            // (차변) 부채 상환
+            if (bookYesu > 0) entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `${finalDesc} (직원분 상환)`, Debit: bookYesu, Credit: 0, Project: project, Operator: writer });
+            if (bookMigigeub > 0) entries.push({ Date: fDate, Type: '부채', Account: '미지급비용', Description: `${finalDesc} (회사분 상환)`, Debit: bookMigigeub, Credit: 0, Project: project, Operator: writer });
+            
+            // 차액 처리
+            if (diff > 0) entries.push({ Date: fDate, Type: '비용', Account: '잡손실', Description: `[4대보험] 납부차액(절사)`, Debit: diff, Credit: 0, Project: project, Operator: writer });
+            else if (diff < 0) entries.push({ Date: fDate, Type: '매출', Account: '잡이익', Description: `[4대보험] 납부차액(절사)`, Debit: 0, Credit: Math.abs(diff), Project: project, Operator: writer });
 
-        // 2. (차변) 미지급비용 상환 (회사부담분 부채 감소)
-        if (bookMigigeub > 0) {
-            entries.push({ Date: fDate, Type: '부채', Account: '미지급비용', Description: `${finalDesc} (회사분 상환)`, Debit: bookMigigeub, Credit: 0, Project: project, Operator: writer });
+            // (대변) 출금
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
         }
-        
-        // 3. 차액 처리 (잡손실/잡이익)
-        if (diff > 0) { 
-            // 실제 돈이 더 나감 -> 비용(잡손실) 발생
-            entries.push({ Date: fDate, Type: '비용', Account: '잡손실', Description: `[4대보험] 납부차액(절사)`, Debit: diff, Credit: 0, Project: project, Operator: writer });
-        } else if (diff < 0) {
-            // 실제 돈이 덜 나감 -> 수익(잡이익) 발생
-            entries.push({ Date: fDate, Type: '매출', Account: '잡이익', Description: `[4대보험] 납부차액(절사)`, Debit: 0, Credit: Math.abs(diff), Project: project, Operator: writer });
+        else if (specialCode === 'loan_pay') { // 대출상환
+            const interest = Number(document.getElementById("loanInterest")?.value || 0);
+            const principal = totalAmt - interest;
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+            if(interest > 0) entries.push({ Date: fDate, Type: '비용', Account: '이자비용', Description: `[${item}] 이자`, Debit: interest, Credit: 0, Project: project, Operator: writer });
+            if(principal > 0) entries.push({ Date: fDate, Type: '부채', Account: item, Description: `[${item}] 원금상환`, Debit: principal, Credit: 0, Project: project, Operator: writer });
         }
-
-        // 4. (대변) 보통예금 (실제 돈 나감)
-        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-    }
-    else if (specialCode === 'loan_pay') { // 대출상환
-        const interest = Number(document.getElementById("loanInterest")?.value || 0);
-        const principal = totalAmt - interest;
-        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        if(interest > 0) entries.push({ Date: fDate, Type: '비용', Account: '이자비용', Description: `[${item}] 이자`, Debit: interest, Credit: 0, Project: project, Operator: writer });
-        if(principal > 0) entries.push({ Date: fDate, Type: '부채', Account: item, Description: `[${item}] 원금상환`, Debit: principal, Credit: 0, Project: project, Operator: writer });
-    }
-    else if (specialCode === 'labor') { // 인적용역
-        const taxRate = Number(document.querySelector('input[name="laborTaxRate"]:checked').value);
-        const taxAmt = Math.floor(totalAmt * taxRate / 10) * 10;
-        const realPay = totalAmt - taxAmt;
-        entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 원천징수(${taxRate*100}%)`, Debit: 0, Credit: taxAmt, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: realPay, Project: project, Operator: writer });
-    }
-    else if (specialCode === 'interest_inc') { // 이자수익
-        const taxAmt = Math.floor(totalAmt * 0.154 / 10) * 10;
-        const realIn = totalAmt - taxAmt;
-        entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '자산', Account: '선납세금', Description: `[${item}] 원천징수`, Debit: taxAmt, Credit: 0, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: realIn, Credit: 0, Project: project, Operator: writer });
-    }
+        else if (specialCode === 'labor') { // 인적용역
+            const taxRate = Number(document.querySelector('input[name="laborTaxRate"]:checked').value);
+            const taxAmt = Math.floor(totalAmt * taxRate / 10) * 10;
+            const realPay = totalAmt - taxAmt;
+            entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `[${item}] 원천징수(${taxRate*100}%)`, Debit: 0, Credit: taxAmt, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: realPay, Project: project, Operator: writer });
+        }
+        else if (specialCode === 'interest_inc') { // 이자수익
+            const taxAmt = Math.floor(totalAmt * 0.154 / 10) * 10;
+            const realIn = totalAmt - taxAmt;
+            entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '자산', Account: '선납세금', Description: `[${item}] 원천징수`, Debit: taxAmt, Credit: 0, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: realIn, Credit: 0, Project: project, Operator: writer });
+        }
     
-    // --- [2] 일반 분개 로직 (기존 로직 유지) ---
-    
-    else if (settleMode === 'pre_expense') {
-        entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
-        if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
     } 
-    else if (settleMode === 'reimburse') {
-        entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
-        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-    } 
-    else {
-        // 일반 매출/비용/자산 처리
-        if (type === '매출') {
-            entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
-            if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
-            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
-        } else if (type === '비용') {
-            const creditAcc = isCard ? '미지급금' : '보통예금';
-            const creditType = isCard ? '부채' : '자산';
-            entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
+    // ==========================================
+    // [2] 일반 분개 모드 (Normal Mode)
+    // ==========================================
+    else { 
+        // 여기서부터는 specialCode가 없을 때만 실행됩니다.
+        
+        if (settleMode === 'pre_expense') { // 설립전 비용
+            entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
             if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
-            entries.push({ Date: fDate, Type: creditType, Account: creditAcc, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
-        } else { // 자산 등 기타
-            const isDebit = (type === "자산" || type === "자본반환" || type === "부채감소");
-            const db = isDebit ? totalAmt : 0;
-            const cr = isDebit ? 0 : totalAmt;
-            let saveType = type === "자본반환" ? "자본" : type;
-            entries.push({ Date: fDate, Type: saveType, Account: item, Description: finalDesc, Debit: db, Credit: cr, Project: project, Operator: writer });
-            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: cr, Credit: db, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        } 
+        else if (settleMode === 'reimburse') { // 정산 지급
+            entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
+            entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+        } 
+        else { // 일반 거래
+            if (type === '매출') {
+                entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
+                if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
+                entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
+            } else if (type === '비용') {
+                const creditAcc = isCard ? '미지급금' : '보통예금';
+                const creditType = isCard ? '부채' : '자산';
+                entries.push({ Date: fDate, Type: '비용', Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
+                if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
+                entries.push({ Date: fDate, Type: creditType, Account: creditAcc, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
+            } else { 
+                const isDebit = (type === "자산" || type === "자본반환" || type === "부채감소");
+                const db = isDebit ? totalAmt : 0;
+                const cr = isDebit ? 0 : totalAmt;
+                let saveType = type === "자본반환" ? "자본" : type;
+                entries.push({ Date: fDate, Type: saveType, Account: item, Description: finalDesc, Debit: db, Credit: cr, Project: project, Operator: writer });
+                entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: cr, Credit: db, Project: project, Operator: writer });
+            }
         }
     }
 
+    // DB 저장
     const { error } = await _supabase.from('ac_journal').insert(entries);
     if(error) showAlert("오류", "저장 실패: " + error.message);
     else {
