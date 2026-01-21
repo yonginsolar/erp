@@ -570,7 +570,7 @@ function updateDynamicUI(accName, accType, specialCode, isTaxFree) {
         area.innerHTML = `<div class="special-box alert alert-success p-2 mb-2"><small class="fw-bold">ℹ️ 인건비 처리</small><br>4대보험/세금 등은 급여연동 기능을 권장합니다.</div>`;
         vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
     } 
-else if (specialCode === "insurance") { // 4대보험 납부 (부채 상환 및 차액 정산)
+   if (specialCode === "insurance") { // 4대보험 납부 (부채 상환 및 차액 정산)
         // 기본값: 지난달 (보통 10일에 납부하므로 지난달 귀속분)
         const now = new Date();
         now.setMonth(now.getMonth() - 1);
