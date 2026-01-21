@@ -784,7 +784,7 @@ function confirmSync(type) {
     const writer = myInfo ? myInfo.emp_name : "System";
 
 // (1) 급여 연동 (수정본: 말일자 기준 + 회사부담분 부채 계상)
-    else if(type === 'salary') {
+     if(type === 'salary') {
         const ym = document.getElementById("salaryMonth").value; // 예: "2025-10"
         if(!ym) return showAlert("알림", "년-월을 선택하세요.");
         
