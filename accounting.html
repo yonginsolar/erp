@@ -807,7 +807,6 @@ function confirmSync(type) {
             // 1. 대상 조회
             const { data: members, error: fetchError } = await _supabase.from('ref_members').select('*').eq('status', '완료');
             
-            // 조회 에러 및 데이터 부재 체크
             if(fetchError) return showAlert("오류", "데이터 조회 실패: " + fetchError.message);
             if(!members || members.length === 0) return showAlert("알림", "신규 내역이 없습니다.");
             
@@ -819,6 +818,7 @@ function confirmSync(type) {
                 const amt = Number(m.amount);
                 if(amt > 0) {
                     const desc = `[출자] ${m.depositor || m.member_id}`;
+                    
                     // 차변 (자산 증가)
                     entries.push({
                         Date: m.deposit_date || today, 
@@ -827,10 +827,11 @@ function confirmSync(type) {
                         Description: desc, 
                         Debit: amt, 
                         Credit: 0, 
-                        RelatedID: `CAP-${m.id}`, 
+                        // RelatedID 제거함 (불필요)
                         Project: '본사', 
                         Operator: writer
                     });
+                    
                     // 대변 (자본 증가)
                     entries.push({
                         Date: m.deposit_date || today, 
@@ -839,38 +840,40 @@ function confirmSync(type) {
                         Description: desc, 
                         Debit: 0, 
                         Credit: amt, 
-                        RelatedID: `CAP-${m.id}`, 
+                        // RelatedID 제거함 (불필요)
                         Project: '본사', 
                         Operator: writer
                     });
+                    
                     processedIds.push(m.id);
                 }
             });
 
             if(entries.length > 0) {
-                // 3. [핵심 수정] 전표 저장 실행 및 에러 체크
+                // 3. 전표 저장 실행 (에러 검증 추가)
                 const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
                 
-                // 저장 실패 시 중단 (상태 업데이트 하지 않음)
+                // 저장 실패 시 중단
                 if (insertError) {
-                    console.error("전표 저장 실패 로그:", insertError); // 개발자 도구 확인용
-                    return showAlert("오류", "전표 저장 중 문제가 발생했습니다: " + insertError.message);
+                    console.error("전표 저장 실패:", insertError);
+                    return showAlert("오류", "전표 저장 실패: " + insertError.message);
                 }
 
-                // 4. 저장 성공 시에만 상태 업데이트 수행
+                // 4. 저장 성공 시에만 상태 업데이트 ('완료' -> '전표완료'로 변경하여 중복 방지)
                 const { error: updateError } = await _supabase.from('ref_members').update({ status: '전표완료' }).in('id', processedIds);
                 
                 if (updateError) {
-                    return showAlert("부분 오류", "전표는 생성되었으나 상태 변경에 실패했습니다. 관리자에게 문의하세요.");
+                    return showAlert("부분 오류", "전표는 생성되었으나 상태 변경에 실패했습니다. (새로고침 후 확인 필요)");
                 }
 
                 showAlert("성공", `${processedIds.length}건 연동 완료`); 
                 refreshDashboard();
             } else {
-                showAlert("알림", "처리할 유효한 금액(0원 초과)이 없습니다.");
+                showAlert("알림", "처리할 유효한 금액이 없습니다.");
             }
         });
     }
+      
     // (4) 배당금 연동
 // (4) 배당금 연동
     else if (type === 'dividend') {
