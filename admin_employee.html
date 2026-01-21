@@ -884,14 +884,27 @@ async function saveSalary() {
         net_pay: p_total-(pen+hlt+care+emp+inc+loc) 
     };
 
-    // 6. Insert or Update
+    // [6] Insert or Update 실행
     const { data: existing } = await _supabase.from('hr_salary').select('id').eq('emp_id', currentEmpId).eq('year_month', month).single();
-    const { error } = existing ? await _supabase.from('hr_salary').update(payload).eq('id', existing.id) : await _supabase.from('hr_salary').insert(payload);
+    
+    // 직원 부담금(JS계산) 저장
+    const { error } = existing 
+        ? await _supabase.from('hr_salary').update(payload).eq('id', existing.id) 
+        : await _supabase.from('hr_salary').insert(payload);
 
-    if (error) showAlert("실패: "+error.message); 
-    else { 
-        showAlert(`${targetYear}년 요율이 적용되어 급여가 확정되었습니다.`); 
-        loadSalaryData(); 
+    if (error) {
+        showAlert("실패: " + error.message);
+    } else {
+        // [핵심 변경] 저장 성공 후, SQL 함수 호출하여 회사 부담금 일괄 계산
+        // 인자: '2025-01' 같은 형태 (month 변수)
+        const { error: rpcError } = await _supabase.rpc('calc_company_share', { target_ym: month });
+
+        if(rpcError) {
+            showAlert("급여는 저장됐으나, 회사부담금 계산 실패: " + rpcError.message);
+        } else {
+            showAlert(`${month} 급여 확정 및 회사부담금 계산 완료.`);
+            loadSalaryData(); // 화면 갱신
+        }
     }
 }
 
