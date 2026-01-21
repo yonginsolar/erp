@@ -642,7 +642,7 @@ function toggleCard() {
     else { sel.classList.add("hidden"); sel.value=""; sel.required = false; }
 }
 
-// 5. 전표 저장 로직 (핵심)
+// 5. 전표 저장 로직 (문법 오류 수정 및 기존 로직 100% 보존)
 async function handleFormSubmit(e) {
     e.preventDefault();
     const item = document.getElementById("hiddenItem").value;
@@ -678,9 +678,10 @@ async function handleFormSubmit(e) {
     let entries = [];
     const writer = myInfo ? myInfo.emp_name : "WebUser";
 
-    // --- 특수 분개 로직 ---
+    // --- [1] 특수 분개 로직 ---
     
-else if (specialCode === 'insurance') { // 4대보험 납부 처리 로직
+    // [수정됨] 여기가 'else if'가 아니라 'if'로 시작해야 합니다.
+    if (specialCode === 'insurance') { // 4대보험 납부 (부채 상환 및 차액 정산)
         const bookYesu = Number(document.getElementById("hiddenYesu").value);
         const bookMigigeub = Number(document.getElementById("hiddenMigigeub").value);
         const bookTotal = bookYesu + bookMigigeub;
@@ -690,55 +691,30 @@ else if (specialCode === 'insurance') { // 4대보험 납부 처리 로직
             return showAlert("오류", "먼저 [장부 조회] 버튼을 눌러 부채 내역을 불러오세요.");
         }
         
-        // totalAmt(사용자 입력값 = 실제 출금액) vs bookTotal(장부상 부채)
+        // 차액 계산 (실제납부 - 장부상부채)
         const diff = totalAmt - bookTotal; 
 
         // 1. (차변) 예수금 상환 (직원부담분 부채 감소)
         if (bookYesu > 0) {
-            entries.push({ 
-                Date: fDate, Type: '부채', Account: '예수금', 
-                Description: `${finalDesc} (직원분 상환)`, 
-                Debit: bookYesu, Credit: 0, 
-                Project: project, Operator: writer 
-            });
+            entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `${finalDesc} (직원분 상환)`, Debit: bookYesu, Credit: 0, Project: project, Operator: writer });
         }
 
         // 2. (차변) 미지급비용 상환 (회사부담분 부채 감소)
         if (bookMigigeub > 0) {
-            entries.push({ 
-                Date: fDate, Type: '부채', Account: '미지급비용', 
-                Description: `${finalDesc} (회사분 상환)`, 
-                Debit: bookMigigeub, Credit: 0, 
-                Project: project, Operator: writer 
-            });
+            entries.push({ Date: fDate, Type: '부채', Account: '미지급비용', Description: `${finalDesc} (회사분 상환)`, Debit: bookMigigeub, Credit: 0, Project: project, Operator: writer });
         }
         
         // 3. 차액 처리 (잡손실/잡이익)
         if (diff > 0) { 
             // 실제 돈이 더 나감 -> 비용(잡손실) 발생
-            entries.push({ 
-                Date: fDate, Type: '비용', Account: '잡손실', 
-                Description: `[4대보험] 납부차액(절사)`, 
-                Debit: diff, Credit: 0, 
-                Project: project, Operator: writer 
-            });
+            entries.push({ Date: fDate, Type: '비용', Account: '잡손실', Description: `[4대보험] 납부차액(절사)`, Debit: diff, Credit: 0, Project: project, Operator: writer });
         } else if (diff < 0) {
-            // 실제 돈이 덜 나감 -> 수익(잡이익) 발생 (대변)
-            entries.push({ 
-                Date: fDate, Type: '매출', Account: '잡이익', 
-                Description: `[4대보험] 납부차액(절사)`, 
-                Debit: 0, Credit: Math.abs(diff), 
-                Project: project, Operator: writer 
-            });
+            // 실제 돈이 덜 나감 -> 수익(잡이익) 발생
+            entries.push({ Date: fDate, Type: '매출', Account: '잡이익', Description: `[4대보험] 납부차액(절사)`, Debit: 0, Credit: Math.abs(diff), Project: project, Operator: writer });
         }
 
         // 4. (대변) 보통예금 (실제 돈 나감)
-        entries.push({ 
-            Date: fDate, Type: '자산', Account: '보통예금', 
-            Description: finalDesc, 
-            Debit: 0, Credit: totalAmt, 
-            Project: project, Operator: writer 
-        });
+        entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
     }
     else if (specialCode === 'loan_pay') { // 대출상환
         const interest = Number(document.getElementById("loanInterest")?.value || 0);
@@ -762,7 +738,9 @@ else if (specialCode === 'insurance') { // 4대보험 납부 처리 로직
         entries.push({ Date: fDate, Type: '자산', Account: '선납세금', Description: `[${item}] 원천징수`, Debit: taxAmt, Credit: 0, Project: project, Operator: writer });
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: realIn, Credit: 0, Project: project, Operator: writer });
     }
-    // --- 일반 분개 ---
+    
+    // --- [2] 일반 분개 로직 (기존 로직 유지) ---
+    
     else if (settleMode === 'pre_expense') {
         entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: netAmount, Credit: 0, Project: project, Operator: writer });
         if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
@@ -773,6 +751,7 @@ else if (specialCode === 'insurance') { // 4대보험 납부 처리 로직
         entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
     } 
     else {
+        // 일반 매출/비용/자산 처리
         if (type === '매출') {
             entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
             if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
