@@ -1302,10 +1302,23 @@ function loadHistory() {
     });
 }
 
-async function deleteTx(id) {
-    showConfirm("삭제 확인", "정말 삭제하시겠습니까?", async function() {
-        await _supabase.from('ac_journal').delete().eq('id', id);
-        loadHistory(); refreshDashboard();
+async function deleteTx(id, transId) {
+    if (!transId) {
+        // Trans_ID가 없으면 기존처럼 ID로 삭제 (하위 호환)
+        if(confirm("이 라인 1개만 삭제됩니다. 계속하시겠습니까?")) {
+             await _supabase.from('ac_journal').delete().eq('id', id);
+        }
+        return;
+    }
+
+    showConfirm("전표 삭제", "이 전표와 관련된 <b>모든 분개(차/대변 전체)</b>를 삭제하시겠습니까?", async function() {
+        // Trans_ID가 같은 모든 행을 삭제
+        const { error } = await _supabase.from('ac_journal').delete().eq('Trans_ID', transId); 
+        if(error) showAlert("오류", "삭제 실패");
+        else {
+            loadHistory(); 
+            refreshDashboard();
+        }
     });
 }
 
