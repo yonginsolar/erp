@@ -5376,24 +5376,40 @@ let g_apps = []; // 데이터 저장용
 let g_app_filter = 'pending'; // 현재 탭 상태
 
 // 1. 신청 목록 불러오기
+// [디버깅용] fetchApplications 함수
 async function fetchApplications() {
+    console.log("🚀 업무 신청 목록 조회 시작..."); // 1. 함수 실행 확인
+
     const tbody = document.getElementById('appListBody');
-    tbody.innerHTML = '<tr><td colspan="7" class="py-5"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+    if (!tbody) {
+        console.error("❌ 에러: HTML에 id='appListBody'인 <tbody> 태그가 없습니다.");
+        return;
+    }
+
+    tbody.innerHTML = '<tr><td colspan="7" class="py-5"><div class="spinner-border spinner-border-sm text-primary"></div> 로딩중...</td></tr>';
 
     const { data, error } = await _supabase
         .from('coop_applications')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(100); // 최근 100건
+        .limit(100);
 
+    // 2. DB 응답 확인
     if (error) {
+        console.error("❌ DB 에러 발생:", error);
         tbody.innerHTML = `<tr><td colspan="7" class="text-danger py-4">로딩 실패: ${error.message}</td></tr>`;
         return;
     }
 
+    console.log("✅ 데이터 수신 성공:", data); // 데이터가 몇 개 왔는지 확인
+
     g_apps = data || [];
+    
+    // 3. 렌더링 직전 데이터 확인
+    console.log("현재 필터 상태:", g_app_filter);
+    
     renderAppList();
-    updateAppBadges(); // 대시보드/사이드바 뱃지 갱신
+    updateAppBadges();
 }
 
 // 2. 화면 렌더링 (필터 적용)
