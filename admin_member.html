@@ -85,6 +85,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <a class="nav-link" onclick="switchTab('funds-manage')" id="nav-funds-manage" style="cursor:pointer;">
     <i class="bi bi-piggy-bank-fill"></i> 자금 및 이용고 배당 관리
 </a>
+    <a class="nav-link" onclick="switchTab('applications')" id="nav-applications" style="cursor:pointer;">
+    <i class="bi bi-inbox-fill"></i> 업무 신청 관리 
+    <span id="sidebar-app-badge" class="badge bg-danger ms-auto hidden">0</span>
+</a>
 <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
 <i class="bi bi-cash-coin"></i> 입금 매칭
 </a>
@@ -146,6 +150,15 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
                 </div>
             </div>
         </div>
+        <div class="col-md-6 col-lg-3">
+    <div class="card bg-danger bg-opacity-10 border-0 shadow-sm h-100" style="cursor:pointer;" onclick="switchTab('applications')">
+        <div class="card-body p-4">
+            <h6 class="text-danger fw-bold mb-2">처리 대기 신청</h6>
+            <h2 class="display-6 fw-bold mb-0 text-danger" id="dash-app-pending">0건</h2>
+            <div class="small text-muted mt-2">출자/감자/탈퇴 요청</div>
+        </div>
+    </div>
+</div>
 
 <div class="col-md-6 col-lg-3">
     <div class="card bg-info bg-opacity-10 border-0 shadow-sm h-100" style="cursor: pointer;" onclick="switchTab('site'); setTimeout(() => document.querySelector('a[href=\'#sub-partners\']').click(), 200);">
@@ -155,6 +168,93 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
         </div>
     </div>
 </div>
+        <div class="tab-pane fade" id="tab-applications">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="fw-bold m-0" style="font-family:'GmarketSans';">📥 업무 신청 현황</h3>
+        <button class="btn btn-dark shadow-sm" onclick="openProxyModal()">
+            <i class="bi bi-telephone-plus-fill me-2"></i>전화/대리 접수
+        </button>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="app-sub-tabs">
+        <li class="nav-item">
+            <button class="nav-link active fw-bold" onclick="filterAppList('pending')">처리 대기중</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link text-secondary" onclick="filterAppList('all')">전체 이력</button>
+        </li>
+    </ul>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>신청일</th>
+                        <th>구분</th>
+                        <th>신청자 (번호)</th>
+                        <th class="text-end">금액</th>
+                        <th>사유/비고</th>
+                        <th>상태</th>
+                        <th>관리 (확인)</th>
+                    </tr>
+                </thead>
+                <tbody id="appListBody">
+                    <tr><td colspan="7" class="py-5 text-muted">로딩 중...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="proxyModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h6 class="modal-title fw-bold">📞 전화/대리 접수 등록</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border small mb-3">
+                    <i class="bi bi-info-circle-fill"></i> 관리자가 대신 신청서를 작성합니다.<br>
+                    작성 후 목록에서 <b>[승인/확인]</b> 처리를 해야 최종 반영됩니다.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">신청자 검색</label>
+                    <div class="input-group">
+                        <input type="text" id="proxy-keyword" class="form-control" placeholder="이름 또는 번호" onkeyup="if(event.key=='Enter') searchProxyMember()">
+                        <button class="btn btn-secondary" onclick="searchProxyMember()">검색</button>
+                    </div>
+                    <input type="text" id="proxy-member-name" class="form-control mt-2 bg-light text-primary fw-bold" readonly placeholder="검색해주세요.">
+                    <input type="hidden" id="proxy-member-uid"> <input type="hidden" id="proxy-member-id">  </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">신청 유형</label>
+                        <select id="proxy-type" class="form-select">
+                            <option value="extra">추가 출자</option>
+                            <option value="reduction">감자 (반환)</option>
+                            <option value="withdraw">탈퇴 신청</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">금액</label>
+                        <input type="number" id="proxy-amount" class="form-control" placeholder="0">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">비고 (필수)</label>
+                    <input type="text" id="proxy-reason" class="form-control" placeholder="예: 전화 요청 (010-1234-5678)">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success w-100 fw-bold" onclick="submitProxyData()">접수 등록</button>
+            </div>
+        </div>
+    </div>
+</div>
+        
     </div>
 
     <div class="row g-3 mb-4">
@@ -3379,6 +3479,11 @@ function switchTab(tabName) {
         const startEl = document.getElementById('don-date-start');
         const endEl = document.getElementById('don-date-end');
 
+        // switchTab 함수 내부의 if/else if 블록에 추가
+else if (tabName === 'applications') {
+    fetchApplications();
+}
+
         // 값이 비어있을 때만 기본값(올해 1월 1일 ~ 오늘) 세팅
         if (startEl && !startEl.value) {
             const today = new Date();
@@ -5265,6 +5370,230 @@ function selectMemberForModal(id, name) {
 
     // 모달 닫기
     bootstrap.Modal.getInstance(document.getElementById('memberSearchModal')).hide();
+}
+
+    // ================================================================
+// [신규 기능] 업무 신청 관리 (Applications)
+// ================================================================
+
+let g_apps = []; // 데이터 저장용
+let g_app_filter = 'pending'; // 현재 탭 상태
+
+// 1. 신청 목록 불러오기
+async function fetchApplications() {
+    const tbody = document.getElementById('appListBody');
+    tbody.innerHTML = '<tr><td colspan="7" class="py-5"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+
+    const { data, error } = await _supabase
+        .from('coop_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100); // 최근 100건
+
+    if (error) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger py-4">로딩 실패: ${error.message}</td></tr>`;
+        return;
+    }
+
+    g_apps = data || [];
+    renderAppList();
+    updateAppBadges(); // 대시보드/사이드바 뱃지 갱신
+}
+
+// 2. 화면 렌더링 (필터 적용)
+function renderAppList() {
+    const tbody = document.getElementById('appListBody');
+    tbody.innerHTML = '';
+
+    // 탭 필터링
+    const list = g_apps.filter(item => {
+        if (g_app_filter === 'pending') return item.status === 'pending';
+        return true; // all
+    });
+
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-muted py-5">해당하는 신청 내역이 없습니다.</td></tr>';
+        return;
+    }
+
+    const typeMap = { 'extra': '추가출자', 'reduction': '감자', 'withdraw': '탈퇴', 'connect': '계정연결' };
+
+    list.forEach(app => {
+        const dateStr = app.created_at.substring(0, 10);
+        const amountStr = app.amount ? Number(app.amount).toLocaleString() + '원' : '-';
+        
+        // 상태 뱃지
+        let statusBadge = `<span class="badge bg-secondary">${app.status}</span>`;
+        let actionBtns = '-';
+
+        if (app.status === 'pending') {
+            statusBadge = `<span class="badge bg-warning text-dark">대기중</span>`;
+            // ★ [승인/확인] 버튼 (클릭 시 DB 기록됨)
+            actionBtns = `
+                <button class="btn btn-sm btn-primary fw-bold py-0" onclick="processApp(${app.id}, 'approve', '${app.type}', ${app.amount})">
+                    <i class="bi bi-check-lg"></i> 승인/확인
+                </button>
+                <button class="btn btn-sm btn-outline-danger py-0 ms-1" onclick="processApp(${app.id}, 'reject')">
+                    반려
+                </button>
+            `;
+        } else if (app.status === 'approved') {
+            statusBadge = `<span class="badge bg-success">처리완료</span>`;
+        } else if (app.status === 'rejected') {
+            statusBadge = `<span class="badge bg-danger">반려됨</span>`;
+        }
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${dateStr}</td>
+                <td><span class="badge bg-light text-dark border">${typeMap[app.type] || app.type}</span></td>
+                <td class="text-start ps-4">
+                    <div class="fw-bold">${app.name}</div>
+                    <small class="text-muted">${app.member_id}</small>
+                </td>
+                <td class="text-end fw-bold pe-3">${amountStr}</td>
+                <td class="text-start text-truncate" style="max-width: 200px;">${app.reason || '-'}</td>
+                <td>${statusBadge}</td>
+                <td>${actionBtns}</td>
+            </tr>
+        `;
+    });
+}
+
+// 3. 탭 전환 (대기중 / 전체)
+function filterAppList(mode) {
+    g_app_filter = mode;
+    // 탭 스타일 변경
+    const tabs = document.querySelectorAll('#app-sub-tabs .nav-link');
+    tabs.forEach(t => t.classList.remove('active', 'fw-bold'));
+    if(mode === 'pending') tabs[0].classList.add('active', 'fw-bold');
+    else tabs[1].classList.add('active', 'fw-bold');
+    
+    renderAppList();
+}
+
+// 4. 승인/반려 실행 (핵심)
+async function processApp(appId, action, type, amount) {
+    let msg = "";
+    if (action === 'reject') {
+        msg = "이 신청을 반려하시겠습니까?";
+    } else {
+        // 승인 시 안내 메시지
+        if (type === 'extra') msg = `[추가 출자] ${Number(amount).toLocaleString()}원 입금을 확인하셨습니까?\n승인 시 출자금 원장에 '입금' 기록됩니다.`;
+        else if (type === 'reduction') msg = `[감자] ${Number(amount).toLocaleString()}원을 반환하셨습니까?\n승인 시 출자금 원장에 '차감(-)' 기록됩니다.`;
+        else if (type === 'withdraw') msg = `[탈퇴] 반환금 지급을 완료하셨습니까?\n승인 시 출자금 원장에 '전액 차감' 기록됩니다.`;
+        else msg = "이 신청을 승인 처리하시겠습니까?";
+    }
+
+    if (!confirm(msg)) return;
+
+    showLoading(true);
+
+    const { data, error } = await _supabase.rpc('admin_process_application', {
+        p_app_id: appId,
+        p_action: action,
+        p_admin_id: (await _supabase.auth.getUser()).data.user.id
+    });
+
+    showLoading(false);
+
+    if (error) {
+        alert("처리 실패: " + error.message);
+    } else {
+        alert(data.message);
+        fetchApplications(); // 목록 새로고침
+        loadDashboard();     // 대시보드 갱신
+    }
+}
+
+// 5. 뱃지 업데이트 (대시보드/사이드바)
+function updateAppBadges() {
+    const pendingCount = g_apps.filter(a => a.status === 'pending').length;
+    
+    // 대시보드 카드
+    const dashEl = document.getElementById('dash-app-pending');
+    if(dashEl) dashEl.innerText = pendingCount + '건';
+
+    // 사이드바 뱃지
+    const sideEl = document.getElementById('sidebar-app-badge');
+    if(sideEl) {
+        sideEl.innerText = pendingCount;
+        if(pendingCount > 0) sideEl.classList.remove('hidden');
+        else sideEl.classList.add('hidden');
+    }
+}
+
+// ================================================================
+// [신규 기능] 대리 접수 (Proxy)
+// ================================================================
+
+function openProxyModal() {
+    document.getElementById('proxy-keyword').value = '';
+    document.getElementById('proxy-member-name').value = '';
+    document.getElementById('proxy-member-uid').value = '';
+    document.getElementById('proxy-member-id').value = '';
+    document.getElementById('proxy-amount').value = '';
+    document.getElementById('proxy-reason').value = '';
+    new bootstrap.Modal(document.getElementById('proxyModal')).show();
+}
+
+// 멤버 검색
+async function searchProxyMember() {
+    const key = document.getElementById('proxy-keyword').value.trim();
+    if(key.length < 2) return alert("검색어를 2글자 이상 입력하세요.");
+
+    const { data, error } = await _supabase
+        .from('coop_members')
+        .select('id, name, member_id')
+        .or(`name.eq.${key},member_id.eq.${key},phone.eq.${key}`)
+        .limit(1);
+
+    if (data && data.length > 0) {
+        const m = data[0];
+        document.getElementById('proxy-member-name').value = `${m.name} (${m.member_id})`;
+        document.getElementById('proxy-member-uid').value = m.id;
+        document.getElementById('proxy-member-id').value = m.member_id;
+    } else {
+        document.getElementById('proxy-member-name').value = "검색 결과 없음";
+        document.getElementById('proxy-member-uid').value = "";
+    }
+}
+
+// 대리 등록 실행
+async function submitProxyData() {
+    const uid = document.getElementById('proxy-member-uid').value;
+    const mid = document.getElementById('proxy-member-id').value; // 텍스트 ID
+    const nameStr = document.getElementById('proxy-member-name').value.split(' (')[0]; // 이름만 추출
+    const type = document.getElementById('proxy-type').value;
+    const amount = document.getElementById('proxy-amount').value;
+    const reason = document.getElementById('proxy-reason').value;
+
+    if (!uid) return alert("신청자를 먼저 검색해주세요.");
+    if (type !== 'withdraw' && (!amount || amount <= 0)) return alert("금액을 입력해주세요.");
+    if (!reason) return alert("비고란에 접수 사유(전화 등)를 입력해주세요.");
+
+    showLoading(true);
+
+    // 직접 Insert (Pending 상태로)
+    const { error } = await _supabase.from('coop_applications').insert({
+        member_uid: uid,
+        member_id: mid,
+        name: nameStr,
+        type: type,
+        amount: Number(amount || 0),
+        reason: '[대리접수] ' + reason,
+        status: 'pending'
+    });
+
+    showLoading(false);
+
+    if (error) {
+        alert("등록 실패: " + error.message);
+    } else {
+        alert("접수되었습니다.\n목록에서 확인 후 승인 처리해주세요.");
+        bootstrap.Modal.getInstance(document.getElementById('proxyModal')).hide();
+        fetchApplications();
+    }
 }
 
 </script>
