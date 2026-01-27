@@ -1328,35 +1328,7 @@ function confirmSync(type) {
             }
         });
     }
-// (7) 연말결산 취소 (되돌리기)
-    else if (type === 'undo_closing') {
-        const thisYear = new Date().getFullYear();
-        const relatedKey = `CLOSE-${thisYear}`;
 
-        showConfirm("결산 취소", `<span class="text-danger fw-bold">⚠️ ${thisYear}년도 결산 내역을 삭제하시겠습니까?</span><br>마감 분개가 모두 삭제되고 손익이 초기화됩니다.`, async () => {
-            
-            // 1. 해당 연도의 결산 데이터가 있는지 확인
-            const { count } = await _supabase
-                .from('ac_journal')
-                .select('*', { count: 'exact', head: true })
-                .eq('RelatedID', relatedKey);
-
-            if (!count || count === 0) return showAlert("알림", `${thisYear}년도 결산 내역이 없습니다.`);
-
-            // 2. 삭제 실행
-            const { error } = await _supabase
-                .from('ac_journal')
-                .delete()
-                .eq('RelatedID', relatedKey);
-
-            if (error) {
-                showAlert("오류", "취소 실패: " + error.message);
-            } else {
-                showAlert("완료", `${thisYear}년도 결산이 취소되었습니다.<br>수정 후 다시 결산을 진행하세요.`);
-                refreshDashboard();
-            }
-        });
-    }
 }
 
 function loadHistory() {
