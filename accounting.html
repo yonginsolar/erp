@@ -135,12 +135,20 @@
 
           <hr class="my-2" style="border-top: 1px dashed #ccc;">
 
-          <label class="small text-muted fw-bold mb-2">2. 계정 유형</label>
-          <div class="btn-group w-100" role="group">
-            <input type="radio" class="btn-check" name="inputType" id="t1" value="매출" onchange="resetAccountInput()"><label class="btn btn-outline-success" for="t1">매출</label>
-            <input type="radio" class="btn-check" name="inputType" id="t2" value="비용" checked onchange="resetAccountInput()"><label class="btn btn-outline-danger" for="t2">비용</label>
-            <input type="radio" class="btn-check" name="inputType" id="t3" value="자산" onchange="resetAccountInput()"><label class="btn btn-outline-primary" for="t3">자산</label>
-          </div>
+<label class="small text-muted fw-bold mb-2">2. 계정 유형</label>
+<div class="btn-group w-100" role="group">
+    <input type="radio" class="btn-check" name="inputType" id="t1" value="매출" onchange="resetAccountInput()">
+    <label class="btn btn-outline-success" for="t1">매출</label>
+    
+    <input type="radio" class="btn-check" name="inputType" id="t_etc_rev" value="영업외수익" onchange="resetAccountInput()">
+    <label class="btn btn-outline-info" for="t_etc_rev">영업외</label>
+
+    <input type="radio" class="btn-check" name="inputType" id="t2" value="비용" checked onchange="resetAccountInput()">
+    <label class="btn btn-outline-danger" for="t2">비용</label>
+    
+    <input type="radio" class="btn-check" name="inputType" id="t3" value="자산" onchange="resetAccountInput()">
+    <label class="btn btn-outline-primary" for="t3">자산</label>
+</div>
         </div>
 
         <div class="mb-3">
@@ -645,7 +653,6 @@ function toggleCard() {
     else { sel.classList.add("hidden"); sel.value=""; sel.required = false; }
 }
 
-// 5. 전표 저장 로직 (구조 개선: 안전한 분기 처리)
 async function handleFormSubmit(e) {
     e.preventDefault();
     const item = document.getElementById("hiddenItem").value;
@@ -653,7 +660,10 @@ async function handleFormSubmit(e) {
     
     const fDate = document.getElementById("dateField").value;
     const project = document.getElementById("projectSelect").value;
+    
+    // [중요] HTML에서 '영업외수익' 라디오 버튼이 선택되면 type 변수에 '영업외수익'이 들어옵니다.
     const type = document.querySelector('input[name="inputType"]:checked').value;
+    
     const settleMode = document.querySelector('input[name="settleMode"]:checked').value;
     const desc = document.getElementById("inputDesc").value;
     const totalAmt = Number(document.getElementById("inputAmount").value);
@@ -673,6 +683,7 @@ async function handleFormSubmit(e) {
 
     // 부가세 계산
     let netAmount = totalAmt, vatAmount = 0;
+    // 영업외수익도 부가세가 있을 수 있으므로(드물지만), 사용자가 체크박스를 켜면 계산하도록 둠.
     if (useVAT && type !== '자산' && settleMode !== 'reimburse' && !document.getElementById("vatCheck").disabled) {
         netAmount = Math.round(totalAmt / 1.1);
         vatAmount = totalAmt - netAmount;
@@ -682,7 +693,7 @@ async function handleFormSubmit(e) {
     const writer = myInfo ? myInfo.emp_name : "WebUser";
 
     // ==========================================
-    // [1] 특수 분개 모드인지 확인 (Special Mode)
+    // [1] 특수 분개 모드인지 확인 (Special Mode) - 기존 로직 100% 유지
     // ==========================================
     if (specialCode && specialCode !== '') {
         
@@ -746,8 +757,9 @@ async function handleFormSubmit(e) {
             entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
         } 
         else { // 일반 거래
-            if (type === '매출') {
-                entries.push({ Date: fDate, Type: '매출', Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
+            // [수정 포인트] 영업외수익도 매출과 동일하게 '대변(Credit)'에 기입되어야 합니다.
+            if (type === '매출' || type === '영업외수익') {
+                entries.push({ Date: fDate, Type: type, Account: item, Description: finalDesc, Debit: 0, Credit: netAmount, Project: project, Operator: writer });
                 if(vatAmount > 0) entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: `[${item}] 부가세`, Debit: 0, Credit: vatAmount, Project: project, Operator: writer });
                 entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: totalAmt, Credit: 0, Project: project, Operator: writer });
             } else if (type === '비용') {
@@ -757,6 +769,7 @@ async function handleFormSubmit(e) {
                 if(vatAmount > 0) entries.push({ Date: fDate, Type: '자산', Account: '부가세대급금', Description: `[${item}] 부가세`, Debit: vatAmount, Credit: 0, Project: project, Operator: writer });
                 entries.push({ Date: fDate, Type: creditType, Account: creditAcc, Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer });
             } else { 
+                // 자산, 부채, 자본(자본반환 등) 처리
                 const isDebit = (type === "자산" || type === "자본반환" || type === "부채감소");
                 const db = isDebit ? totalAmt : 0;
                 const cr = isDebit ? 0 : totalAmt;
@@ -779,7 +792,8 @@ async function handleFormSubmit(e) {
         toggleSettleMode();
         refreshDashboard();
     }
-}
+} 
+// End of handleFormSubmit
 
 // 6. 자동 연동 기능 (6종 완벽 구현)
 function confirmSync(type) {
@@ -1414,33 +1428,57 @@ async function printReport() {
     const { count } = await _supabase.from('ref_members').select('*', { count: 'exact', head: true });
     const memberCount = count || 0;
 
-    let asset={}, liab={}, equity={}, rev={}, exp={};
-    let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0;
+    // [수정] otherRev(영업외수익) 변수 추가
+    let asset={}, liab={}, equity={}, rev={}, exp={}, otherRev={};
+    let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0, tOtherRev=0;
     let capital = 0; 
 
     data.forEach(r => {
         const debit = Number(r.Debit||0), credit = Number(r.Credit||0);
         const valDr = debit - credit;
         const valCr = credit - debit;
+        
         if(r.Type==='자산') { asset[r.Account]=(asset[r.Account]||0)+valDr; tAsset+=valDr; }
         else if(r.Type==='부채') { liab[r.Account]=(liab[r.Account]||0)+valCr; tLiab+=valCr; }
         else if(r.Type==='자본') { equity[r.Account]=(equity[r.Account]||0)+valCr; tEquity+=valCr; if(r.Account==='출자금') capital+=valCr; }
         else if(r.Type==='매출') { rev[r.Account]=(rev[r.Account]||0)+valCr; tRev+=valCr; }
         else if(r.Type==='비용') { exp[r.Account]=(exp[r.Account]||0)+valDr; tExp+=valDr; }
+        // [추가] 영업외수익 집계
+        else if(r.Type==='영업외수익') { otherRev[r.Account]=(otherRev[r.Account]||0)+valCr; tOtherRev+=valCr; }
     });
 
-    const netIncome = tRev - tExp;
+    const operatingIncome = tRev - tExp; // 영업이익
+    const netIncome = operatingIncome + tOtherRev; // 당기순이익 (+ 영업외수익)
     const totalLiabEquity = tLiab + tEquity + netIncome;
 
     const headerHtml = `<div class="rpt-title">재무제표</div><table class="rpt-header-tbl"><tr><th>회사명</th><td>${info.orgName||''}</td><th>사업자번호</th><td>${info.bizNum||''}</td></tr><tr><th>회계기간</th><td>${rangeText}</td><th>대표자</th><td>${info.ceoName||''}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>`;
     
     const bsHtml = `<div class="rpt-sec">1. 대차대조표 (Balance Sheet)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div><table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>`;
 
-    const plHtml = `<div class="page-break"></div><div class="rpt-sec mt-4">2. 손익계산서 (Income Statement)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div><table class="rpt-tbl"><tr><th>계정과목</th><th>코드</th><th>금액</th></tr><tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}<tr class="bg-light"><td class="fw-bold">II. 매출총이익</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr><tr class="bg-light"><td class="fw-bold">III. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}<tr class="bg-light" style="border-top:2px solid #000;"><td class="fw-bold">IV. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${netIncome.toLocaleString()}</td></tr><tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr></table>`;
+    // [수정] 손익계산서 HTML에 영업외수익 섹션 추가
+    const plHtml = `
+    <div class="page-break"></div>
+    <div class="rpt-sec mt-4">2. 손익계산서 (Income Statement)</div>
+    <div style="text-align:right; font-size:11px;">(단위: 원)</div>
+    <table class="rpt-tbl">
+        <tr><th>계정과목</th><th>코드</th><th>금액</th></tr>
+        <tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>
+        ${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}
+        
+        <tr class="bg-light"><td class="fw-bold">II. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>
+        ${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}
+        
+        <tr class="bg-light" style="border-top:1px solid #aaa;"><td class="fw-bold">III. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${operatingIncome.toLocaleString()}</td></tr>
+
+        <tr class="bg-light"><td class="fw-bold">IV. 영업외수익</td><td></td><td class="rpt-amt fw-bold">${tOtherRev.toLocaleString()}</td></tr>
+        ${Object.keys(otherRev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${otherRev[k].toLocaleString()}</td></tr>`).join('')}
+
+        <tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr>
+    </table>`;
 
     document.getElementById("reportContent").innerHTML = headerHtml + bsHtml + plHtml;
     reportModal.show();
-}
+} // End of printReport
 
 function realPrint() {
     const w = window.open();
