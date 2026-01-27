@@ -245,8 +245,22 @@
 
 <div class="modal fade" id="selectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header p-3 bg-light"><h6 class="m-0 fw-bold">계정과목 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="p-2 border-bottom bg-white sticky-top"><input type="text" class="form-control" id="accountSearchInput" placeholder="검색어 입력..." onkeyup="filterAccounts()"></div><div id="accountList" style="height: 350px; overflow-y: auto;"></div></div></div></div></div>
 
-<div class="modal fade" id="addModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">항목 추가</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
-    <label class="small text-muted mb-1">구분</label><select class="form-select mb-3" id="addTypeSelect" disabled><option value="매출">매출</option><option value="비용">비용</option><option value="자산">자산</option></select>
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">항목 추가</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="small text-muted mb-1">구분</label>
+        
+        <select class="form-select mb-3" id="addTypeSelect" disabled>
+            <option value="매출">매출</option>
+            <option value="비용">비용</option>
+            <option value="자산">자산</option>
+            <option value="영업외수익">영업외수익</option> 
+        </select>
     <label class="small text-muted mb-1">중분류</label><select class="form-select mb-2" id="addCategorySelect"></select><div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="chkManualCat" onchange="toggleManualCat()"><label class="form-check-label small" for="chkManualCat">직접 입력</label></div><input type="text" class="form-control mb-3 hidden" id="manualCatInput" placeholder="새 중분류명 입력">
     <label class="small text-muted mb-1">사용처</label><select class="form-select mb-3" id="addUsageSelect"><option value="전체">전체</option><option value="본사">본사</option><option value="1호기">1호기</option><option value="2호기">2호기</option></select>
     <label class="small text-muted mb-1">새 항목명</label><input type="text" class="form-control mb-3" id="addNewItemName" placeholder="예: 야근식대">
