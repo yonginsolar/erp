@@ -1460,76 +1460,77 @@ async function printReport() {
     const { count } = await _supabase.from('ref_members').select('*', { count: 'exact', head: true });
     const memberCount = count || 0;
 
-    // [수정] otherRev(영업외수익) 변수 추가
+    // 집계 변수
     let asset={}, liab={}, equity={}, rev={}, exp={}, otherRev={};
     let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0, tOtherRev=0;
     let capital = 0; 
     
-    // ▼ [신규] 법인세 조정용 집계 변수
-    let taxAdjust = {
-        fines: 0, // 과태료/벌금
-        noProof: 0, // 증빙불비 (3만원 초과 & 영수증)
-        donations: 0, // 기부금
-        entertain: 0 // 접대비
-    };
-    // ▲ [신규 끝]
+    // 법인세 조정용
+    let taxAdjust = { fines: 0, noProof: 0, donations: 0, entertain: 0 };
+    
+    // [신규] 잉여금 처분 집계용
+    let surplus = { legal: 0, voluntary: 0, dividend: 0 }; 
 
     data.forEach(r => {
-        const debit = Number(r.Debit||0), credit = Number(r.Credit||0);
-        const valDr = debit - credit;
-        const valCr = credit - debit;
+        const db = Number(r.Debit||0), cr = Number(r.Credit||0);
+        const valDr = db - cr;
+        const valCr = cr - db;
         
+        // 1. 재무제표 집계
         if(r.Type==='자산') { asset[r.Account]=(asset[r.Account]||0)+valDr; tAsset+=valDr; }
         else if(r.Type==='부채') { liab[r.Account]=(liab[r.Account]||0)+valCr; tLiab+=valCr; }
-        else if(r.Type==='자본') { equity[r.Account]=(equity[r.Account]||0)+valCr; tEquity+=valCr; if(r.Account==='출자금') capital+=valCr; }
+        else if(r.Type==='자본') { 
+            equity[r.Account]=(equity[r.Account]||0)+valCr; 
+            tEquity+=valCr; 
+            if(r.Account==='출자금') capital+=valCr; 
+            
+            // 잉여금 처분 내역 파악 (결산 분개에서 대변에 적힌 적립금)
+            if(r.Account === '법정적립금') surplus.legal += cr;
+            if(r.Account === '임의적립금') surplus.voluntary += cr;
+        }
         else if(r.Type==='매출') { rev[r.Account]=(rev[r.Account]||0)+valCr; tRev+=valCr; }
         else if(r.Type==='비용') { exp[r.Account]=(exp[r.Account]||0)+valDr; tExp+=valDr; }
-        // [추가] 영업외수익 집계
         else if(r.Type==='영업외수익') { otherRev[r.Account]=(otherRev[r.Account]||0)+valCr; tOtherRev+=valCr; }
         
-        // ▼ [신규] 법인세 조정용 데이터 분석
+        // 2. 법인세 조정 분석
         if(r.Type === '비용') {
-            const db = Number(r.Debit || 0);
-            // (1) 손금불산입: 세금과공과 중 과태료/벌금은 비용 인정 안됨 -> 이익에 가산
-            if(r.Account === '세금과공과' && (r.Description.includes('과태료') || r.Description.includes('벌금'))) {
-                taxAdjust.fines += db;
-            }
-            // (2) 접대비 집계 (한도 계산용)
+            if(r.Account === '세금과공과' && (r.Description.includes('과태료') || r.Description.includes('벌금'))) taxAdjust.fines += db;
             if(r.Account === '접대비') taxAdjust.entertain += db;
-            // (3) 기부금 집계 (한도 계산용)
             if(r.Account === '기부금') taxAdjust.donations += db;
-            // (4) 증빙 불비 체크: 3만원 초과인데 증빙이 '기타(영수증)'인 경우 가산세 위험
-            // Evidence_Type 필드가 없으면 undefined 일 수 있으므로 체크
-            if(db > 30000 && r.Evidence_Type === '기타(영수증)') {
-                taxAdjust.noProof += db;
-            }
+            if(db > 30000 && r.Evidence_Type === '기타(영수증)') taxAdjust.noProof += db;
         }
-        // ▲ [신규 끝]
     });
 
-    const operatingIncome = tRev - tExp; // 영업이익
-    const netIncome = operatingIncome + tOtherRev; // 당기순이익 (+ 영업외수익)
+    const operatingIncome = tRev - tExp;
+    const netIncome = operatingIncome + tOtherRev; 
     const totalLiabEquity = tLiab + tEquity + netIncome;
     
-    // ▼ [신규] 법인세 예상액 계산
-    const taxBase = netIncome + taxAdjust.fines; // 과세표준 (단순화 모델: 순이익 + 손금불산입)
-    const estTax = Math.floor(taxBase * 0.09); // 산출세액 (2억 이하 9%)
-    // ▲ [신규 끝]
+    // 법인세 예상액
+    const taxBase = netIncome + taxAdjust.fines;
+    const estTax = Math.floor(taxBase * 0.09);
 
-    // 리포트 HTML 생성 (탭 구조 도입)
+    // 잉여금 처분 계산
+    // (처분 전 잉여금 = 당기순이익 + 전기이월) *지금은 전기이월 0 가정
+    const totalSurplus = netIncome; 
+    const totalAppropriation = surplus.legal + surplus.voluntary;
+    const carriedForward = totalSurplus - totalAppropriation;
+
+    // 리포트 HTML
     const reportHtml = `
-        <div class="rpt-title">재무제표</div>
+        <div class="rpt-title">재무제표 및 조정명세서</div>
         <table class="rpt-header-tbl"><tr><th>회사명</th><td>${info.orgName||''}</td><th>사업자번호</th><td>${info.bizNum||''}</td></tr><tr><th>회계기간</th><td>${rangeText}</td><th>대표자</th><td>${info.ceoName||''}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>
         
         <ul class="nav nav-tabs mb-3 no-print" id="rptTab" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rptBS">재무상태표</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rptPL">손익계산서</button></li>
+            <li class="nav-item"><button class="nav-link text-primary fw-bold" data-bs-toggle="tab" data-bs-target="#rptSurplus">📄 이익잉여금</button></li>
             <li class="nav-item"><button class="nav-link text-danger fw-bold" data-bs-toggle="tab" data-bs-target="#rptTax">⚖️ 법인세 조정</button></li>
         </ul>
         
         <div class="tab-content">
             <div class="tab-pane fade show active" id="rptBS">
-                <div class="rpt-sec">1. 대차대조표 (Balance Sheet)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div><table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
+                <div class="rpt-sec">1. 재무상태표 (Balance Sheet)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div>
+                <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
             </div>
 
             <div class="tab-pane fade" id="rptPL">
@@ -1539,21 +1540,38 @@ async function printReport() {
                     <tr><th>계정과목</th><th>코드</th><th>금액</th></tr>
                     <tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>
                     ${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}
-                    
                     <tr class="bg-light"><td class="fw-bold">II. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>
                     ${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}
-                    
                     <tr class="bg-light" style="border-top:1px solid #aaa;"><td class="fw-bold">III. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${operatingIncome.toLocaleString()}</td></tr>
-
                     <tr class="bg-light"><td class="fw-bold">IV. 영업외수익</td><td></td><td class="rpt-amt fw-bold">${tOtherRev.toLocaleString()}</td></tr>
                     ${Object.keys(otherRev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${otherRev[k].toLocaleString()}</td></tr>`).join('')}
-
                     <tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr>
                 </table>
             </div>
 
+            <div class="tab-pane fade" id="rptSurplus">
+                <div class="rpt-sec mt-4 text-primary">3. 이익잉여금처분계산서 (Proposal)</div>
+                <div style="text-align:right; font-size:11px;">(단위: 원)</div>
+                <table class="rpt-tbl mt-2">
+                    <tr><th class="bg-light">과목</th><th class="bg-light">금액</th></tr>
+                    <tr><td class="fw-bold">I. 처분전 이익잉여금</td><td class="rpt-amt fw-bold">${totalSurplus.toLocaleString()}</td></tr>
+                    <tr><td class="rpt-indent">1. 전기이월 이익잉여금</td><td class="rpt-amt">0</td></tr>
+                    <tr><td class="rpt-indent">2. 당기순이익</td><td class="rpt-amt">${netIncome.toLocaleString()}</td></tr>
+                    
+                    <tr><td class="fw-bold">II. 이익잉여금 처분액</td><td class="rpt-amt fw-bold">${totalAppropriation.toLocaleString()}</td></tr>
+                    <tr><td class="rpt-indent">1. 법정적립금 (10% 이상)</td><td class="rpt-amt">${surplus.legal.toLocaleString()}</td></tr>
+                    <tr><td class="rpt-indent">2. 임의적립금 (사업준비금 등)</td><td class="rpt-amt">${surplus.voluntary.toLocaleString()}</td></tr>
+                    
+                    <tr><td class="fw-bold bg-light">III. 차기이월 이익잉여금</td><td class="rpt-amt fw-bold text-primary" style="font-size:1.1em;">${carriedForward.toLocaleString()}</td></tr>
+                </table>
+                <div class="alert alert-info small p-2 mt-2">
+                    * 위 처분액은 '연말결산' 기능을 통해 입력한 금액이 반영됩니다. <br>
+                    * 미처분 상태라면 처분액이 0으로 표시됩니다.
+                </div>
+            </div>
+
             <div class="tab-pane fade" id="rptTax">
-                <div class="rpt-sec mt-4 text-danger">3. 법인세 신고용 조정명세서 (참고용)</div>
+                <div class="rpt-sec mt-4 text-danger">4. 법인세 신고용 조정명세서 (참고용)</div>
                 <div class="alert alert-warning small p-2 mt-2">
                     * 이 자료는 신고 참고용입니다. 실제 신고 시 세무 조정 사항을 재확인하세요.<br>
                     * 개발비(자산) 인식 여부와 증빙 누락 건을 확인하십시오.
@@ -1577,7 +1595,7 @@ async function printReport() {
 
     document.getElementById("reportContent").innerHTML = reportHtml;
     reportModal.show();
-} // End of printReport
+}
 
 function realPrint() {
     const w = window.open();
