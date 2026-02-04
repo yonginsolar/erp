@@ -1,6 +1,8 @@
 <!DOCTYPE html>
+<!-- Version: v1.0.2 -->
 <html>
 <head>
+  <script>console.log('[Version] v1.0.2 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>임직원 관리 v2.7 (최종)</title>
@@ -230,7 +232,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4"><p class="mb-0 fw-bold" id="alertBody"></p></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4"><p class="mb-0 fw-bold" id="alertBody" style="white-space: pre-wrap;"></p></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold">확인</h6></div><div class="modal-body text-center py-3" id="confirmBody"></div><div class="modal-footer justify-content-center border-0 pt-0"><button type="button" class="btn btn-secondary btn-sm me-2" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="btnConfirmYes">확인</button></div></div></div></div>
 <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content text-center p-4"><div class="spinner-border text-primary mb-3"></div><h6 class="mb-0">처리 중...</h6></div></div></div>
 <div class="modal fade" id="resignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 퇴사 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">퇴사일자 (마지막 근무일)</label><input type="date" id="inputResignDate" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-danger btn-sm w-100" onclick="confirmResign()">퇴사 확정</button></div></div></div></div>
@@ -347,12 +349,23 @@ const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 let settings = {}; let companyInfo = {}; let advancedSettingsRaw = [];
 let currentEmpId = null, currentEmpName = null, currentAnnualSalary = 0; 
 let currentEmpHireDate = null, currentEmpResignDate = null; 
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
 let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal, resignModal;
 let hasCheckedExpired = false;
+let myInfo = null;
+let permissionSet = new Set();
 
 window.onload = async function() {
     alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
@@ -369,10 +382,21 @@ window.onload = async function() {
     document.getElementById("salaryMonth").value = new Date().toISOString().slice(0, 7);
     document.getElementById("ledgerMonth").value = new Date().toISOString().slice(0, 7);
 
+    const stored = localStorage.getItem('erp_user');
+    if (!stored) { location.href = 'index.html'; return; }
+    myInfo = JSON.parse(stored);
+    permissionSet = await loadPermissions(myInfo);
+    localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+    if (permissionSet.size > 0 && !permissionSet.has('hr.admin')) {
+        showAlert("접근 권한이 없습니다.");
+        setTimeout(() => location.href = 'index.html', 1200);
+        return;
+    }
+
     await loadList(); await loadSettings(); await loadCompanyInfo();
 };
 
-function showAlert(msg) { document.getElementById("alertBody").innerHTML = msg; alertModal.show(); }
+function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModal.show(); }
 // [수정] 인자가 2개(메시지, 콜백)일 때와 3개(제목, 메시지, 콜백)일 때를 모두 처리
 function showConfirm(arg1, arg2, arg3) {
     let title = "확인";
@@ -395,7 +419,7 @@ function showConfirm(arg1, arg2, arg3) {
     const titleEl = document.querySelector("#confirmModal .modal-title");
     if(titleEl) titleEl.innerText = title;
 
-    document.getElementById("confirmBody").innerHTML = msg;
+    document.getElementById("confirmBody").textContent = msg || "";
     confirmCallback = cb;
     confirmModal.show();
 }
@@ -405,7 +429,62 @@ function hideLoading() { loadingModal.hide(); }
 function autoHyphen(target) { target.value = target.value.replace(/[^0-9]/g, '').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g, "$1-$2-$3").replace(/(\-{1,2})$/g, ""); }
 function openAddressSearch() { new daum.Postcode({ oncomplete: function(data) { let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress; if(data.buildingName) addr += ' (' + data.buildingName + ')'; document.getElementById("editAddress").value = addr; document.getElementById("editAddressDetail").focus(); } }).open(); }
 
-async function loadList() { const tbody = document.getElementById("empListBody"); tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">로딩 중...</td></tr>'; const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id'); if(error || !list) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>'; return; } tbody.innerHTML = ""; const threeYearsAgo = new Date(); threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3); let expiredCount = 0; list.forEach(u => { let isResigned = !!u.resign_date; let isExpired = false; if (isResigned && new Date(u.resign_date) <= threeYearsAgo) { isExpired = true; expiredCount++; } let statusBadge = isResigned ? (isExpired ? `<span class="badge bg-danger">3년 경과</span>` : `<span class="badge bg-secondary">퇴사</span>`) : `<span class="badge bg-success">재직</span>`; let roleBadge = u.role === 'admin' ? '<span class="badge bg-danger">관리자</span>' : '<span class="badge bg-light text-dark">일반</span>'; const tr = document.createElement("tr"); if(isResigned) tr.style.opacity = "0.7"; if(isExpired) tr.style.backgroundColor = "#fff5f5"; tr.onclick = () => openDetail(u); tr.innerHTML = `<td class="fw-bold text-secondary">${u.emp_id}</td><td><div class="fw-bold">${u.emp_name}</div><div class="small text-muted">${u.department || '-'}</div></td><td>${u.position}</td><td>${statusBadge}</td><td>${roleBadge}</td>`; tbody.appendChild(tr); }); if (expiredCount > 0 && !hasCheckedExpired) { showConfirm(`⚠️ <strong>개인정보 파기 알림</strong><br>퇴사 후 3년 경과자 ${expiredCount}명 발견. 삭제하시겠습니까?`, () => showAlert("목록에서 붉은색 직원을 삭제하세요.")); hasCheckedExpired = true; } }
+async function loadPermissions(user) {
+    const result = new Set();
+    if (!user) return result;
+    const roleKey = user.role || '';
+    const posKey = user.position || '';
+    if (!roleKey && !posKey) return result;
+
+    const { data } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .in('scope', ['role', 'position'])
+        .in('role_key', [roleKey, posKey])
+        .eq('is_enabled', true);
+
+    if (Array.isArray(data)) {
+        data.forEach(row => {
+            if (row.permission_key) result.add(row.permission_key);
+        });
+    }
+    return result;
+}
+
+async function loadList() {
+    const tbody = document.getElementById("empListBody");
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">로딩 중...</td></tr>';
+    const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id');
+    if (error || !list) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
+        return;
+    }
+    tbody.innerHTML = "";
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    let expiredCount = 0;
+    list.forEach(u => {
+        let isResigned = !!u.resign_date;
+        let isExpired = false;
+        if (isResigned && new Date(u.resign_date) <= threeYearsAgo) { isExpired = true; expiredCount++; }
+        let statusBadge = isResigned ? (isExpired ? `<span class="badge bg-danger">3년 경과</span>` : `<span class="badge bg-secondary">퇴사</span>`) : `<span class="badge bg-success">재직</span>`;
+        let roleBadge = u.role === 'admin' ? '<span class="badge bg-danger">관리자</span>' : '<span class="badge bg-light text-dark">일반</span>';
+        const tr = document.createElement("tr");
+        if (isResigned) tr.style.opacity = "0.7";
+        if (isExpired) tr.style.backgroundColor = "#fff5f5";
+        tr.onclick = () => openDetail(u);
+        const safeEmpId = escapeHtml(u.emp_id);
+        const safeName = escapeHtml(u.emp_name);
+        const safeDept = escapeHtml(u.department || '-');
+        const safePos = escapeHtml(u.position || '');
+        tr.innerHTML = `<td class="fw-bold text-secondary">${safeEmpId}</td><td><div class="fw-bold">${safeName}</div><div class="small text-muted">${safeDept}</div></td><td>${safePos}</td><td>${statusBadge}</td><td>${roleBadge}</td>`;
+        tbody.appendChild(tr);
+    });
+    if (expiredCount > 0 && !hasCheckedExpired) {
+        showConfirm(`⚠️ 개인정보 파기 알림\n퇴사 후 3년 경과자 ${expiredCount}명 발견. 삭제하시겠습니까?`, () => showAlert("목록에서 붉은색 직원을 삭제하세요."));
+        hasCheckedExpired = true;
+    }
+}
 
 async function loadCompanyInfo() { const { data } = await _supabase.from('ref_company_info').select('*'); if(data) data.forEach(r => { companyInfo[r.key] = r.value; }); companyInfo.chairman_name = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = logoData.publicUrl; } if (companyInfo.seal_url) { let sealPath = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600); if (sealData) companyInfo.seal_url = sealData.signedUrl; } }
 async function loadAdvancedSettings() { const tbody = document.getElementById("advSettingsBody"); tbody.innerHTML = '<tr><td colspan="3">로딩...</td></tr>'; const { data } = await _supabase.from('ref_settings').select('*').order('category'); if(data) { advancedSettingsRaw = data; tbody.innerHTML = data.map((r, i) => `<tr><td><small class="text-muted">${r.item_key}</small></td><td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}"></td><td><small>${r.description||'-'}</small></td></tr>`).join(""); } }
@@ -448,7 +527,6 @@ async function loadSettings() {
     // [핵심] 연도에 따라 조회 테이블 분기
     if (selYear < currentYear) {
         // 과거 데이터 (History 테이블)
-        console.log(`[설정] ${selYear}년도(과거) 데이터를 불러옵니다.`);
         const res = await _supabase
             .from('ref_settings_history')
             .select('*')
@@ -457,7 +535,6 @@ async function loadSettings() {
         error = res.error;
     } else {
         // 현재/미래 데이터 (원본 테이블)
-        console.log(`[설정] ${selYear}년도(현재) 데이터를 불러옵니다.`);
         const res = await _supabase.from('ref_settings').select('*');
         data = res.data;
         error = res.error;
@@ -541,7 +618,6 @@ async function saveSettings() {
         // [핵심] 저장할 테이블 분기 처리
         if (selYear < currentYear) {
             // 1. 과거 데이터 저장 (History 테이블)
-            console.log(`[저장] ${selYear}년도(과거) - ref_settings_history에 저장합니다.`);
             
             // History 테이블은 'target_year' 칼럼이 필수입니다.
             const historyUpdates = updates.map(u => ({
@@ -559,7 +635,6 @@ async function saveSettings() {
 
         } else {
             // 2. 현재 데이터 저장 (Original 테이블)
-            console.log(`[저장] ${selYear}년도(현재) - ref_settings에 저장합니다.`);
             
             // Original 테이블은 item_key만 있으면 됨
             const { error } = await _supabase
@@ -693,7 +768,7 @@ async function saveBasicInfo() {
 async function saveRRN() { const f = document.getElementById("rrnFront").value; const b = document.getElementById("rrnBack").value; if((f+b).length !== 13) return showAlert("13자리를 입력하세요."); const { error } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f+"-"+b }); if(error) showAlert("실패: "+error.message); else { showAlert("암호화되어 저장되었습니다."); const { data: bd } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId }); document.getElementById("viewBirth").innerText = bd || f; document.getElementById("rrnFront").value=""; document.getElementById("rrnBack").value=""; toggleEditMode(false); } }
 async function uploadContract() { const fileInput = document.getElementById("contractFile"); if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요."); const file = fileInput.files[0]; const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`; showLoading(); try { const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single(); if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]); const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true }); if (error) throw error; await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId); hideLoading(); setTimeout(async () => { showAlert("계약서가 등록되었습니다."); const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600); document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>`; document.getElementById("hiddenContractUrl").value = data.path; fileInput.value = ""; }, 500); } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); } }
 
-async function reqDeletePermanent() { showConfirm("⚠️ 영구 삭제 경고", `<strong>${currentEmpName}</strong> 데이터를 모두 삭제하시겠습니까?`, async function() { detailModal.hide(); const filePath = document.getElementById("hiddenContractUrl").value; if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); showAlert("삭제되었습니다."); loadList(); }); }
+async function reqDeletePermanent() { showConfirm("⚠️ 영구 삭제 경고", `${currentEmpName} 데이터를 모두 삭제하시겠습니까?`, async function() { detailModal.hide(); const filePath = document.getElementById("hiddenContractUrl").value; if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); showAlert("삭제되었습니다."); loadList(); }); }
 function doResign() { document.getElementById("inputResignDate").value = new Date().toISOString().slice(0, 10); resignModal.show(); }
 async function confirmResign() { const rDate = document.getElementById("inputResignDate").value; if(!rDate) return showAlert("퇴사일을 입력해주세요."); resignModal.hide(); await _supabase.from('ref_employees').update({ resign_date: rDate }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); showAlert("퇴사 처리되었습니다."); }
 async function cancelResign() { showConfirm("퇴사 취소하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
@@ -914,7 +989,7 @@ async function loadLeave() {
     const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: currentEmpId });
     
     if (error) {
-        alert("연차 조회 실패: " + error.message);
+        showAlert("연차 조회 실패: " + error.message);
         return;
     }
     
@@ -1394,7 +1469,6 @@ async function getTaxRates(year) {
 
     // 1. 과거 데이터인지 확인 (올해보다 작으면 히스토리 테이블 조회)
     if (targetYear < currentYear) {
-        console.log(`[시스템] ${targetYear}년도(과거) 요율을 히스토리 테이블에서 조회합니다.`);
         const response = await _supabase
             .from('ref_settings_history')
             .select('item_key, item_value')
@@ -1404,7 +1478,6 @@ async function getTaxRates(year) {
     } 
     // 2. 현재 또는 미래 데이터라면 (원본 테이블 조회)
     else {
-        console.log(`[시스템] ${targetYear}년도(현재) 요율을 원본 테이블에서 조회합니다.`);
         const response = await _supabase
             .from('ref_settings')
             .select('item_key, item_value');
@@ -1419,7 +1492,6 @@ async function getTaxRates(year) {
 
     if (!data || data.length === 0) {
         // 데이터가 없으면 알림을 띄우지 않고 null 반환 (기본값 사용 유도)
-        console.warn(`[주의] ${targetYear}년도 요율 데이터가 없습니다.`);
         return null;
     }
 

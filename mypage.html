@@ -1,6 +1,8 @@
 <!DOCTYPE html>
+<!-- Version: v1.0.2 -->
 <html lang="ko">
 <head>
+  <script>console.log('[Version] v1.0.2 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -135,7 +137,7 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="modal fade" id="certPurposeModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">발급 용도</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><select class="form-select mb-2" id="certPurposeSelect" onchange="toggleEtcInput()"><option value="관공서 제출용">관공서 제출용</option><option value="금융기관 제출용">금융기관 제출용</option><option value="기타">기타</option></select><input type="text" id="certPurposeEtc" class="form-control hidden" placeholder="용도 입력"></div><div class="modal-footer"><button class="btn btn-primary btn-sm" onclick="runCertIssue()">인쇄하기</button></div></div></div></div>
 <div class="modal fade" id="leaveDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">연차 상세 리포트</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-3"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="noticeDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold" id="noticeModalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="text-muted small mb-3"><span id="noticeModalDate"></span> | <span id="noticeModalWriter"></span></div><div id="noticeModalContent" style="white-space: pre-wrap;"></div><div id="noticeFileArea" class="mt-3 pt-2 border-top hidden"><a href="#" id="noticeFileLink" target="_blank">첨부파일 다운로드</a></div></div></div></div></div>
-<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center fw-bold py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center fw-bold py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="eventModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📅 일정 관리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
 
   <input type="hidden" id="evtId">
@@ -170,7 +172,9 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 const SUPABASE_URL='https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
 let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
+let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
@@ -184,14 +188,40 @@ confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);
+permissionSet = await loadPermissions(myInfo);
+localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+if (permissionSet.size > 0 && !permissionSet.has('mypage.view')) {
+    showAlert("접근 권한이 없습니다.");
+    setTimeout(() => location.href = 'index.html', 1200);
+    return;
+}
 document.getElementById("salaryMonth").value=new Date().toISOString().slice(0,7);
 document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
 await loadCompanyInfo();
 await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave()]);
 };
-function showAlert(m){document.getElementById("alertBody").innerHTML=m;alertModal.show()}
+function showAlert(m){document.getElementById("alertBody").textContent=m||"";alertModal.show()}
 function autoHyphen(t){t.value=t.value.replace(/[^0-9]/g,'').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g,"$1-$2-$3").replace(/(\-{1,2})$/g,"")}
 function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.userSelectedType==='R'?d.roadAddress:d.jibunAddress;if(d.buildingName)a+=' ('+d.buildingName+')';document.getElementById("myAddress").value=a}}).open()}
+async function loadPermissions(user) {
+    const result = new Set();
+    if (!user) return result;
+    const roleKey = user.role || '';
+    const posKey = user.position || '';
+    if (!roleKey && !posKey) return result;
+    const { data } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .in('scope', ['role', 'position'])
+        .in('role_key', [roleKey, posKey])
+        .eq('is_enabled', true);
+    if (Array.isArray(data)) {
+        data.forEach(row => {
+            if (row.permission_key) result.add(row.permission_key);
+        });
+    }
+    return result;
+}
 async function loadCompanyInfo(){const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
 async function loadProfile() {
     const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
@@ -270,7 +300,33 @@ async function updateInfo() {
     });
 }
 async function loadEmergencyList(){const{data}=await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id',myInfo.emp_id).order('id');tempEmergencyList=data||[];renderEmergencyTable()}
-function renderEmergencyTable(){const b=document.getElementById("emergencyListBody");b.innerHTML="";const e=!document.getElementById("btnSaveInfo").classList.contains('hidden');tempEmergencyList.forEach((r,i)=>{b.innerHTML+=`<tr><td>${r.contact_name}</td><td>${r.relation}</td><td>${r.phone}</td><td>${e?`<button class="btn btn-sm btn-outline-danger py-0" onclick="removeTempEm(${i})">×</button>`:''}</td></tr>`})}
+function renderEmergencyTable(){
+const b=document.getElementById("emergencyListBody");
+const isEditing=!document.getElementById("btnSaveInfo").classList.contains('hidden');
+b.innerHTML="";
+tempEmergencyList.forEach((r,i)=>{
+const tr=document.createElement('tr');
+const tdName=document.createElement('td');
+const tdRel=document.createElement('td');
+const tdPhone=document.createElement('td');
+const tdAct=document.createElement('td');
+tdName.textContent=r.contact_name||"";
+tdRel.textContent=r.relation||"";
+tdPhone.textContent=r.phone||"";
+if(isEditing){
+const btn=document.createElement('button');
+btn.className="btn btn-sm btn-outline-danger py-0";
+btn.type="button";
+btn.textContent="×";
+btn.onclick=()=>removeTempEm(i);
+tdAct.appendChild(btn);
+}
+tr.appendChild(tdName);
+tr.appendChild(tdRel);
+tr.appendChild(tdPhone);
+tr.appendChild(tdAct);
+b.appendChild(tr);
+})}
 function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
 function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
 function removeTempEm(i){tempEmergencyList.splice(i,1);renderEmergencyTable()}
@@ -357,7 +413,20 @@ function printSalaryPopup() {
 
   function toggleEtcInput(){const v=document.getElementById("certPurposeSelect").value,e=document.getElementById("certPurposeEtc");if(v==='기타'){e.classList.remove('hidden');e.focus()}else{e.classList.add('hidden')}}
 function openCertModal(){purposeModal.show()}
-async function loadNotices(){const{data}=await _supabase.from('ref_notice').select('*').order('created_at',{ascending:false}).limit(5);document.getElementById("noticeList").innerHTML=data&&data.length?data.map((n,i)=>`<div class="list-group-item" onclick="viewNotice(${i})" style="cursor:pointer"><h6 class="fw-bold mb-1">${n.title}</h6><small class="text-muted">${n.created_at.slice(0,10)}</small></div>`).join(""):'<div class="text-center p-3 text-muted">공지사항 없음</div>';noticesData=data}
+async function loadNotices(){
+  const{data}=await _supabase.from('ref_notice').select('*').order('created_at',{ascending:false}).limit(5);
+  const listEl=document.getElementById("noticeList");
+  if(data&&data.length){
+    listEl.innerHTML=data.map((n,i)=>{
+      const safeTitle=escapeHtml(n.title);
+      const safeDate=escapeHtml(n.created_at.slice(0,10));
+      return `<div class="list-group-item" onclick="viewNotice(${i})" style="cursor:pointer"><h6 class="fw-bold mb-1">${safeTitle}</h6><small class="text-muted">${safeDate}</small></div>`;
+    }).join("");
+  }else{
+    listEl.innerHTML='<div class="text-center p-3 text-muted">공지사항 없음</div>';
+  }
+  noticesData=data;
+}
 function viewNotice(i){const n=noticesData[i];document.getElementById("noticeModalTitle").innerText=n.title;document.getElementById("noticeModalDate").innerText=n.created_at.slice(0,10);document.getElementById("noticeModalWriter").innerText=n.writer||"관리자";document.getElementById("noticeModalContent").innerText=n.content;const l=document.getElementById("noticeFileLink"),a=document.getElementById("noticeFileArea");if(n.file_url){a.classList.remove("hidden");l.href=n.file_url}else a.classList.add("hidden");noticeDetailModal.show()}
 // [추가] 범용 확인 모달 열기 함수
 function openConfirmModal(msg, callback) {

@@ -1,6 +1,11 @@
 <!DOCTYPE html>
+<!--
+Version: v1.0.6
+Change: Require public disclosure (XBRL element ID) account codes; stop auto-generating codes.
+-->
 <html>
 <head>
+  <script>console.log('[Version] v1.0.6 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계 관리</title>
@@ -16,6 +21,7 @@
     .bg-rev { background: linear-gradient(135deg, #2ecc71, #27ae60); }
     .bg-exp { background: linear-gradient(135deg, #e74c3c, #c0392b); }
     .bg-ast { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .bg-cap { background: linear-gradient(135deg, #f59f00, #e8590c); }
     
     .sub-card { flex: 1; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #eee; background-color: #fff; }
     .text-vat { color: #d63384; font-weight: bold; } 
@@ -64,9 +70,10 @@
     </div>
   </div>
 
-  <div class="d-flex gap-2 mb-2 no-print">
+  <div class="d-flex flex-wrap gap-2 mb-2 no-print">
     <div class="stat-card bg-rev"><div>매출</div><div class="fw-bold" id="valRev">0</div></div>
     <div class="stat-card bg-exp"><div>비용</div><div class="fw-bold" id="valExp">0</div></div>
+    <div class="stat-card bg-cap"><div>출자금</div><div class="fw-bold" id="valCap">0</div></div>
     <div class="stat-card bg-ast"><div>자산</div><div class="fw-bold" id="valAst">0</div></div>
   </div>
   <div class="d-flex gap-2 mb-4 no-print">
@@ -240,8 +247,8 @@
   </div>
 </div>
 
-<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold" id="alertTitle">알림</h6></div><div class="modal-body text-center py-4" id="alertBody">내용</div><div class="modal-footer border-0 pt-0 justify-content-center"><button type="button" class="btn btn-primary btn-sm w-50" data-bs-dismiss="modal">확인</button></div></div></div></div>
-<div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6></div><div class="modal-body text-center py-4" id="confirmBody">진행하시겠습니까?</div><div class="modal-footer border-0 pt-0 justify-content-center gap-2"><button type="button" class="btn btn-secondary btn-sm w-40" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm w-40" id="btnConfirmYes">확인</button></div></div></div></div>
+<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold" id="alertTitle">알림</h6></div><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;">내용</div><div class="modal-footer border-0 pt-0 justify-content-center"><button type="button" class="btn btn-primary btn-sm w-50" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6></div><div class="modal-body text-center py-4" id="confirmBody" style="white-space: pre-wrap;">진행하시겠습니까?</div><div class="modal-footer border-0 pt-0 justify-content-center gap-2"><button type="button" class="btn btn-secondary btn-sm w-40" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm w-40" id="btnConfirmYes">확인</button></div></div></div></div>
 
 <div class="modal fade" id="selectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header p-3 bg-light"><h6 class="m-0 fw-bold">계정과목 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="p-2 border-bottom bg-white sticky-top"><input type="text" class="form-control" id="accountSearchInput" placeholder="검색어 입력..." onkeyup="filterAccounts()"></div><div id="accountList" style="height: 350px; overflow-y: auto;"></div></div></div></div></div>
 
@@ -264,6 +271,7 @@
     <label class="small text-muted mb-1">중분류</label><select class="form-select mb-2" id="addCategorySelect"></select><div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="chkManualCat" onchange="toggleManualCat()"><label class="form-check-label small" for="chkManualCat">직접 입력</label></div><input type="text" class="form-control mb-3 hidden" id="manualCatInput" placeholder="새 중분류명 입력">
     <label class="small text-muted mb-1">사용처</label><select class="form-select mb-3" id="addUsageSelect"><option value="전체">전체</option><option value="본사">본사</option><option value="1호기">1호기</option><option value="2호기">2호기</option></select>
     <label class="small text-muted mb-1">새 항목명</label><input type="text" class="form-control mb-3" id="addNewItemName" placeholder="예: 야근식대">
+    <label class="small text-muted mb-1">공시형 코드 (XBRL element ID)</label><input type="text" class="form-control" id="addCodeInput" placeholder="예: ifrs-full:Profit"><div class="form-text mb-3">공시용 표준계정과목 XBRL 택사노미 ID를 입력하세요.</div>
 <div class="mb-3">
     <label class="form-label d-block fw-bold">항목 속성 (다중 선택 가능)</label>
     <div class="border p-3 rounded bg-light">
@@ -341,14 +349,20 @@ function toggleLabor(target) {
 <script>
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
-const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let _supabase = null;
 
 let mData=[], cardData=[]; 
 let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal;
 let myInfo = null, confirmCallback = null;
+let permissionSet = new Set();
 
 // 1. 초기화
 window.onload = async function() {
+    if (!window.supabase) {
+        console.error('Supabase SDK not loaded. Check network or script tag.');
+        return;
+    }
+    _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     selectModal = new bootstrap.Modal(document.getElementById('selectModal'));
     reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
     addModal = new bootstrap.Modal(document.getElementById('addModal'));
@@ -359,7 +373,15 @@ window.onload = async function() {
     document.getElementById("btnConfirmYes").onclick = function() { if(confirmCallback) confirmCallback(); confirmModal.hide(); };
 
     const stored = localStorage.getItem('erp_user');
-    if(stored) myInfo = JSON.parse(stored);
+    if(!stored) { location.href = 'index.html'; return; }
+    myInfo = JSON.parse(stored);
+    permissionSet = await loadPermissions(myInfo);
+    localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+    if (permissionSet.size > 0 && !permissionSet.has('accounting.view')) {
+        showAlert("접근 권한이 없습니다.");
+        setTimeout(() => location.href = 'index.html', 1200);
+        return;
+    }
 
     document.getElementById('dateField').valueAsDate = new Date();
     document.getElementById('salaryMonth').value = new Date().toISOString().slice(0, 7);
@@ -378,8 +400,74 @@ window.onload = async function() {
 };
 
 // Helper
-function showAlert(t,m) { document.getElementById("alertTitle").innerText=t; document.getElementById("alertBody").innerHTML=m; alertModal.show(); }
-function showConfirm(t,m,cb) { document.getElementById("confirmTitle").innerText=t; document.getElementById("confirmBody").innerHTML=m; confirmCallback=cb; confirmModal.show(); }
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+async function logAudit(action, entityId, summary, detail = null) {
+    try {
+        await _supabase.from('erp_audit_logs').insert({
+            actor_emp_id: myInfo?.emp_id || null,
+            actor_name: myInfo?.emp_name || null,
+            action,
+            entity_type: 'ac_journal',
+            entity_id: entityId ? String(entityId) : null,
+            summary: summary || '',
+            detail
+        });
+    } catch (e) { /* noop */ }
+}
+async function loadPermissions(user) {
+    const result = new Set();
+    if (!user) return result;
+    const roleKey = user.role || '';
+    const posKey = user.position || '';
+    if (!roleKey && !posKey) return result;
+
+    const { data } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .in('scope', ['role', 'position'])
+        .in('role_key', [roleKey, posKey])
+        .eq('is_enabled', true);
+
+    if (Array.isArray(data)) {
+        data.forEach(row => {
+            if (row.permission_key) result.add(row.permission_key);
+        });
+    }
+    return result;
+}
+
+function canPerform(permissionKey) {
+    if (!permissionKey) return true;
+    if (!permissionSet || permissionSet.size === 0) return true;
+    return permissionSet.has(permissionKey);
+}
+function showAlert(t,m) {
+    let title = "알림";
+    let msg = "";
+    if (m === undefined) {
+        msg = t || "";
+    } else {
+        title = t || "알림";
+        msg = m || "";
+    }
+    document.getElementById("alertTitle").innerText = title;
+    document.getElementById("alertBody").textContent = msg;
+    alertModal.show();
+}
+function showConfirm(t,m,cb) {
+    document.getElementById("confirmTitle").innerText = t;
+    document.getElementById("confirmBody").textContent = m || "";
+    confirmCallback = cb;
+    confirmModal.show();
+}
 function validNum(el) { if(el.value < 0) el.value = Math.abs(el.value); }
 
 // 2. 데이터 로드 함수들
@@ -435,6 +523,7 @@ async function refreshDashboard() {
     let rev = 0;         // 매출 (금년도 전체)
     let exp = 0;         // 비용 (금년도 전체)
     let ast = 0;         // 총자산 (전체 누적)
+    let capital = 0;     // 출자금(자본) 누적
     let vatIn = 0;       // 부가세예수금 (현재 분기만)
     let vatOut = 0;      // 부가세대급금 (현재 분기만)
     let bankBalance = 0; // 보통예금 (전체 누적)
@@ -454,6 +543,10 @@ async function refreshDashboard() {
                 bankBalance += (db - cr);
             }
         }
+        // 1-1. 출자금(자본) 누적
+        if (r.Type === '자본' && r.Account === '출자금') {
+            capital += (cr - db);
+        }
 
         // 2. 매출/비용 (금년도 전체 합계)
         if (rYear === currentYear) {
@@ -472,6 +565,7 @@ async function refreshDashboard() {
     // UI 반영
     document.getElementById("valRev").innerText = rev.toLocaleString(); // 올해 총 매출
     document.getElementById("valExp").innerText = exp.toLocaleString(); // 올해 총 비용
+    document.getElementById("valCap").innerText = capital.toLocaleString(); // 현재 출자금
     document.getElementById("valAst").innerText = ast.toLocaleString(); // 현재 총 자산
     document.getElementById("valCash").innerText = bankBalance.toLocaleString(); // 현재 통장 잔고
     document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString(); // ★현재 분기 예상 부가세
@@ -544,9 +638,12 @@ function filterAccounts() {
         const specialType = acc.special_code
         
         const badge = (isTaxFree === true || isTaxFree === 'TRUE' || isTaxFree === '면세') ? '<span class="badge bg-secondary ms-2" style="font-size:0.7em;">면세</span>' : '';
-        const spBadge = (specialType) ? `<span class="badge bg-info text-dark ms-1" style="font-size:0.7em;">${specialType}</span>` : '';
+        const safeItem = escapeHtml(acc.Item);
+        const safeStandard = escapeHtml(acc.Standard);
+        const safeSpecial = escapeHtml(specialType || '');
+        const spBadge = (specialType) ? `<span class="badge bg-info text-dark ms-1" style="font-size:0.7em;">${safeSpecial}</span>` : '';
 
-        d.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><span class="acc-item-name">${acc.Item}</span><span class="acc-item-std ms-1">(${acc.Standard})</span></div><div>${spBadge}${badge}</div></div>`;
+        d.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><span class="acc-item-name">${safeItem}</span><span class="acc-item-std ms-1">(${safeStandard})</span></div><div>${spBadge}${badge}</div></div>`;
         
         d.onclick = () => {
             document.getElementById("displayAccount").value = acc.Item;
@@ -685,6 +782,7 @@ function toggleCard() {
 
 async function handleFormSubmit(e) {
     e.preventDefault();
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
     const item = document.getElementById("hiddenItem").value;
     if(!item) return showAlert("오류", "계정과목을 선택하세요.");
     
@@ -693,6 +791,9 @@ async function handleFormSubmit(e) {
     
     // [중요] HTML에서 '영업외수익' 라디오 버튼이 선택되면 type 변수에 '영업외수익'이 들어옵니다.
     const type = document.querySelector('input[name="inputType"]:checked').value;
+    const standard = document.getElementById("hiddenStandard").value;
+    const ensuredCode = await ensureAccountCode(type, item, standard);
+    if (!ensuredCode) return;
     
     const settleMode = document.querySelector('input[name="settleMode"]:checked').value;
     const desc = document.getElementById("inputDesc").value;
@@ -819,6 +920,7 @@ async function handleFormSubmit(e) {
     const { error } = await _supabase.from('ac_journal').insert(entries);
     if(error) showAlert("오류", "저장 실패: " + error.message);
     else {
+        await logAudit('accounting.submit', null, '전표 저장', { total: totalAmt, type, project, entries: entries.length });
         showAlert("완료", "저장되었습니다.");
         document.getElementById("erpForm").reset();
         document.getElementById("smNorm").checked = true;
@@ -831,7 +933,8 @@ async function handleFormSubmit(e) {
 // End of handleFormSubmit
   // ★ [신규] 2025년 급여 -> 개발비 대체 분개 (수동 실행용)
 async function runAssetCorrection2025() {
-    showConfirm("2025 수정분개", "2025년 선급금(급여성격)을 <b class='text-primary'>개발비(자산)</b>로 대체하여<br>흑자를 유지하고 법인세 자산을 생성하시겠습니까?", async () => {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    showConfirm("2025 수정분개", "2025년 선급금(급여성격)을 개발비(자산)로 대체하여\n흑자를 유지하고 법인세 자산을 생성하시겠습니까?", async () => {
         // (차) 개발비 550,000 / (대) 선급금 550,000
         // 이렇게 하면 자산 간 이동이므로 당기순이익 변동 없음 (흑자 유지)
         const entries = [
@@ -840,12 +943,13 @@ async function runAssetCorrection2025() {
         ];
         const { error } = await _supabase.from('ac_journal').insert(entries);
         if(error) showAlert("오류", error.message);
-        else showAlert("성공", "수정 분개가 완료되었습니다.<br>이제 선급금이 사라지고 개발비가 생성되었습니다.");
+        else showAlert("성공", "수정 분개가 완료되었습니다.\n이제 선급금이 사라지고 개발비가 생성되었습니다.");
     });
 }
 
 // 6. 자동 연동 기능 (6종 완벽 구현)
 function confirmSync(type) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
     const today = new Date().toISOString().slice(0,10);
     const writer = myInfo ? myInfo.emp_name : "System";
 
@@ -861,7 +965,7 @@ function confirmSync(type) {
         const lastDateObj = new Date(year, month, 0); 
         const fDate = lastDateObj.toISOString().slice(0, 10); // "2025-10-31"
 
-        showConfirm("급여 연동", `${ym}월 급여 및 4대보험(회사분)을 전표 처리하시겠습니까?<br>전표일자: <span class="fw-bold text-primary">${fDate}</span>`, async () => {
+        showConfirm("급여 연동", `${ym}월 급여 및 4대보험(회사분)을 전표 처리하시겠습니까?\n전표일자: ${fDate}`, async () => {
             
             // 1. 중복 방지 (DB 상태 체크)
             const { data: alreadyProcessed } = await _supabase.from('hr_salary').select('id').eq('year_month', ym).eq('is_accounted', true).limit(1);
@@ -980,12 +1084,15 @@ function confirmSync(type) {
             });
 
             const { error } = await _supabase.from('ac_journal').insert(entries);
-            if(!error) { showAlert("완료", `${targetDocs.length}건 연동 성공`); refreshDashboard(); loadHistory(); }
+            if (error) return showAlert("오류", "전표 저장 실패: " + error.message);
+            showAlert("완료", `${targetDocs.length}건 연동 성공`);
+            refreshDashboard();
+            loadHistory();
         });
     }
 // (3) 출자금 연동
     else if (type === 'capital') {
-        showConfirm("출자금 연동", "신규 입금된 출자금을 전표로 생성하시겠습니까?<br>(상태가 '완료'인 항목만 처리)", async () => {
+        showConfirm("출자금 연동", "신규 입금된 출자금을 전표로 생성하시겠습니까?\n(상태가 '완료'인 항목만 처리)", async () => {
             // 1. 대상 조회
             const { data: members, error: fetchError } = await _supabase.from('ref_members').select('*').eq('status', '완료');
             
@@ -1130,7 +1237,7 @@ function confirmSync(type) {
     else if (type === 'depreciation') {
         const thisYear = new Date().getFullYear();
         
-        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?<br><span class="text-danger small">* 1년에 한 번만 실행하세요.</span>`, async () => {
+        showConfirm("감가상각", `${thisYear}년도 감가상각을 실행하시겠습니까?\n* 1년에 한 번만 실행하세요.`, async () => {
             // 1. 중복 실행 방지 체크
             const descCheck = `[결산] ${thisYear}년 감가상각`;
             const { data: dup } = await _supabase
@@ -1233,7 +1340,7 @@ function confirmSync(type) {
         
         if (reserveAmt === null || voluntaryAmt === null) return;
 
-        showConfirm("연말결산 실행", `${targetYear}년 결산을 진행합니다.<br>법정적립: ${Number(reserveAmt).toLocaleString()}원<br>임의적립: ${Number(voluntaryAmt).toLocaleString()}원`, async () => {
+        showConfirm("연말결산 실행", `${targetYear}년 결산을 진행합니다.\n법정적립: ${Number(reserveAmt).toLocaleString()}원\n임의적립: ${Number(voluntaryAmt).toLocaleString()}원`, async () => {
              const startDate = `${targetYear}-01-01`;
              const endDate = `${targetYear}-12-31`;
              const relatedKey = `CLOSE-${targetYear}`;
@@ -1294,7 +1401,7 @@ function confirmSync(type) {
                  const { error } = await _supabase.from('ac_journal').insert(entries);
                  if(error) showAlert("오류", error.message);
                  else {
-                    showAlert("완료", `결산 및 이익처분이 완료되었습니다.<br>당기순손익: ${netIncome.toLocaleString()}원`);
+                    showAlert("완료", `결산 및 이익처분이 완료되었습니다.\n당기순손익: ${netIncome.toLocaleString()}원`);
                     refreshDashboard();
                  }
              } else {
@@ -1312,7 +1419,7 @@ function confirmSync(type) {
         const targetYear = Number(inputYear);
         const relatedKey = `CLOSE-${targetYear}`;
 
-        showConfirm("결산 취소", `<span class="text-danger fw-bold">⚠️ ${targetYear}년도 결산 내역을 삭제하시겠습니까?</span><br>마감 분개가 모두 삭제되고 손익이 초기화됩니다.`, async () => {
+        showConfirm("결산 취소", `⚠️ ${targetYear}년도 결산 내역을 삭제하시겠습니까?\n마감 분개가 모두 삭제되고 손익이 초기화됩니다.`, async () => {
             
             // 1. 해당 연도의 결산 데이터가 있는지 확인
             const { count } = await _supabase
@@ -1331,7 +1438,7 @@ function confirmSync(type) {
             if (error) {
                 showAlert("오류", "취소 실패: " + error.message);
             } else {
-                showAlert("완료", `${targetYear}년도 결산이 취소되었습니다.<br>수정 후 다시 결산을 진행하세요.`);
+                showAlert("완료", `${targetYear}년도 결산이 취소되었습니다.\n수정 후 다시 결산을 진행하세요.`);
                 refreshDashboard();
             }
         });
@@ -1346,25 +1453,32 @@ function loadHistory() {
         el.innerHTML = "";
         if(data) data.forEach(item => {
             const amt = Number(item.Debit||0) + Number(item.Credit||0);
-            el.innerHTML += `<div class="list-group-item d-flex justify-content-between"><div><span class="badge bg-secondary me-1">${item.Type}</span><b>${item.Account}</b> <small>${item.Description}</small></div><div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" onclick="deleteTx('${item.id}')">×</span></div></div>`;
+            const safeType = escapeHtml(item.Type);
+            const safeAccount = escapeHtml(item.Account);
+            const safeDesc = escapeHtml(item.Description);
+            const safeDate = escapeHtml(item.Date || '');
+            el.innerHTML += `<div class="list-group-item d-flex justify-content-between"><div><div class="small text-muted">${safeDate}</div><span class="badge bg-secondary me-1">${safeType}</span><b>${safeAccount}</b> <small>${safeDesc}</small></div><div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" onclick="deleteTx('${item.id}')">×</span></div></div>`;
         });
     });
 }
 
 async function deleteTx(id, transId) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
     if (!transId) {
         // Trans_ID가 없으면 기존처럼 ID로 삭제 (하위 호환)
-        if(confirm("이 라인 1개만 삭제됩니다. 계속하시겠습니까?")) {
-             await _supabase.from('ac_journal').delete().eq('id', id);
-        }
+        showConfirm("전표 삭제", "이 라인 1개만 삭제됩니다. 계속하시겠습니까?", async () => {
+            const { error } = await _supabase.from('ac_journal').delete().eq('id', id);
+            if (!error) await logAudit('accounting.delete', id, '전표 삭제(단일)', null);
+        });
         return;
     }
 
-    showConfirm("전표 삭제", "이 전표와 관련된 <b>모든 분개(차/대변 전체)</b>를 삭제하시겠습니까?", async function() {
+    showConfirm("전표 삭제", "이 전표와 관련된 모든 분개(차/대변 전체)를 삭제하시겠습니까?", async function() {
         // Trans_ID가 같은 모든 행을 삭제
         const { error } = await _supabase.from('ac_journal').delete().eq('Trans_ID', transId); 
         if(error) showAlert("오류", "삭제 실패");
         else {
+            await logAudit('accounting.delete', transId, '전표 삭제(전체)', null);
             loadHistory(); 
             refreshDashboard();
         }
@@ -1378,6 +1492,8 @@ function openAddModal() {
     catSel.innerHTML = "";
     const cats = [...new Set(mData.filter(m => m.Type === type).map(m => m.Standard))].sort();
     cats.forEach(c => catSel.add(new Option(c, c)));
+    const codeInput = document.getElementById("addCodeInput");
+    if (codeInput) codeInput.value = "";
     addModal.show();
 }
 
@@ -1387,8 +1503,64 @@ function toggleManualCat() {
     document.getElementById("manualCatInput").classList.toggle("hidden", !chk);
 }
 
+let accountCodeField = null;
+async function resolveAccountCodeField() {
+    if (accountCodeField) return accountCodeField;
+    const testUpper = await _supabase.from('ac_master').select('Code', { head: true, count: 'exact' });
+    if (!testUpper.error) { accountCodeField = 'Code'; return accountCodeField; }
+    const testLower = await _supabase.from('ac_master').select('code', { head: true, count: 'exact' });
+    if (!testLower.error) { accountCodeField = 'code'; return accountCodeField; }
+    showAlert("오류", "ac_master 테이블에 계정 코드 컬럼(code/Code)이 없습니다.");
+    return null;
+}
+
+function isPublicDisclosureCode(code) {
+    if (!code) return false;
+    // XBRL element ID pattern (e.g., ifrs-full:Assets)
+    return /^[a-z][a-z0-9_-]*:[A-Za-z0-9_.-]+$/.test(code);
+}
+
+async function ensureAccountCode(type, item, standard) {
+    const codeEl = document.getElementById("hiddenCode");
+    const current = (codeEl?.value || '').trim();
+    if (current) return current;
+
+    const codeField = await resolveAccountCodeField();
+    if (!codeField) return null;
+
+    const { data, error } = await _supabase
+        .from('ac_master')
+        .select(codeField)
+        .eq('Type', type)
+        .eq('Standard', standard)
+        .eq('Item', item)
+        .limit(1);
+
+    if (error) {
+        showAlert("오류", "계정코드 조회 실패: " + error.message);
+        return null;
+    }
+    if (!data || data.length === 0) {
+        showAlert("오류", "계정과목 코드를 찾을 수 없습니다. 계정과목 설정을 확인하세요.");
+        return null;
+    }
+
+    const found = data[0][codeField] || "";
+    if (found) {
+        if (!isPublicDisclosureCode(found)) {
+            console.warn("[Warn] 공시형 코드 형식이 아닙니다:", found);
+        }
+        if (codeEl) codeEl.value = found;
+        return found;
+    }
+
+    showAlert("오류", "계정과목 코드가 없습니다. 공시형 코드(XBRL element ID)를 입력하세요.");
+    return null;
+}
+
 // [수정] 다중 속성 처리가 포함된 항목 추가 함수
 async function confAdd() {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
     const type = document.getElementById("addTypeSelect").value;
     const name = document.getElementById("addNewItemName").value;
     
@@ -1397,6 +1569,12 @@ async function confAdd() {
     if(document.getElementById("chkManualCat").checked) cat = document.getElementById("manualCatInput").value;
     
     const usage = document.getElementById("addUsageSelect").value;
+    const codeInput = document.getElementById("addCodeInput")?.value?.trim();
+    if (!codeInput) return showAlert("알림", "공시형 계정 코드(XBRL element ID)를 입력하세요.");
+    if (!isPublicDisclosureCode(codeInput)) return showAlert("알림", "공시형 코드 형식이 올바르지 않습니다. 예: ifrs-full:Profit");
+    const codeVal = codeInput;
+    const codeField = await resolveAccountCodeField();
+    if (!codeField) return;
 
     if(!name || !cat) return showAlert("알림", "내용을 입력하세요");
 
@@ -1414,14 +1592,16 @@ async function confAdd() {
 
     // DB Insert
     // SpecialType 칼럼 추가됨
-    const { error } = await _supabase.from('ac_master').insert({
+    const payload = {
         Type: type, 
         Standard: cat, 
         Item: name, 
         Usage: usage, 
         tax_free: isTaxFree,         
         special_code: specialTypeVal 
-    });
+    };
+    payload[codeField] = codeVal;
+    const { error } = await _supabase.from('ac_master').insert(payload);
 
     if (error) {
         showAlert("오류", "저장 실패: " + error.message);
@@ -1516,9 +1696,10 @@ async function printReport() {
     const carriedForward = totalSurplus - totalAppropriation;
 
     // 리포트 HTML
+    const e = escapeHtml;
     const reportHtml = `
         <div class="rpt-title">재무제표 및 조정명세서</div>
-        <table class="rpt-header-tbl"><tr><th>회사명</th><td>${info.orgName||''}</td><th>사업자번호</th><td>${info.bizNum||''}</td></tr><tr><th>회계기간</th><td>${rangeText}</td><th>대표자</th><td>${info.ceoName||''}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>
+        <table class="rpt-header-tbl"><tr><th>회사명</th><td>${e(info.orgName||'')}</td><th>사업자번호</th><td>${e(info.bizNum||'')}</td></tr><tr><th>회계기간</th><td>${e(rangeText)}</td><th>대표자</th><td>${e(info.ceoName||'')}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>
         
         <ul class="nav nav-tabs mb-3 no-print" id="rptTab" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rptBS">재무상태표</button></li>
@@ -1530,7 +1711,7 @@ async function printReport() {
         <div class="tab-content">
             <div class="tab-pane fade show active" id="rptBS">
                 <div class="rpt-sec">1. 재무상태표 (Balance Sheet)</div><div style="text-align:right; font-size:11px;">(단위: 원)</div>
-                <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${k}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
+                <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${Object.keys(asset).map(k=>`<div class="d-flex justify-content-between"><span>${e(k)}</span><span>${asset[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${Object.keys(liab).map(k=>`<div class="d-flex justify-content-between"><span>${e(k)}</span><span>${liab[k].toLocaleString()}</span></div>`).join('')}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${Object.keys(equity).map(k=>`<div class="d-flex justify-content-between"><span>${e(k)}</span><span>${equity[k].toLocaleString()}</span></div>`).join('')}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
             </div>
 
             <div class="tab-pane fade" id="rptPL">
@@ -1539,12 +1720,12 @@ async function printReport() {
                 <table class="rpt-tbl">
                     <tr><th>계정과목</th><th>코드</th><th>금액</th></tr>
                     <tr class="bg-light"><td class="fw-bold">I. 매출액</td><td></td><td class="rpt-amt fw-bold">${tRev.toLocaleString()}</td></tr>
-                    ${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}
+                    ${Object.keys(rev).map(k=>`<tr><td class="rpt-indent">${e(k)}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${rev[k].toLocaleString()}</td></tr>`).join('')}
                     <tr class="bg-light"><td class="fw-bold">II. 판매비와관리비</td><td></td><td class="rpt-amt fw-bold">${tExp.toLocaleString()}</td></tr>
-                    ${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}
+                    ${Object.keys(exp).map(k=>`<tr><td class="rpt-indent">${e(k)}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${exp[k].toLocaleString()}</td></tr>`).join('')}
                     <tr class="bg-light" style="border-top:1px solid #aaa;"><td class="fw-bold">III. 영업이익(손실)</td><td></td><td class="rpt-amt fw-bold">${operatingIncome.toLocaleString()}</td></tr>
                     <tr class="bg-light"><td class="fw-bold">IV. 영업외수익</td><td></td><td class="rpt-amt fw-bold">${tOtherRev.toLocaleString()}</td></tr>
-                    ${Object.keys(otherRev).map(k=>`<tr><td class="rpt-indent">${k}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${otherRev[k].toLocaleString()}</td></tr>`).join('')}
+                    ${Object.keys(otherRev).map(k=>`<tr><td class="rpt-indent">${e(k)}</td><td class="text-center text-muted text-small">-</td><td class="rpt-amt">${otherRev[k].toLocaleString()}</td></tr>`).join('')}
                     <tr style="background:#fff3cd; border-top:2px solid #000;"><td class="fw-bold text-center">V. 당기순이익</td><td></td><td class="rpt-amt fw-bold text-danger" style="font-size:1.2em;">${netIncome.toLocaleString()}</td></tr>
                 </table>
             </div>
@@ -1630,7 +1811,7 @@ async function fetchInsuranceShare() {
     inputEl.value = totalShare;
     
     // 알림 메시지 (선택 사항)
-    showAlert("완료", `${ym}월 급여대장에서 직원부담분 합계 ${totalShare.toLocaleString()}원을 가져왔습니다.<br>실제 고지서 금액과 다르다면 수정해주세요.`);
+    showAlert("완료", `${ym}월 급여대장에서 직원부담분 합계 ${totalShare.toLocaleString()}원을 가져왔습니다.\n실제 고지서 금액과 다르다면 수정해주세요.`);
 }
 
   // [신규] 4대보험 납부 시 장부상 부채(직원분+회사분) 조회 함수
@@ -1670,7 +1851,7 @@ async function fetchLiabilitySum() {
     // 편의상 입력창에 장부금액을 넣어줌 (사용자가 고지서 금액으로 수정 가능)
     document.getElementById("inputAmount").value = totalBook;
 
-    showAlert("조회 성공", "장부상 금액을 불러왔습니다.<br>실제 고지서 금액과 다르다면 '금액' 란을 수정하세요.");
+    showAlert("조회 성공", "장부상 금액을 불러왔습니다.\n실제 고지서 금액과 다르다면 '금액' 란을 수정하세요.");
 }
 </script>
 </body>

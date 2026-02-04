@@ -1,6 +1,8 @@
 <!DOCTYPE html>
+<!-- Version: v1.0.1 -->
 <html lang="ko">
 <head>
+  <script>console.log('[Version] v1.0.1 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -189,15 +191,20 @@
 
   <div id="view-todo" class="hidden"><div id="todoList" class="list-group"></div></div>
   <div id="view-history" class="hidden">
-    <div class="input-group mb-3"><input type="text" class="form-control" id="searchKeyword" placeholder="검색" onkeyup="filterHistory()"><button class="btn btn-outline-secondary">🔍</button></div>
+    <div class="input-group mb-3">
+      <input type="text" class="form-control" id="searchKeyword" placeholder="검색" onkeyup="filterHistory()">
+      <button class="btn btn-outline-secondary">🔍</button>
+      <button class="btn btn-outline-success" onclick="exportHistoryCsv()">⬇ CSV</button>
+    </div>
     <div id="historyList" class="list-group"></div>
   </div>
 </div>
 
 <div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
-<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
 <div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">📄 관련 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
+<input type="file" id="signedDocInput" class="hidden" accept=".pdf,.png,.jpg,.jpeg">
 
   <script>
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
@@ -209,6 +216,68 @@ let allUsers = [];
 let modalInstance, alertModalInstance;
 let modalType = ''; 
 let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [];
+let permissionSet = new Set();
+let pendingPhysicalDocId = null;
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function createNotification(targetEmpId, title, message, linkUrl, meta = null) {
+    try {
+        if (!targetEmpId) return;
+        await _supabase.from('erp_notifications').insert({
+            user_emp_id: targetEmpId,
+            title: title || '알림',
+            message: message || '',
+            type: 'approval',
+            link_url: linkUrl || 'approval.html',
+            meta: meta,
+            created_by: myInfo?.emp_id || null
+        });
+    } catch (e) { /* noop */ }
+}
+
+async function logAudit(action, entityId, summary, detail = null) {
+    try {
+        await _supabase.from('erp_audit_logs').insert({
+            actor_emp_id: myInfo?.emp_id || null,
+            actor_name: myInfo?.emp_name || null,
+            action,
+            entity_type: 'ref_approval',
+            entity_id: entityId ? String(entityId) : null,
+            summary: summary || '',
+            detail
+        });
+    } catch (e) { /* noop */ }
+}
+
+const ATTACHMENT_RULES = {
+    maxSizeMB: 10,
+    allowedExt: ['pdf', 'png', 'jpg', 'jpeg']
+};
+
+function validateAttachments(fileList) {
+    if (!fileList || fileList.length === 0) return { ok: true };
+    const maxBytes = ATTACHMENT_RULES.maxSizeMB * 1024 * 1024;
+    for (const file of fileList) {
+        const name = file.name || '';
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+        if (ATTACHMENT_RULES.allowedExt.length && !ATTACHMENT_RULES.allowedExt.includes(ext)) {
+            return { ok: false, message: `허용되지 않는 파일 형식입니다: ${name}` };
+        }
+        if (file.size > maxBytes) {
+            return { ok: false, message: `파일 용량이 너무 큽니다 (최대 ${ATTACHMENT_RULES.maxSizeMB}MB): ${name}` };
+        }
+    }
+    return { ok: true };
+}
 
 window.onload = async function() {
     modalInstance = new bootstrap.Modal(document.getElementById('userModal'));
@@ -217,6 +286,13 @@ window.onload = async function() {
     const stored = localStorage.getItem('erp_user');
     if (!stored) { location.href = 'index.html'; return; }
     myInfo = JSON.parse(stored);
+    permissionSet = await loadPermissions(myInfo);
+    localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+    if (permissionSet.size > 0 && !permissionSet.has('approval.view')) {
+        showAlert("접근 권한이 없습니다.");
+        setTimeout(() => location.href = 'index.html', 1200);
+        return;
+    }
 
     // [로직] 직원 목록 로드 (1급 이사장 -> 9급 사원)
     const { data } = await _supabase.from('ref_employees').select('*').order('auth_level', {ascending: true});
@@ -225,6 +301,34 @@ window.onload = async function() {
     calculateLeave(); // 연차 계산 (대리상신 고려하여 함수 분리됨)
     handleCategoryChange(); // UI 초기화
 };
+
+async function loadPermissions(user) {
+    const result = new Set();
+    if (!user) return result;
+    const roleKey = user.role || '';
+    const posKey = user.position || '';
+    if (!roleKey && !posKey) return result;
+
+    const { data } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .in('scope', ['role', 'position'])
+        .in('role_key', [roleKey, posKey])
+        .eq('is_enabled', true);
+
+    if (Array.isArray(data)) {
+        data.forEach(row => {
+            if (row.permission_key) result.add(row.permission_key);
+        });
+    }
+    return result;
+}
+
+function canPerform(permissionKey) {
+    if (!permissionKey) return true;
+    if (!permissionSet || permissionSet.size === 0) return true;
+    return permissionSet.has(permissionKey);
+}
 
 // [추가] 대리 상신 모드 토글
 function toggleProxyMode() {
@@ -241,13 +345,16 @@ function toggleProxyMode() {
         });
 
         targetSel.innerHTML = "";
-        if (subordinates.length === 0) {
-            alert("대리 상신 가능한 하급자가 없습니다.");
-            document.getElementById("chkProxy").checked = false;
-            return;
-        }
+    if (subordinates.length === 0) {
+        showAlert("대리 상신 가능한 하급자가 없습니다.");
+        document.getElementById("chkProxy").checked = false;
+        return;
+    }
         subordinates.forEach(u => {
-            targetSel.innerHTML += `<option value="${u.emp_id}">${u.emp_name} (${u.position})</option>`;
+            const opt = document.createElement("option");
+            opt.value = u.emp_id;
+            opt.textContent = `${u.emp_name} (${u.position})`;
+            targetSel.appendChild(opt);
         });
         targetDiv.classList.remove("hidden");
     } else {
@@ -273,13 +380,18 @@ async function calculateLeave() {
     if(halfBadge) halfBadge.innerText = val;
 }
 
-function showAlert(msg) { document.getElementById("alertBody").innerHTML = msg; alertModalInstance.show(); }
+function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModalInstance.show(); }
 
 function switchTab(tab) {
     document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
     if(tab==='draft') { document.getElementById('view-draft').classList.remove('hidden'); document.getElementById('tab1').classList.add('active'); }
-    else if(tab==='todo') { document.getElementById('view-todo').classList.remove('hidden'); document.getElementById('tab2').classList.add('active'); loadTodoList(); }
+    else if(tab==='todo') { 
+        if (!canPerform('approval.process')) { showAlert("접근 권한이 없습니다."); switchTab('draft'); return; }
+        document.getElementById('view-todo').classList.remove('hidden'); 
+        document.getElementById('tab2').classList.add('active'); 
+        loadTodoList(); 
+    }
     else { document.getElementById('view-history').classList.remove('hidden'); document.getElementById('tab3').classList.add('active'); loadHistoryList(); }
 }
 
@@ -432,7 +544,23 @@ function renderUserList() {
         const isSelected = tempSelection.some(s => s.emp_id === u.emp_id);
         const a = document.createElement("a");
         a.className = `list-group-item list-group-item-action user-select-item d-flex justify-content-between ${isSelected ? 'active' : ''}`;
-        a.innerHTML = `<div><span class="badge bg-secondary me-2">${u.position}</span>${u.emp_name} <small class="text-muted">(${u.department||'-'})</small></div>${isSelected?'✅':''}`;
+        const left = document.createElement("div");
+        const badge = document.createElement("span");
+        badge.className = "badge bg-secondary me-2";
+        badge.textContent = u.position || '';
+        left.appendChild(badge);
+        left.appendChild(document.createTextNode(u.emp_name || ''));
+        const small = document.createElement("small");
+        small.className = "text-muted";
+        small.textContent = `(${u.department || '-'})`;
+        left.appendChild(document.createTextNode(" "));
+        left.appendChild(small);
+        a.appendChild(left);
+        if (isSelected) {
+            const mark = document.createElement("span");
+            mark.textContent = "✅";
+            a.appendChild(mark);
+        }
         a.onclick = () => toggleSelect(u);
         listEl.appendChild(a);
     });
@@ -458,13 +586,13 @@ function confirmSelection() {
 function renderLinePreview() {
     const el = document.getElementById("linePreview");
     if(finalApprovers.length === 0) { el.innerText = "결재자를 추가해주세요."; return; }
-    el.innerHTML = finalApprovers.map((u, i) => `<span class="line-step">${u.emp_name} ${u.position}</span>` + (i < finalApprovers.length-1 ? '<span class="line-arrow">➡</span>' : '')).join("");
+    el.innerHTML = finalApprovers.map((u, i) => `<span class="line-step">${escapeHtml(u.emp_name)} ${escapeHtml(u.position)}</span>` + (i < finalApprovers.length-1 ? '<span class="line-arrow">➡</span>' : '')).join("");
 }
 
 function renderRefPreview() {
     const el = document.getElementById("refPreview");
     if(finalRefs.length === 0) { el.innerText = "참조자가 없습니다."; return; }
-    el.innerHTML = finalRefs.map(u => `<span class="ref-step">📢 ${u.emp_name}</span>`).join("");
+    el.innerHTML = finalRefs.map(u => `<span class="ref-step">📢 ${escapeHtml(u.emp_name)}</span>`).join("");
 }
 function resetLine(type) { if(type==='approver') { finalApprovers=[]; renderLinePreview(); } else { finalRefs=[]; renderRefPreview(); } }
 
@@ -472,6 +600,7 @@ function resetLine(type) { if(type==='approver') { finalApprovers=[]; renderLine
 async function handleDraftSubmit(e) {
     e.preventDefault();
     if (finalApprovers.length === 0) return showAlert("결재선을 지정해주세요.");
+    if (!canPerform('approval.submit')) return showAlert("상신 권한이 없습니다.");
 
     const mainType = document.getElementById("appCategory").value;
     let subType = mainType; 
@@ -534,6 +663,11 @@ async function handleDraftSubmit(e) {
         }
     }
 
+    // 첨부파일 형식/용량 검증
+    const fileInput = document.getElementById("attachFile");
+    const validation = validateAttachments(fileInput.files);
+    if (!validation.ok) return showAlert(validation.message);
+
     // 2. [자동 정렬] 결재선: 직급 역순 (하급자 -> 상급자)
     // auth_level 숫자가 큰 사람(9) -> 작은 사람(1)
     finalApprovers.sort((a, b) => b.auth_level - a.auth_level);
@@ -542,7 +676,6 @@ async function handleDraftSubmit(e) {
     btn.disabled = true; btn.innerText = "처리 중...";
 
     // 3. 파일 업로드
-    const fileInput = document.getElementById("attachFile");
     const uploadedUrls = [];
     for (let i = 0; i < fileInput.files.length; i++) {
         const file = fileInput.files[i];
@@ -553,11 +686,13 @@ async function handleDraftSubmit(e) {
         uploadedUrls.push(publicUrl);
     }
 
+    const relatedDocId = document.getElementById("relDocId").value || null;
+
     // 4. DB 저장
     const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
     const refData = finalRefs.map(u => ({ emp_id: u.emp_id, name: u.emp_name }));
 
-    const { error } = await _supabase.from('ref_approval').insert({
+    const { data: insertedDoc, error } = await _supabase.from('ref_approval').insert({
         doc_type: subType, 
         title: title,
         content: document.getElementById("appDesc").value + appendDesc, // 시스템 기록 추가
@@ -571,14 +706,23 @@ async function handleDraftSubmit(e) {
         status: initialStatus, // 가승인 or 진행중
         related_doc_id: relatedDocId, // [New]
         created_at: new Date()
-    });
+    }).select('id').single();
 
     if (error) { showAlert("상신 실패: " + error.message); btn.disabled = false; }
-    else { showAlert("상신되었습니다."); location.reload(); }
+    else {
+        const docId = insertedDoc?.id;
+        if (docId) {
+            await logAudit('approval.submit', docId, `${title} 상신`, { status: initialStatus });
+            await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        }
+        showAlert("상신되었습니다.");
+        location.reload();
+    }
 }
 
 // [핵심] 결재 처리
 async function procDoc(docId, action) {
+    if (!canPerform('approval.process')) return showAlert("처리 권한이 없습니다.");
     const reason = prompt(`${action} 사유 (선택):`);
     if (reason === null) return;
 
@@ -616,22 +760,41 @@ async function procDoc(docId, action) {
     }
 
     await _supabase.from('ref_approval').update({ approval_line: line, current_approver: nextUser, status: newStatus }).eq('id', docId);
+    await logAudit('approval.process', docId, `${action} 처리`, { status: newStatus, reason: reason || null });
+
+    if (action === '반려') {
+        await createNotification(doc.drafter_id, '결재 반려', `${doc.title} 문서가 반려되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+    } else if (newStatus === '완료') {
+        await createNotification(doc.drafter_id, '결재 완료', `${doc.title} 문서가 최종 승인되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+    } else if (nextUser) {
+        await createNotification(nextUser, '결재 요청', `${doc.title} 문서 결재 차례입니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+    }
+
     showAlert("처리되었습니다."); loadTodoList();
 }
 
 // [추가] 사용자 액션 (대리상신 건에 대한 증빙제출/취소)
 async function procUserAction(docId, action) {
+    const { data: doc } = await _supabase.from('ref_approval').select('title, current_approver, drafter_id').eq('id', docId).single();
     if (action === '취소') {
         const reason = prompt("취소 사유를 입력하세요:");
         if (!reason) return;
         // 결재취소 상태로 변경 (연차 복구됨)
         await _supabase.from('ref_approval').update({ status: '결재취소', comment: `[사용자 취소] ${reason}` }).eq('id', docId);
+        await logAudit('approval.cancel', docId, '사용자 취소', { reason });
+        if (doc?.current_approver) {
+            await createNotification(doc.current_approver, '결재 취소', `${doc.title || '문서'}가 취소되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        }
         showAlert("취소되었습니다.");
         loadHistoryList();
     } else if (action === '증빙제출') {
         // (간소화) 실제 구현 시 파일 모달 필요. 여기선 안내만.
-        alert("증빙 서류가 제출되었습니다. (관리자 확인 대기)");
+        showAlert("증빙 서류가 제출되었습니다. (관리자 확인 대기)");
         await _supabase.from('ref_approval').update({ status: '증빙확인중' }).eq('id', docId);
+        await logAudit('approval.evidence', docId, '증빙 제출', null);
+        if (doc?.current_approver) {
+            await createNotification(doc.current_approver, '증빙 제출', `${doc.title || '문서'}에 증빙이 제출되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        }
         loadHistoryList();
     }
 }
@@ -655,8 +818,46 @@ async function loadHistoryList() {
 }
 function filterHistory() {
     const key = document.getElementById("searchKeyword").value.toLowerCase();
-    const filtered = historyCache.filter(d => d.title.toLowerCase().includes(key));
+    const filtered = historyCache.filter(d => (d.title || '').toLowerCase().includes(key));
     renderDocs(document.getElementById("historyList"), filtered, false);
+}
+
+function exportHistoryCsv() {
+    const key = document.getElementById("searchKeyword").value.toLowerCase();
+    const list = key ? historyCache.filter(d => (d.title || '').toLowerCase().includes(key)) : historyCache;
+    if (!list || list.length === 0) return showAlert("내보낼 데이터가 없습니다.");
+
+    const headers = ['id','doc_type','title','status','drafter_name','created_at','amount','current_approver','signed_doc_url'];
+    const rows = list.map(d => [
+        d.id,
+        d.doc_type || '',
+        d.title || '',
+        d.status || '',
+        d.drafter_name || '',
+        d.created_at || '',
+        d.amount || 0,
+        d.current_approver || '',
+        d.signed_doc_url || ''
+    ]);
+
+    const csvEscape = (val) => {
+        const str = String(val ?? '');
+        if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+        return str;
+    };
+
+    const csv = [headers.join(',')]
+        .concat(rows.map(r => r.map(csvEscape).join(',')))
+        .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateTag = new Date().toISOString().slice(0,10);
+    a.download = `approval_history_${dateTag}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // [수정] 문서 렌더링 (가승인 버튼 포함)
@@ -665,30 +866,226 @@ function renderDocs(target, list, isTodo) {
     target.innerHTML = "";
     if(!list || list.length===0) { target.innerHTML = '<div class="p-3 text-center text-muted">없음</div>'; return; }
     list.forEach(doc => {
-        const lineHtml = doc.approval_line.map(s => `<span class="small me-2 ${s.status==='승인'?'text-success':(s.status==='반려'?'text-danger':'text-muted')}">${s.status==='승인'?'✅':(s.status==='반려'?'⛔':'⬜')} ${s.name}</span>`).join("");
+        const approvalLine = Array.isArray(doc.approval_line) ? doc.approval_line : [];
+        const safeDocType = escapeHtml(doc.doc_type);
+        const safeTitle = escapeHtml(doc.title);
+        const safeDate = escapeHtml(doc.created_at ? doc.created_at.slice(0,10) : '-');
+        const lineHtml = approvalLine.map(s => {
+            const status = s.status || '';
+            const name = escapeHtml(s.name);
+            const statusClass = status==='승인'?'text-success':(status==='반려'?'text-danger':'text-muted');
+            const statusIcon = status==='승인'?'✅':(status==='반려'?'⛔':'⬜');
+            return `<span class="small me-2 ${statusClass}">${statusIcon} ${name}</span>`;
+        }).join("");
+
+        let ageBadge = "";
+        if (doc.created_at) {
+            const createdAt = new Date(doc.created_at);
+            if (!Number.isNaN(createdAt.getTime())) {
+                const ageDays = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+                if (ageDays >= 0) {
+                    const ageClass = ageDays >= 7 ? 'bg-danger' : (ageDays >= 3 ? 'bg-warning text-dark' : 'bg-light text-dark');
+                    ageBadge = `<span class="badge ${ageClass} ms-2">${ageDays}일 경과</span>`;
+                }
+            }
+        }
         
-        // [New] 관련 문서 링크 버튼 생성
         let relBtn = "";
-        if (doc.related_doc_id) {
-            relBtn = `<button class="btn btn-sm btn-outline-info ms-2" style="font-size: 0.75rem;" onclick="openRelView(${doc.related_doc_id})">🔗 근거문서 보기</button>`;
+        const relId = Number(doc.related_doc_id);
+        if (Number.isFinite(relId)) {
+            relBtn = `<button class="btn btn-sm btn-outline-info ms-2" style="font-size: 0.75rem;" onclick="openRelView(${relId})">🔗 근거문서 보기</button>`;
         }
 
         let btnHtml = "";
         if (isTodo) {
             btnHtml = `<div class="mt-2 text-end"><button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>`;
         } else {
+            const actions = [];
+            const isSecretary = (myInfo?.position === '사무국장' || myInfo?.role === 'admin');
+            const hasChairman = approvalLine.some(l => (l.position || '').includes('이사장'));
+            const canPhysical = isSecretary && hasChairman && canPerform('approval.physical') && doc.drafter_id === myInfo.emp_id;
+
             if (doc.status === '가승인' && doc.drafter_id === myInfo.emp_id) {
-                btnHtml = `<div class="mt-2 text-end"><span class="badge bg-warning text-dark me-2">⚠️ 증빙제출 필요</span><button class="btn btn-sm btn-primary me-1" onclick="procUserAction(${doc.id}, '증빙제출')">📁 증빙제출</button><button class="btn btn-sm btn-secondary" onclick="procUserAction(${doc.id}, '취소')">🗑️ 취소</button></div>`;
+                actions.push(`<span class="badge bg-warning text-dark me-2">⚠️ 증빙제출 필요</span>`);
+                actions.push(`<button class="btn btn-sm btn-primary me-1" onclick="procUserAction(${doc.id}, '증빙제출')">📁 증빙제출</button>`);
+                actions.push(`<button class="btn btn-sm btn-secondary" onclick="procUserAction(${doc.id}, '취소')">🗑️ 취소</button>`);
+            }
+
+            if (canPhysical && ['진행중','가승인','증빙확인중'].includes(doc.status)) {
+                actions.push(`<button class="btn btn-sm btn-outline-primary me-1" onclick="printPhysicalDoc(${doc.id})">🖨️ 실물결재 출력</button>`);
+            }
+            if (canPhysical && doc.status === '실물결재대기') {
+                actions.push(`<button class="btn btn-sm btn-success me-1" onclick="startPhysicalComplete(${doc.id})">✅ 서명첨부 완료</button>`);
+            }
+            if (doc.signed_doc_url) {
+                const safeUrl = encodeURIComponent(doc.signed_doc_url);
+                actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="openSignedDoc('${safeUrl}')">📎 서명문서</button>`);
+            }
+
+            const badgeClass = (doc.status === '완료' || doc.status === '실물결재완료')
+                ? 'bg-success'
+                : (doc.status === '반려' || doc.status === '결재취소')
+                    ? 'bg-danger'
+                    : 'bg-warning';
+            const safeStatus = escapeHtml(doc.status);
+            const badgeHtml = `<span class="badge ${badgeClass}">${safeStatus}</span>`;
+
+            if (actions.length > 0) {
+                btnHtml = `<div class="mt-2 text-end">${badgeHtml} ${actions.join(' ')}</div>`;
             } else {
-                let badge = doc.status==='완료'?'bg-success':(doc.status==='반려'||doc.status==='결재취소'?'bg-danger':'bg-warning');
-                btnHtml = `<div class="mt-2 text-end"><span class="badge ${badge}">${doc.status}</span></div>`;
+                btnHtml = `<div class="mt-2 text-end">${badgeHtml}</div>`;
             }
         }
         
-        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${doc.doc_type}</span>${relBtn}</div><small class="text-muted">${doc.created_at.slice(0,10)}</small></div><h6 class="fw-bold">${doc.title}</h6><div class="small mb-2">${lineHtml}</div>${btnHtml}</div>`;
+        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${safeDocType}</span>${relBtn}</div><small class="text-muted">${safeDate}${ageBadge}</small></div><h6 class="fw-bold">${safeTitle}</h6><div class="small mb-2">${lineHtml}</div>${btnHtml}</div>`;
     });
 }
-function updateFileList() { document.getElementById("fileListArea").innerHTML = Array.from(document.getElementById("attachFile").files).map(f => `<div class="file-item">📎 ${f.name}</div>`).join(""); }
+function updateFileList() {
+    const area = document.getElementById("fileListArea");
+    area.innerHTML = "";
+    Array.from(document.getElementById("attachFile").files).forEach(f => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+        item.textContent = `📎 ${f.name}`;
+        area.appendChild(item);
+    });
+}
+
+function openSignedDoc(encodedUrl) {
+    if (!encodedUrl) return;
+    const url = decodeURIComponent(encodedUrl);
+    window.open(url, '_blank');
+}
+
+function buildPhysicalPrintHtml(doc) {
+    const safeTitle = escapeHtml(doc.title || '');
+    const safeType = escapeHtml(doc.doc_type || '');
+    const safeDrafter = escapeHtml(doc.drafter_name || '');
+    const safeDate = escapeHtml(doc.created_at ? doc.created_at.slice(0,10) : '');
+    const safeAmount = Number(doc.amount || 0).toLocaleString();
+    const safeContent = escapeHtml(doc.content || '').replace(/\n/g, '<br>');
+
+    const lineText = Array.isArray(doc.approval_line)
+        ? doc.approval_line.map(l => `${escapeHtml(l.position || '')} ${escapeHtml(l.name || '')}`).join(' → ')
+        : '';
+
+    return `
+      <html>
+        <head>
+          <title>실물 결재 출력</title>
+          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+          <style>
+            body { font-family: "Malgun Gothic", sans-serif; padding: 30px; }
+            .print-area { max-width: 900px; margin: 0 auto; }
+            .sign-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .sign-table th, .sign-table td { border: 1px solid #000; padding: 10px; text-align: center; height: 60px; }
+            .print-actions { position: fixed; bottom: 20px; right: 20px; }
+            @media print { .print-actions { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="print-area">
+            <h3 class="text-center mb-4">전자결재 문서</h3>
+            <div class="mb-2"><strong>문서 유형:</strong> ${safeType}</div>
+            <div class="mb-2"><strong>제목:</strong> ${safeTitle}</div>
+            <div class="mb-2"><strong>작성자:</strong> ${safeDrafter}</div>
+            <div class="mb-2"><strong>작성일:</strong> ${safeDate}</div>
+            <div class="mb-2"><strong>결재선:</strong> ${lineText}</div>
+            <div class="mb-3"><strong>금액:</strong> ${safeAmount}원</div>
+            <div class="border p-3" style="min-height: 200px; white-space: pre-wrap;">${safeContent}</div>
+
+            <table class="sign-table">
+              <tr>
+                <th>담당</th>
+                <th>사무국장</th>
+                <th>이사장</th>
+              </tr>
+              <tr>
+                <td></td>
+                <td>${escapeHtml(myInfo?.emp_name || '')}</td>
+                <td></td>
+              </tr>
+            </table>
+          </div>
+          <div class="print-actions">
+            <button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ 인쇄</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.close()">닫기</button>
+          </div>
+        </body>
+      </html>
+    `;
+}
+
+async function printPhysicalDoc(docId) {
+    if (!canPerform('approval.physical')) return showAlert("처리 권한이 없습니다.");
+    const { data: doc, error } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
+    if (error || !doc) return showAlert("문서를 찾을 수 없습니다.");
+
+    const win = window.open('', '_blank');
+    win.document.write(buildPhysicalPrintHtml(doc));
+    win.document.close();
+
+    if (!['실물결재대기', '실물결재완료'].includes(doc.status)) {
+        await _supabase.from('ref_approval')
+            .update({ status: '실물결재대기', current_approver: null })
+            .eq('id', docId);
+        await logAudit('approval.physical_print', docId, '실물결재 출력', null);
+        loadHistoryList();
+    }
+}
+
+function startPhysicalComplete(docId) {
+    if (!canPerform('approval.physical')) return showAlert("처리 권한이 없습니다.");
+    pendingPhysicalDocId = docId;
+    const input = document.getElementById('signedDocInput');
+    input.value = "";
+    input.click();
+}
+
+document.getElementById('signedDocInput').addEventListener('change', async (e) => {
+    const fileInput = e.target;
+    if (!pendingPhysicalDocId) return;
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    const validation = validateAttachments(fileInput.files);
+    if (!validation.ok) return showAlert(validation.message);
+
+    const file = fileInput.files[0];
+    const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const { error: uploadErr } = await _supabase.storage.from('attachments').upload(safeName, file);
+    if (uploadErr) return showAlert("파일 오류: " + uploadErr.message);
+    const { data: { publicUrl } } = _supabase.storage.from('attachments').getPublicUrl(safeName);
+
+    const { data: doc } = await _supabase.from('ref_approval').select('approval_line, title, drafter_id').eq('id', pendingPhysicalDocId).single();
+    const nowIso = new Date().toISOString();
+    let line = Array.isArray(doc?.approval_line) ? doc.approval_line : [];
+    line = line.map(l => {
+        if ((l.position || '').includes('이사장')) {
+            return { ...l, status: '승인', processed_at: nowIso, comment: '실물결재 확인' };
+        }
+        return l;
+    });
+
+    await _supabase.from('ref_approval').update({
+        status: '실물결재완료',
+        signed_doc_url: publicUrl,
+        physical_approved_at: nowIso,
+        physical_approved_by: myInfo?.emp_id || null,
+        approval_line: line,
+        current_approver: null,
+        processed_at: nowIso
+    }).eq('id', pendingPhysicalDocId);
+
+    await logAudit('approval.physical_complete', pendingPhysicalDocId, '실물결재 완료', { signed_doc_url: publicUrl });
+    if (doc?.drafter_id && doc.drafter_id !== myInfo?.emp_id) {
+        await createNotification(doc.drafter_id, '실물결재 완료', `${doc.title || '문서'} 실물결재가 완료되었습니다.`, `approval.html?doc=${pendingPhysicalDocId}`, { doc_id: pendingPhysicalDocId });
+    }
+
+    pendingPhysicalDocId = null;
+    fileInput.value = "";
+    showAlert("실물결재가 완료되었습니다.");
+    loadHistoryList();
+});
 
     // --- [신규 기능] 관련 문서 검색 및 보기 ---
 
@@ -729,7 +1126,11 @@ async function runRelSearch() {
     if (key) query = query.or(`title.ilike.%${key}%,drafter_name.ilike.%${key}%`);
 
     const { data, error } = await query;
-    if (error) { listEl.innerHTML = '오류: ' + error.message; return; }
+    if (error) {
+        listEl.innerHTML = "";
+        listEl.textContent = '오류: ' + error.message;
+        return;
+    }
 
     // 부서 필터링 (클라이언트 사이드)
     // allUsers 배열을 활용해 작성자의 부서를 확인
@@ -749,7 +1150,20 @@ async function runRelSearch() {
         const item = document.createElement("a");
         item.className = "list-group-item list-group-item-action";
         item.style.cursor = "pointer";
-        item.innerHTML = `<div class="d-flex justify-content-between"><span class="fw-bold">${doc.title}</span><small>${doc.created_at.slice(0,10)}</small></div><small class="text-muted">${doc.drafter_name} | ${Number(doc.amount).toLocaleString()}원</small>`;
+        const header = document.createElement("div");
+        header.className = "d-flex justify-content-between";
+        const title = document.createElement("span");
+        title.className = "fw-bold";
+        title.textContent = doc.title || "";
+        const date = document.createElement("small");
+        date.textContent = doc.created_at ? doc.created_at.slice(0,10) : "";
+        header.appendChild(title);
+        header.appendChild(date);
+        const meta = document.createElement("small");
+        meta.className = "text-muted";
+        meta.textContent = `${doc.drafter_name || ''} | ${Number(doc.amount || 0).toLocaleString()}원`;
+        item.appendChild(header);
+        item.appendChild(meta);
         item.onclick = () => selectRelDoc(doc);
         listEl.appendChild(item);
     });
@@ -758,7 +1172,8 @@ async function runRelSearch() {
 // 3. 문서 선택
 function selectRelDoc(doc) {
     document.getElementById("relDocId").value = doc.id;
-    document.getElementById("relDocName").innerHTML = `<span class="badge bg-success me-2">연동됨</span><b>${doc.title}</b> (${doc.drafter_name})`;
+    const nameEl = document.getElementById("relDocName");
+    nameEl.textContent = `연동됨 ${doc.title || ''} (${doc.drafter_name || ''})`;
     relSearchModal.hide();
 }
 
@@ -766,21 +1181,42 @@ function selectRelDoc(doc) {
 async function openRelView(docId) {
     currentViewingDocId = docId;
     const contentEl = document.getElementById("relViewContent");
-    contentEl.innerHTML = "Loading...";
+    contentEl.textContent = "Loading...";
     relViewModal.show();
 
     const { data, error } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
-    if (error || !data) { contentEl.innerHTML = "문서를 불러올 수 없습니다."; return; }
+    if (error || !data) { contentEl.textContent = "문서를 불러올 수 없습니다."; return; }
 
-    // 보기 전용 템플릿 렌더링
-    const lines = data.approval_line.map(l => `${l.name}(${l.status})`).join(" → ");
-    contentEl.innerHTML = `
-        <h4 class="fw-bold mb-3">${data.title}</h4>
-        <div class="mb-3 text-muted small">작성자: ${data.drafter_name} | 기안일: ${data.created_at.slice(0,10)} | 결재선: ${lines}</div>
-        <hr>
-        <div class="p-3 bg-light rounded" style="white-space: pre-wrap; min-height: 200px;">${data.content}</div>
-        <div class="mt-3 text-end fw-bold">금액: ${Number(data.amount).toLocaleString()}원</div>
-    `;
+    // 보기 전용 템플릿 렌더링 (안전한 DOM 구성)
+    const lines = (Array.isArray(data.approval_line) ? data.approval_line : [])
+        .map(l => `${l.name || ''}(${l.status || ''})`).join(" → ");
+    contentEl.innerHTML = "";
+
+    const titleEl = document.createElement("h4");
+    titleEl.className = "fw-bold mb-3";
+    titleEl.textContent = data.title || "";
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "mb-3 text-muted small";
+    metaEl.textContent = `작성자: ${data.drafter_name || ''} | 기안일: ${data.created_at ? data.created_at.slice(0,10) : ''} | 결재선: ${lines}`;
+
+    const hr = document.createElement("hr");
+
+    const contentBox = document.createElement("div");
+    contentBox.className = "p-3 bg-light rounded";
+    contentBox.style.whiteSpace = "pre-wrap";
+    contentBox.style.minHeight = "200px";
+    contentBox.textContent = data.content || "";
+
+    const amountEl = document.createElement("div");
+    amountEl.className = "mt-3 text-end fw-bold";
+    amountEl.textContent = `금액: ${Number(data.amount || 0).toLocaleString()}원`;
+
+    contentEl.appendChild(titleEl);
+    contentEl.appendChild(metaEl);
+    contentEl.appendChild(hr);
+    contentEl.appendChild(contentBox);
+    contentEl.appendChild(amountEl);
 }
 
 // 5. 새 창으로 보기

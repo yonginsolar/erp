@@ -1,3 +1,4 @@
+/* Version: v1.0.1
 /**
  * [File: patch_note.js]
  * 패치노트 UI 및 관리자 기능 (작성/삭제) 포함
@@ -56,6 +57,75 @@ const patchNoteModalHTML = `
 
 // HTML 주입
 document.body.insertAdjacentHTML('beforeend', patchNoteModalHTML);
+
+// 공통 알림/확인 모달 (패치노트 전용 fallback)
+const patchAlertModalHTML = `
+<div class="modal fade" id="patchAlertModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4" id="patchAlertBody" style="white-space: pre-wrap;"></div>
+      <div class="modal-footer justify-content-center p-1 border-0">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+const patchConfirmModalHTML = `
+<div class="modal fade" id="patchConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white p-2">
+        <h6 class="modal-title fw-bold mb-0">⚠️ 확인</h6>
+      </div>
+      <div class="modal-body text-center py-4" id="patchConfirmBody" style="white-space: pre-wrap;"></div>
+      <div class="modal-footer justify-content-center p-2 border-0">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-primary btn-sm" id="patchConfirmYes">확인</button>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+document.body.insertAdjacentHTML('beforeend', patchAlertModalHTML);
+document.body.insertAdjacentHTML('beforeend', patchConfirmModalHTML);
+
+let patchAlertModal;
+let patchConfirmModal;
+let patchConfirmCallback = null;
+
+function patchShowAlert(message) {
+    if (typeof showAlert === 'function') {
+        showAlert(message);
+        return;
+    }
+    if (!patchAlertModal) patchAlertModal = new bootstrap.Modal(document.getElementById('patchAlertModal'));
+    const body = document.getElementById('patchAlertBody');
+    if (body) body.textContent = message || '';
+    patchAlertModal.show();
+}
+
+function patchShowConfirm(message, callback) {
+    if (typeof showConfirm === 'function') {
+        showConfirm(message, callback);
+        return;
+    }
+    if (!patchConfirmModal) patchConfirmModal = new bootstrap.Modal(document.getElementById('patchConfirmModal'));
+    const body = document.getElementById('patchConfirmBody');
+    if (body) body.textContent = message || '';
+    patchConfirmCallback = typeof callback === 'function' ? callback : null;
+    const btn = document.getElementById('patchConfirmYes');
+    if (btn) {
+        btn.onclick = () => {
+            if (patchConfirmCallback) patchConfirmCallback();
+            patchConfirmCallback = null;
+            patchConfirmModal.hide();
+        };
+    }
+    patchConfirmModal.show();
+}
 
 // ============================================================
 // [로직] 데이터 로드 및 관리
@@ -151,7 +221,10 @@ async function savePatchNote() {
     const content = document.getElementById("pnContent").value;
     const isMajor = document.getElementById("pnMajor").checked;
 
-    if(!version || !title || !content) return alert("내용을 모두 입력해주세요.");
+    if(!version || !title || !content) {
+        patchShowAlert("내용을 모두 입력해주세요.");
+        return;
+    }
 
     const { error } = await _supabase.from('sys_patch_notes').insert({
         version: version,
@@ -162,9 +235,9 @@ async function savePatchNote() {
     });
 
     if(error) {
-        alert("저장 실패: " + error.message);
+        patchShowAlert("저장 실패: " + error.message);
     } else {
-        alert("업데이트 되었습니다!");
+        patchShowAlert("업데이트 되었습니다!");
         // 폼 초기화 및 리스트 갱신
         document.getElementById("pnVersion").value = "";
         document.getElementById("pnTitle").value = "";
@@ -177,12 +250,13 @@ async function savePatchNote() {
 
 // 5. 패치노트 삭제 (관리자용)
 async function deletePatchNote(id) {
-    if(!confirm("이 패치 내역을 삭제하시겠습니까?")) return;
-    
-    const { error } = await _supabase.from('sys_patch_notes').delete().eq('id', id);
-    
-    if(error) alert("삭제 실패: " + error.message);
-    else await loadPatchList();
+    return patchShowConfirm("이 패치 내역을 삭제하시겠습니까?", async () => {
+            const { error } = await _supabase.from('sys_patch_notes').delete().eq('id', id);
+            if(error) {
+                patchShowAlert("삭제 실패: " + error.message);
+            }
+            else await loadPatchList();
+        });
 }
 
 // [Helper] 관리자 권한 체크 및 UI 제어
