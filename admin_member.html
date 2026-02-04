@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.4
-Change: Compute 신규가입(7일) from pending list to avoid mismatch.
+Version: v1.0.5
+Change: 신규가입(7일) count now requires 승인대기 + 7일 이내 (DB-side).
 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.4 | admin_member.html');</script>
+  <script>console.log('[Version] v1.0.5 | admin_member.html');</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>☀️ 협동조합 통합 관리자</title>
@@ -3713,16 +3713,17 @@ async function loadDashboard() {
     const { count: totalCount } = await _supabase
         .from('coop_members').select('*', { count: 'exact', head: true });
 
-    // 2. [기존] 승인 대기 조합원 수 + 신규가입(7일) 산출
-    const { data: pendingRows, count: pendingCount } = await _supabase
-        .from('coop_members')
-        .select('created_at', { count: 'exact' })
-        .eq('status', '승인대기');
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const newPendingCount = Array.isArray(pendingRows)
-        ? pendingRows.filter(r => r.created_at && new Date(r.created_at) >= weekAgo).length
-        : 0;
+// 2. [수정] 승인 대기 조합원 수 + 신규가입(7일) 동시 조건
+const { count: pendingCount } = await _supabase
+    .from('coop_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', '승인대기');
+const weekAgoISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+const { count: newPendingCount } = await _supabase
+    .from('coop_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', '승인대기')
+    .gte('created_at', weekAgoISO);
 
     // 3. [변경] 파트너 신청 대기 건수 조회 (consult_logs 대체)
     // site_partners 테이블에서 status가 'pending'인 것만 카운트
