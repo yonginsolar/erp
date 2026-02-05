@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.2 -->
+<!-- Version: v1.0.5 | Change: 2026-02-05 - Avoid KST helper name collision with shared scripts. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.2 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.5 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -172,6 +172,11 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 const SUPABASE_URL='https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const KST_TZ_MYPAGE='Asia/Seoul';
+const formatMypageKstDate=(value,fallback='')=>{if(!value) return fallback; const d=new Date(value); if(Number.isNaN(d.getTime())) return fallback; return new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d)};
+const formatMypageKstMonth=(value=new Date())=>{const d=value instanceof Date?value:new Date(value); if(Number.isNaN(d.getTime())) return ''; return new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit'}).format(d)};
+const toUtcIsoFromKstInput=(value)=>{if(!value) return null; return new Date(`${value}:00+09:00`).toISOString()};
+const getMypageKstDateParts=(value)=>{if(!value) return {date:'',time:'',hasTime:false}; if(typeof value==='string' && !value.includes('T')) return {date:value,time:'',hasTime:false}; const d=new Date(value); if(Number.isNaN(d.getTime())) return {date:'',time:'',hasTime:false}; const date=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d); const time=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,hour:'2-digit',minute:'2-digit',hour12:false}).format(d); return {date,time,hasTime:true}};
 function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
 let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
 let permissionSet = new Set();
@@ -195,7 +200,7 @@ if (permissionSet.size > 0 && !permissionSet.has('mypage.view')) {
     setTimeout(() => location.href = 'index.html', 1200);
     return;
 }
-document.getElementById("salaryMonth").value=new Date().toISOString().slice(0,7);
+document.getElementById("salaryMonth").value=formatMypageKstMonth();
 document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
 await loadCompanyInfo();
 await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave()]);
@@ -209,11 +214,15 @@ async function loadPermissions(user) {
     const roleKey = user.role || '';
     const posKey = user.position || '';
     if (!roleKey && !posKey) return result;
+
+    const roleKeys = [roleKey, posKey].filter(Boolean);
+    if (roleKey === 'admin_all') roleKeys.push('admin');
+    if (roleKey === 'admin') roleKeys.push('admin_all');
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
         .in('scope', ['role', 'position'])
-        .in('role_key', [roleKey, posKey])
+        .in('role_key', roleKeys)
         .eq('is_enabled', true);
     if (Array.isArray(data)) {
         data.forEach(row => {
@@ -330,7 +339,20 @@ b.appendChild(tr);
 function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
 function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
 function removeTempEm(i){tempEmergencyList.splice(i,1);renderEmergencyTable()}
-async function renderCalendar(){const{data:l}=await _supabase.from('ref_approval').select('*').eq('doc_type','휴가').eq('status','완료');const{data:e}=await _supabase.from('view_employees_calendar').select('*');const{data:c}=await _supabase.from('ref_calendar').select('*');let evts=[];const bY=new Date().getFullYear();const yrs=[bY-2,bY-1,bY,bY+1,bY+2];if(l)l.forEach(x=>evts.push({title:`${x.drafter_name}(${x.drafter_dept||''}) 휴가`,start:x.start_date,end:x.end_date,color:(x.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true,extendedProps:{origin:{title:`${x.drafter_name} 휴가`,start_date:x.start_date,type:'leave',visibility:'company',cal_memo:`결재 완료된 휴가입니다.\n사번: ${x.drafter_id}\n기안자: ${x.drafter_name}`}}}));if(e)e.forEach(p=>{const dn=p.department?`(${p.department})`:'';if(p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));if(p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}});if(c)c.forEach(x=>{if(x.visibility==='admin'&&myInfo.role!=='admin')return;if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;const bg=x.visibility==='admin'?'#6610f2':(x.visibility==='private'?'#198754':(x.type==='holiday'?'#dc3545':'#0d6efd'));if(x.recurrence==='yearly'){yrs.forEach(y=>{evts.push({id:x.id,title:x.title,start:`${y}-${x.start_date.slice(5,10)}${x.start_date.length>10?'T'+x.start_date.slice(11,16):''}`,color:bg,extendedProps:{origin:x}})});}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=x.start_date.slice(8,10);if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${x.start_date.length>10?'T'+x.start_date.slice(11,16):''}`,color:bg,extendedProps:{origin:x}})}}});}else{evts.push({id:x.id,title:x.title,start:x.start_date,end:x.end_date,color:bg,extendedProps:{origin:x}})}});if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:"🎉 창립기념일",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true,extendedProps:{origin:{title:"🎉 창립기념일",start_date:`${y}-${companyInfo.estDate.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`}}})}}const el=document.getElementById('calendar');const cal=new FullCalendar.Calendar(el,{initialView:'dayGridMonth',locale:'ko',height:600,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},dayMaxEvents:true,events:evts,selectable:true,dateClick:function(i){openEventModal(null,i.dateStr)},eventClick:function(i){if(i.event.extendedProps.origin){openEventModal(i.event.extendedProps.origin,null)}}});cal.render()}
+async function renderCalendar(){
+const{data:l}=await _supabase.from('ref_approval').select('*').eq('doc_type','휴가').eq('status','완료');
+const{data:e}=await _supabase.from('view_employees_calendar').select('*');
+const{data:c}=await _supabase.from('ref_calendar').select('*');
+let evts=[];
+const bY=new Date().getFullYear();
+const yrs=[bY-2,bY-1,bY,bY+1,bY+2];
+if(l)l.forEach(x=>evts.push({title:`${x.drafter_name}(${x.drafter_dept||''}) 휴가`,start:x.start_date,end:x.end_date,color:(x.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true,extendedProps:{origin:{title:`${x.drafter_name} 휴가`,start_date:x.start_date,type:'leave',visibility:'company',cal_memo:`결재 완료된 휴가입니다.\n사번: ${x.drafter_id}\n기안자: ${x.drafter_name}`}}}));
+if(e)e.forEach(p=>{const dn=p.department?`(${p.department})`:'';if(p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));if(p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}});
+if(c)c.forEach(x=>{if(x.visibility==='admin'&&!(myInfo.role==='admin' || myInfo.role==='admin_all'))return;if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;const bg=x.visibility==='admin'?'#6610f2':(x.visibility==='private'?'#198754':(x.type==='holiday'?'#dc3545':'#0d6efd'));const startParts=getMypageKstDateParts(x.start_date);const endParts=getMypageKstDateParts(x.end_date);const timeSuffix=startParts.hasTime&&startParts.time?`T${startParts.time}`:'';if(x.recurrence==='yearly'){yrs.forEach(y=>{const md=startParts.date?startParts.date.slice(5,10):'';if(!md) return;evts.push({id:x.id,title:x.title,start:`${y}-${md}${timeSuffix}`,color:bg,extendedProps:{origin:x}})});}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=startParts.date?startParts.date.slice(8,10):'';if(!dd) return;if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${timeSuffix}`,color:bg,extendedProps:{origin:x}})}}});}else{const startVal=startParts.date?`${startParts.date}${timeSuffix}`:x.start_date;const endSuffix=endParts.hasTime&&endParts.time?`T${endParts.time}`:'';const endVal=endParts.date?`${endParts.date}${endSuffix}`:x.end_date;evts.push({id:x.id,title:x.title,start:startVal,end:endVal,color:bg,extendedProps:{origin:x}})}}); 
+if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:\"🎉 창립기념일\",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true,extendedProps:{origin:{title:\"🎉 창립기념일\",start_date:`${y}-${companyInfo.estDate.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`}}})}}
+const el=document.getElementById('calendar');
+const cal=new FullCalendar.Calendar(el,{initialView:'dayGridMonth',locale:'ko',height:600,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},dayMaxEvents:true,events:evts,selectable:true,dateClick:function(i){openEventModal(null,i.dateStr)},eventClick:function(i){if(i.event.extendedProps.origin){openEventModal(i.event.extendedProps.origin,null)}}});
+cal.render()}
 async function calculateLeave(){const{data:r,error}=await _supabase.rpc('calculate_leave_days',{p_emp_id:myInfo.emp_id});if(error){console.error(error);return}const v=r!==null?r:0;document.getElementById("lvRemain").innerText=v;const b=document.querySelector('.leave-badge');if(v<=0){b.style.borderColor='#dc3545';b.style.color='#dc3545'}else{b.style.borderColor='#0d6efd';b.style.color='#0d6efd'}}
 async function showLeaveDetail(){
 const el=document.getElementById('leaveDetailModal'),bd=el.querySelector('.modal-body');if(!el)return;
@@ -342,21 +364,21 @@ let h='<div class="d-flex flex-column gap-3">';
 let gh='<ul class="leave-list">';
 if(em&&em.hire_date){const hd=new Date(em.hire_date),n=new Date(),oy=new Date(hd);oy.setFullYear(oy.getFullYear()+1);if(n<oy){let m=(n.getFullYear()-hd.getFullYear())*12+(n.getMonth()-hd.getMonth());if(n.getDate()<hd.getDate())m--;gh+=`<li class="text-primary">🟢 1년 미만: ${Math.min(11,Math.max(0,m))}개</li>`}else{gh+=`<li class="text-muted">⚪ 1년 미만: 0개</li>`}if(n.getFullYear()>hd.getFullYear())gh+=`<li class="text-primary">🔵 회계연도(${n.getFullYear()}): 15개</li>`;else gh+=`<li class="text-muted">⚪ 회계연도: 0개</li>`}gh+='</ul>';h+=`<div class="leave-section"><h6>🎁 발생 내역</h6>${gh}</div>`;
 let ah='<ul class="leave-list">';if(al&&al.length>0)al.forEach(i=>{const c=(i.adj_type==='지급'||i.adj_type==='포상')?'text-success':'text-danger',s=(i.adj_type==='지급'||i.adj_type==='포상')?'+':'-';ah+=`<li><span class="${c} fw-bold">[${i.adj_type}]</span> ${i.reason||''} (${s}${i.days}일)</li>`});else ah+='<li class="text-muted">- 없음 -</li>';ah+='</ul>';h+=`<div class="leave-section"><h6>⚖️ 조정 내역</h6>${ah}</div>`;
-let uh='<ul class="leave-list">';if(ul&&ul.length>0)ul.forEach(i=>{const d=i.created_at.slice(0,10);let b='';if(i.status==='가승인')b='<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';if(i.status==='증빙확인중')b='<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';uh+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${i.doc_type} ${b}</span><span class="fw-bold text-danger">-${i.amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${d}</div></li>`});else uh+='<li class="text-muted">- 없음 -</li>';uh+='</ul>';h+=`<div class="leave-section"><h6>🎫 사용 내역</h6>${uh}</div>`;
+let uh='<ul class="leave-list">';if(ul&&ul.length>0)ul.forEach(i=>{const d=formatMypageKstDate(i.created_at);let b='';if(i.status==='가승인')b='<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';if(i.status==='증빙확인중')b='<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';uh+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${i.doc_type} ${b}</span><span class="fw-bold text-danger">-${i.amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${d}</div></li>`});else uh+='<li class="text-muted">- 없음 -</li>';uh+='</ul>';h+=`<div class="leave-section"><h6>🎫 사용 내역</h6>${uh}</div>`;
 h+='</div>';bd.innerHTML=h;
 }
 function openEventModal(e,d){
 const b=document.getElementById("btnDelEvent"),s=document.getElementById("btnSaveEvent");
 const inputs=eventModal._element.querySelectorAll('input, select, textarea');
-const canEdit= !e || (myInfo.role==='admin' || e.created_by===myInfo.emp_id);
+const canEdit= !e || ((myInfo.role==='admin' || myInfo.role==='admin_all') || e.created_by===myInfo.emp_id);
 inputs.forEach(el=>{el.disabled=!canEdit});
 if(canEdit){s.classList.remove('hidden');if(e)b.classList.remove("hidden");else b.classList.add("hidden")}else{s.classList.add('hidden');b.classList.add("hidden")}
-if(e){document.getElementById("evtId").value=e.id;document.getElementById("evtTitle").value=e.title;document.getElementById("evtVisibility").value=e.visibility||'company';const dt=e.start_date.split('T');document.getElementById("evtDate").value=dt[0];document.getElementById("evtTime").value=dt[1]?dt[1].slice(0,5):"";document.getElementById("evtRecure").value=e.recurrence||'none';document.getElementById("evtIsHoliday").checked=(e.type==='holiday');document.getElementById("evtMemo").value=e.cal_memo||""}else{document.getElementById("evtId").value="";document.getElementById("evtTitle").value="";document.getElementById("evtVisibility").value='private';document.getElementById("evtDate").value=d;document.getElementById("evtTime").value="";document.getElementById("evtRecure").value="none";document.getElementById("evtIsHoliday").checked=false;document.getElementById("evtMemo").value=""}
+if(e){document.getElementById("evtId").value=e.id;document.getElementById("evtTitle").value=e.title;document.getElementById("evtVisibility").value=e.visibility||'company';const dt=getMypageKstDateParts(e.start_date);document.getElementById("evtDate").value=dt.date||'';document.getElementById("evtTime").value=dt.time||"";document.getElementById("evtRecure").value=e.recurrence||'none';document.getElementById("evtIsHoliday").checked=(e.type==='holiday');document.getElementById("evtMemo").value=e.cal_memo||""}else{document.getElementById("evtId").value="";document.getElementById("evtTitle").value="";document.getElementById("evtVisibility").value='private';document.getElementById("evtDate").value=d;document.getElementById("evtTime").value="";document.getElementById("evtRecure").value="none";document.getElementById("evtIsHoliday").checked=false;document.getElementById("evtMemo").value=""}
 eventModal.show();
 }
 async function saveEvent(){
 const i=document.getElementById("evtId").value,t=document.getElementById("evtTitle").value,v=document.getElementById("evtVisibility").value,d=document.getElementById("evtDate").value,tm=document.getElementById("evtTime").value,r=document.getElementById("evtRecure").value,tp=document.getElementById("evtIsHoliday").checked?'holiday':'company',mm=document.getElementById("evtMemo").value;
-if(!t||!d){showAlert("입력 확인");return}const fd=tm?`${d}T${tm}:00`:d,p={title:t,start_date:fd,type:tp,recurrence:r,visibility:v,created_by:myInfo.emp_id,cal_memo:mm};
+if(!t||!d){showAlert("입력 확인");return}const fd=tm?toUtcIsoFromKstInput(`${d}T${tm}`):d,p={title:t,start_date:fd,type:tp,recurrence:r,visibility:v,created_by:myInfo.emp_id,cal_memo:mm};
 const{error}=i?await _supabase.from('ref_calendar').update(p).eq('id',i):await _supabase.from('ref_calendar').insert(p);
 if(error)showAlert("저장 실패: "+error.message);else{showAlert("저장되었습니다.");eventModal.hide();renderCalendar()}
 }
@@ -419,7 +441,7 @@ async function loadNotices(){
   if(data&&data.length){
     listEl.innerHTML=data.map((n,i)=>{
       const safeTitle=escapeHtml(n.title);
-      const safeDate=escapeHtml(n.created_at.slice(0,10));
+      const safeDate=escapeHtml(formatMypageKstDate(n.created_at));
       return `<div class="list-group-item" onclick="viewNotice(${i})" style="cursor:pointer"><h6 class="fw-bold mb-1">${safeTitle}</h6><small class="text-muted">${safeDate}</small></div>`;
     }).join("");
   }else{
@@ -427,7 +449,7 @@ async function loadNotices(){
   }
   noticesData=data;
 }
-function viewNotice(i){const n=noticesData[i];document.getElementById("noticeModalTitle").innerText=n.title;document.getElementById("noticeModalDate").innerText=n.created_at.slice(0,10);document.getElementById("noticeModalWriter").innerText=n.writer||"관리자";document.getElementById("noticeModalContent").innerText=n.content;const l=document.getElementById("noticeFileLink"),a=document.getElementById("noticeFileArea");if(n.file_url){a.classList.remove("hidden");l.href=n.file_url}else a.classList.add("hidden");noticeDetailModal.show()}
+function viewNotice(i){const n=noticesData[i];document.getElementById("noticeModalTitle").innerText=n.title;document.getElementById("noticeModalDate").innerText=formatMypageKstDate(n.created_at);document.getElementById("noticeModalWriter").innerText=n.writer||"관리자";document.getElementById("noticeModalContent").innerText=n.content;const l=document.getElementById("noticeFileLink"),a=document.getElementById("noticeFileArea");if(n.file_url){a.classList.remove("hidden");l.href=n.file_url}else a.classList.add("hidden");noticeDetailModal.show()}
 // [추가] 범용 확인 모달 열기 함수
 function openConfirmModal(msg, callback) {
     document.getElementById("confirmMessage").innerText = msg;

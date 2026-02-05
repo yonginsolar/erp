@@ -1,4 +1,6 @@
-/* Version: v1.0.1
+/* Version: v1.0.3
+Change: 2026-02-05 - Use KST date defaults for patch notes.
+*/
 /**
  * [File: patch_note.js]
  * 패치노트 UI 및 관리자 기능 (작성/삭제) 포함
@@ -159,7 +161,7 @@ async function openPatchModal() {
     
     // 작성 폼 초기화
     document.getElementById("patchWriteForm").classList.add("hidden");
-    document.getElementById("pnDate").valueAsDate = new Date(); // 오늘 날짜
+    document.getElementById("pnDate").value = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); // 오늘 날짜 (KST)
 
     // 리스트 로딩
     await loadPatchList();
@@ -274,7 +276,7 @@ function isAdminUser() {
     if(!userStr) return false;
     const user = JSON.parse(userStr);
     // 권한 체크 로직 (국장, 관리자, 이사 등)
-    return (user.role === 'admin' || user.position === '국장' || user.position === '이사' || user.position === '이사장');
+    return ((user.role === 'admin' || user.role === 'admin_all') || user.position === '국장' || user.position === '이사' || user.position === '이사장');
 }
 
 function toggleWriteForm() {

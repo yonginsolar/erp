@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!-- Version: v1.0.2 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.1 | index.html');</script>
+  <script>console.log('[Version] v1.0.2 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>협동조합 ERP (메인)</title>
@@ -237,11 +237,15 @@ async function loadPermissions(user) {
     const posKey = user.position || '';
     if (!roleKey && !posKey) return result;
 
+    const roleKeys = [roleKey, posKey].filter(Boolean);
+    if (roleKey === 'admin_all') roleKeys.push('admin');
+    if (roleKey === 'admin') roleKeys.push('admin_all');
+
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
         .in('scope', ['role', 'position'])
-        .in('role_key', [roleKey, posKey])
+        .in('role_key', roleKeys)
         .eq('is_enabled', true);
 
     if (Array.isArray(data)) {
@@ -258,7 +262,7 @@ function hasPermission(key) {
 }
 
 function applyMenuPermissions(user) {
-    const isAdmin = user.role === 'admin' || user.position === '국장';
+    const isAdmin = (user.role === 'admin' || user.role === 'admin_all' || user.position === '국장');
     const isManager = user.role === 'manager' || user.position === '이사';
 
     const canApproval = hasPermission('approval.view');

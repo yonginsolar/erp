@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!--
+Version: v1.0.5
+Change: 2026-02-05 - Avoid KST helper name collision with shared scripts.
+-->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.1 | audit_logs.html');</script>
+  <script>console.log('[Version] v1.0.5 | audit_logs.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>감사 로그</title>
@@ -84,6 +87,13 @@
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const KST_TZ_AUDIT = 'Asia/Seoul';
+const formatAuditKstDate = (value, fallback = '') => {
+  if (!value) return fallback;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return fallback;
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: KST_TZ_AUDIT, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+};
 
 let alertModal;
 let myInfo = null;
@@ -118,11 +128,15 @@ async function loadPermissions(user) {
   const roleKey = user.role || '';
   const posKey = user.position || '';
   if (!roleKey && !posKey) return result;
+
+    const roleKeys = [roleKey, posKey].filter(Boolean);
+    if (roleKey === 'admin_all') roleKeys.push('admin');
+    if (roleKey === 'admin') roleKeys.push('admin_all');
   const { data } = await _supabase
     .from('erp_role_permissions')
     .select('permission_key')
     .in('scope', ['role','position'])
-    .in('role_key', [roleKey, posKey])
+    .in('role_key', roleKeys)
     .eq('is_enabled', true);
   if (Array.isArray(data)) {
     data.forEach(r => r.permission_key && result.add(r.permission_key));
@@ -178,14 +192,19 @@ function renderLogs(list, reset) {
   list.forEach(log => {
     const tr = document.createElement('tr');
     const created = log.created_at ? log.created_at.replace('T', ' ').slice(0, 16) : '';
-    tr.innerHTML = `
-      <td>${created}</td>
-      <td>${log.actor_name || ''} (${log.actor_emp_id || ''})</td>
-      <td>${log.action || ''}</td>
-      <td>${log.summary || ''}</td>
-      <td>${log.entity_type || ''}</td>
-      <td>${log.entity_id || ''}</td>
-    `;
+    const cells = [
+      created,
+      `${log.actor_name || ''} (${log.actor_emp_id || ''})`,
+      log.action || '',
+      log.summary || '',
+      log.entity_type || '',
+      log.entity_id || ''
+    ];
+    cells.forEach(value => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
     body.appendChild(tr);
   });
 }
@@ -215,7 +234,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const dateTag = new Date().toISOString().slice(0,10);
+  const dateTag = formatAuditKstDate(new Date());
   a.download = `audit_logs_${dateTag}.csv`;
   a.click();
   URL.revokeObjectURL(url);

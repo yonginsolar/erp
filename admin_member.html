@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.5
-Change: 신규가입(7일) count now requires 승인대기 + 7일 이내 (DB-side).
+Version: v1.0.14
+Change: 2026-02-05 - Avoid KST helper name collision with shared scripts.
 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.5 | admin_member.html');</script>
+  <script>console.log('[Version] v1.0.14 | admin_member.html');</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>☀️ 협동조합 통합 관리자</title>
@@ -101,6 +101,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="menu-category">운영 관리</div>
 <a class="nav-link" onclick="switchTab('notices')" id="nav-notices" style="cursor:pointer;">
 <i class="bi bi-megaphone"></i> 공지사항 관리
+</a>
+
+<a class="nav-link" onclick="switchTab('official-sign')" id="nav-official-sign" style="cursor:pointer;">
+<i class="bi bi-pen"></i> 임원 서명 관리
 </a>
 
 
@@ -625,6 +629,24 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 </div>
 
+<div class="tab-pane fade" id="tab-official-sign">
+<div class="content-header">
+<h3>🖋️ 임원 서명/도장 관리</h3>
+<button class="btn btn-outline-secondary btn-sm" onclick="loadOfficialSignatures()"><i class="bi bi-arrow-clockwise"></i> 새로고침</button>
+</div>
+<div class="alert alert-info small">
+<i class="bi bi-info-circle-fill"></i> 임원/대의원 서명 이미지는 이곳에서 관리합니다. 업로드된 이미지는 의사록 서명에 재사용됩니다.
+</div>
+<div class="card border-0 shadow-sm">
+<div class="table-responsive">
+<table class="table table-hover mb-0">
+<thead><tr><th>이름</th><th>구분</th><th>직책</th><th>도장/서명</th><th>업로드</th><th>관리</th></tr></thead>
+<tbody id="officialSignBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
 <div class="tab-pane fade" id="tab-site">
 <div class="content-header"><h3>🖥️ 홈페이지 컨텐츠 관리</h3></div>
 
@@ -908,6 +930,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
             <div class="modal-body">
                 <input type="hidden" id="notice-id">
+                    <input type="hidden" id="notice-doc-no">
                 
                 <div class="mb-3">
                     <label class="form-label small">제목</label>
@@ -919,16 +942,21 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
                 </div>
 
                 <div class="mb-3 p-3 bg-light rounded border">
-                    <label class="form-label small fw-bold">📎 첨부 파일</label>
-                    <input type="file" id="notice-file" class="form-control form-control-sm mb-1">
+                    <label class="form-label small fw-bold">📎 첨부 파일 (여러 개 선택 가능)</label>
+                    <input type="file" id="notice-file" class="form-control form-control-sm mb-1" multiple>
                     
-                    <div id="notice-file-preview" class="d-flex align-items-center mt-2" style="display:none !important;">
-                        <span class="badge bg-primary me-2">기존 파일</span>
-                        <a id="notice-file-link" href="#" target="_blank" class="text-truncate small" style="max-width: 250px;">-</a>
-                        <button type="button" class="btn btn-xs btn-outline-danger ms-2" onclick="clearNoticeFile()">삭제</button>
+                    <div id="notice-file-preview" class="mt-2" style="display:none !important;">
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-primary me-2">첨부 파일</span>
+                            <button type="button" class="btn btn-xs btn-outline-danger ms-auto" onclick="clearNoticeFile()">전체 삭제</button>
+                        </div>
+                        <ul id="notice-file-list" class="list-unstyled small mb-0"></ul>
                     </div>
                     <input type="hidden" id="notice-file-url">
+                    <input type="hidden" id="notice-file-urls">
+                    <input type="hidden" id="notice-file-names">
                     <input type="hidden" id="notice-file-original">
+                    <input type="hidden" id="notice-file-removed" value="0">
                 </div>
 
                 <div class="row mb-3">
@@ -1826,6 +1854,26 @@ const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k'; 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let permissionSet = new Set();
+const KST_TZ_ADMIN_MEMBER = 'Asia/Seoul';
+const formatAdminMemberKstDate = (value, fallback = '-') => {
+    if (!value) return fallback;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: KST_TZ_ADMIN_MEMBER, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+};
+const formatAdminMemberKstDateTime = (value, fallback = '-') => {
+    if (!value) return fallback;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: KST_TZ_ADMIN_MEMBER, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+};
+const formatAdminMemberKstDateTimeSeconds = (value, fallback = '-') => {
+    if (!value) return fallback;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: KST_TZ_ADMIN_MEMBER, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+};
+const getAdminMemberKstDateString = () => formatAdminMemberKstDate(new Date(), '');
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -2184,7 +2232,7 @@ async function fetchNotices() {
 
     data.forEach(n => {
         // 날짜 포맷팅 (YYYY-MM-DD)
-        const dateStr = n.created_at ? n.created_at.split('T')[0] : '-';
+        const dateStr = formatAdminMemberKstDate(n.created_at);
         
         // 팝업 여부 표시
         const popupBadge = n.is_popup ? '<span class="badge bg-danger">POP</span>' : '-';
@@ -2230,11 +2278,58 @@ function askDeleteNotice(id) {
 let g_current_notice_id = null;
 // 공지 모달 열기 (내용 불러오기 추가)
 
-// [보조] 공지사항 파일 삭제 버튼 클릭 시 (화면 처리)
+function safeParseArray(raw) {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function deriveNoticeFileName(url) {
+    if (!url) return '-';
+    let fileName = String(url).split('/').pop() || '';
+    try { fileName = decodeURIComponent(fileName); } catch (e) {}
+    return fileName.replace(/_/g, ' ');
+}
+
+function renderNoticeFilePreview(urls, names) {
+    const preview = document.getElementById('notice-file-preview');
+    const list = document.getElementById('notice-file-list');
+    if (!preview || !list) return;
+
+    list.innerHTML = '';
+    if (!Array.isArray(urls) || urls.length === 0) {
+        preview.style.setProperty('display', 'none', 'important');
+        return;
+    }
+
+    urls.forEach((url, idx) => {
+        if (!url) return;
+        const rawName = (Array.isArray(names) && names[idx]) ? names[idx] : deriveNoticeFileName(url);
+        const safeName = escapeHtml(rawName);
+        const safeUrl = escapeHtml(url);
+        list.innerHTML += `<li class="mb-1"><a href="${safeUrl}" target="_blank" class="text-decoration-none">${safeName}</a></li>`;
+    });
+    preview.style.setProperty('display', 'block', 'important');
+}
+
+function setNoticeFileState(urls, names) {
+    const safeUrls = Array.isArray(urls) ? urls.filter(Boolean) : [];
+    const safeNames = Array.isArray(names) ? names : [];
+    document.getElementById('notice-file-urls').value = JSON.stringify(safeUrls);
+    document.getElementById('notice-file-names').value = JSON.stringify(safeNames);
+    document.getElementById('notice-file-url').value = safeUrls[0] || '';
+    renderNoticeFilePreview(safeUrls, safeNames);
+}
+
+// [보조] 공지사항 파일 전체 삭제 (화면 처리)
 function clearNoticeFile() {
     document.getElementById('notice-file').value = '';
-    document.getElementById('notice-file-url').value = '';
-    document.getElementById('notice-file-preview').style.setProperty('display', 'none', 'important');
+    document.getElementById('notice-file-removed').value = '1';
+    setNoticeFileState([], []);
 }
 
 // 1. 공지 모달 열기 (파일 정보 불러오기 추가)
@@ -2244,7 +2339,9 @@ async function openNoticeModal(id) {
     
     // 파일 입력 초기화
     document.getElementById('notice-file').value = '';
-    clearNoticeFile();
+    document.getElementById('notice-file-removed').value = '0';
+    document.getElementById('notice-file-original').value = '[]';
+    setNoticeFileState([], []);
 
     if(id) {
         const { data } = await _supabase.from('coop_notices').select('*').eq('id', id).single();
@@ -2254,30 +2351,53 @@ async function openNoticeModal(id) {
             document.getElementById('notice-category').value = data.category;
             document.getElementById('notice-status').value = data.status;
             document.getElementById('notice-popup').checked = data.is_popup;
+            document.getElementById('notice-doc-no').value = data.doc_no || '';
 
-            // [추가] 파일 정보 세팅
-            const fileUrl = data.file_url || '';
-            document.getElementById('notice-file-original').value = fileUrl;
-            document.getElementById('notice-file-url').value = fileUrl;
-
-            if (fileUrl) {
-                const previewDiv = document.getElementById('notice-file-preview');
-                const linkEl = document.getElementById('notice-file-link');
-                
-                previewDiv.style.setProperty('display', 'flex', 'important');
-                linkEl.href = fileUrl;
-                // 파일명만 추출해서 보여주기
-                linkEl.innerText = decodeURIComponent(fileUrl.split('/').pop());
+            // [추가] 파일 정보 세팅 (멀티 첨부 대응)
+            let urls = [];
+            if (Array.isArray(data.file_urls) && data.file_urls.length > 0) {
+                urls = data.file_urls;
+            } else if (data.file_url) {
+                urls = [data.file_url];
             }
+            const names = Array.isArray(data.file_names) ? data.file_names : [];
+            document.getElementById('notice-file-original').value = JSON.stringify(urls);
+            setNoticeFileState(urls, names);
         }
     } else {
         // 신규 작성
         document.getElementById('notice-title').value = '';
         document.getElementById('notice-content').value = '';
         document.getElementById('notice-popup').checked = false;
-        document.getElementById('notice-file-original').value = '';
+        document.getElementById('notice-file-original').value = '[]';
+        document.getElementById('notice-doc-no').value = '';
     }
     new bootstrap.Modal(document.getElementById('noticeModal')).show();
+}
+
+
+// [신규] 공지 문서번호 자동 생성 (제YYYY-NNN호)
+async function generateNoticeDocNo() {
+    const year = new Date().getFullYear();
+    const prefix = `제${year}-`;
+    const { data } = await _supabase
+        .from('coop_notices')
+        .select('doc_no')
+        .like('doc_no', `${prefix}%`)
+        .not('doc_no', 'is', null)
+        .order('doc_no', { ascending: false })
+        .limit(1);
+
+    let nextSeq = 1;
+    if (data && data.length > 0 && data[0].doc_no) {
+        const m = String(data[0].doc_no).match(/제\d{4}-(\d{3})호/);
+        if (m) nextSeq = parseInt(m[1], 10) + 1;
+    } else if (year == 2026) {
+        // 2026년은 001 이미 사용됨 (요청 반영: 002부터 시작)
+        nextSeq = 2;
+    }
+    const seq = String(nextSeq).padStart(3, '0');
+    return `${prefix}${seq}호`;
 }
 
 // 2. 공지 저장 (파일 업로드 로직 통합)
@@ -2289,21 +2409,36 @@ async function saveNotice() {
 
     // --- [파일 업로드 처리 시작] ---
     const fileInput = document.getElementById('notice-file');
-    const originalUrl = document.getElementById('notice-file-original').value;
-    let finalFileUrl = document.getElementById('notice-file-url').value;
+    const originalUrls = safeParseArray(document.getElementById('notice-file-original').value);
+    const currentUrls = safeParseArray(document.getElementById('notice-file-urls').value);
+    const currentNames = safeParseArray(document.getElementById('notice-file-names').value);
+    const removeFlag = document.getElementById('notice-file-removed').value === '1';
+
+    let finalUrls = [...currentUrls];
+    let finalNames = [...currentNames];
 
     try {
-        // 1. 새 파일이 선택된 경우 -> 업로드 수행
-        if (fileInput.files.length > 0) {
-            // 기존 uploadFileToStorage 함수 재사용 (폴더명: 'notices')
-            finalFileUrl = await uploadFileToStorage(fileInput.files[0], 'notices');
-            
-            // 기존 파일이 있었으면 삭제 (선택사항, 스토리지 용량 관리용)
-            if (originalUrl) await deleteOldFile(originalUrl);
-        } 
-        // 2. 파일은 없는데 기존 URL도 비어있다 -> 삭제 버튼 누른 경우
-        else if (originalUrl && !finalFileUrl) {
-            await deleteOldFile(originalUrl);
+        if (fileInput.files && fileInput.files.length > 0) {
+            for (const file of fileInput.files) {
+                const url = await uploadFileToStorage(file, 'notices');
+                if (url) {
+                    finalUrls.push(url);
+                    finalNames.push(file.name || deriveNoticeFileName(url));
+                }
+            }
+        }
+
+        if (finalNames.length < finalUrls.length) {
+            finalUrls.forEach((url, idx) => {
+                if (!finalNames[idx]) finalNames[idx] = deriveNoticeFileName(url);
+            });
+        }
+
+        if (removeFlag && Array.isArray(originalUrls) && originalUrls.length > 0) {
+            const toDelete = originalUrls.filter(url => !finalUrls.includes(url));
+            for (const url of toDelete) {
+                await deleteOldFile(url);
+            }
         }
     } catch (e) {
         showLoading(false);
@@ -2311,14 +2446,33 @@ async function saveNotice() {
     }
     // --- [파일 업로드 처리 끝] ---
 
+    // 화면 상태 업데이트
+    document.getElementById('notice-file-url').value = finalUrls[0] || '';
+    document.getElementById('notice-file-urls').value = JSON.stringify(finalUrls);
+    document.getElementById('notice-file-names').value = JSON.stringify(finalNames);
+
+    const noticeId = document.getElementById('notice-id').value || null;
+    let docNo = document.getElementById('notice-doc-no').value || '';
+    if (!noticeId && !docNo) {
+        docNo = await generateNoticeDocNo();
+        document.getElementById('notice-doc-no').value = docNo;
+    }
+
+    const fileUrlsForDb = finalUrls.length > 0 ? finalUrls : null;
+    const fileNamesForDb = finalNames.length > 0 ? finalNames : null;
+
     const updates = {
-        p_id: document.getElementById('notice-id').value || null,
+        p_id: noticeId,
         p_title: title,
         p_content: document.getElementById('notice-content').value,
         p_category: document.getElementById('notice-category').value,
         p_status: document.getElementById('notice-status').value,
         p_is_popup: document.getElementById('notice-popup').checked,
-        p_file_url: finalFileUrl // [추가] 파일 URL 전달
+        p_file_url: fileUrlsForDb ? fileUrlsForDb[0] : null,
+        p_doc_no: docNo || null,
+        p_file_urls: fileUrlsForDb,
+        p_file_names: fileNamesForDb,
+        p_source_approval_id: null
     };
 
     // RPC 함수 호출 (RPC 함수에도 p_file_url 파라미터가 추가되어야 함)
@@ -2331,7 +2485,7 @@ async function saveNotice() {
     if(error) {
         // RPC 파라미터 불일치 에러가 날 수 있음 (DB 함수 수정 필요)
         console.error(error);
-        myAlert('저장 에러: ' + error.message + '\n(DB 함수 upsert_notice_secure에 p_file_url 파라미터를 추가했는지 확인하세요)', 'error');
+        myAlert('저장 에러: ' + error.message + '\n(DB 함수 upsert_notice_secure에 p_file_url/p_file_urls/p_file_names/p_source_approval_id 파라미터를 추가했는지 확인하세요)', 'error');
     } else {
         myAlert('저장되었습니다.');
         bootstrap.Modal.getInstance(document.getElementById('noticeModal')).hide();
@@ -2418,7 +2572,7 @@ function openHistoryModal(type) {
         else {
             data.forEach(item => {
                 html += `<tr>
-                    <td>${item.deposit_date ? item.deposit_date.substring(0,10) : '-'}</td>
+                    <td>${formatAdminMemberKstDate(item.deposit_date)}</td>
                     <td class="text-end fw-bold">${Number(item.amount).toLocaleString()}원</td>
                 </tr>`;
             });
@@ -2456,7 +2610,7 @@ function openHistoryModal(type) {
                 const style = isPlus ? 'text-primary' : 'text-danger';
                 const sign = isPlus ? '+' : '';
                 html += `<tr>
-                    <td>${item.created_at ? item.created_at.substring(0,10) : '-'}</td>
+                    <td>${formatAdminMemberKstDate(item.created_at)}</td>
                     <td>${item.reason || item.transaction_type}</td>
                     <td class="text-end fw-bold ${style}">${sign}${Number(item.change_amount).toLocaleString()}</td>
                 </tr>`;
@@ -2475,7 +2629,7 @@ function openHistoryModal(type) {
             data.forEach(item => {
                 html += `<tr>
                     <td>${item.fiscal_year}년</td>
-                    <td>${item.paid_at ? item.paid_at.substring(0,10) : '-'}</td>
+                    <td>${formatAdminMemberKstDate(item.paid_at)}</td>
                     <td class="text-end fw-bold">${Number(item.total_amount).toLocaleString()}원</td>
                 </tr>`;
             });
@@ -2521,7 +2675,7 @@ async function openSiteHistoryModal(id) {
         document.getElementById('hist-title').value = '';
         document.getElementById('hist-content').value = '';
         // 날짜는 오늘 날짜로 기본 세팅
-        document.getElementById('hist-date').value = new Date().toISOString().substring(0, 10);
+        document.getElementById('hist-date').value = getAdminMemberKstDateString();
     }
     
     // HTML 모달 ID는 기존 그대로 'historyModal' 사용
@@ -3019,7 +3173,7 @@ document.getElementById('doc-current').checked = data.is_current;
 // 신규
 document.getElementById('doc-title').value = '정관';
 document.getElementById('doc-version').value = '';
-document.getElementById('doc-date').value = new Date().toISOString().substring(0, 10);
+document.getElementById('doc-date').value = getAdminMemberKstDateString();
 document.getElementById('doc-content').value = '';
 document.getElementById('doc-current').checked = true;
 }
@@ -3611,6 +3765,10 @@ function switchTab(tabName) {
 
     // 3. 사이드바 네비게이션 활성화 표시
     document.querySelectorAll('.sidebar-menu .nav-link').forEach(el => el.classList.remove('active'));
+
+    if (tabName === 'official-sign') {
+        loadOfficialSignatures();
+    }
     const navBtn = document.getElementById('nav-' + tabName);
     if (navBtn) navBtn.classList.add('active');
 
@@ -4012,9 +4170,7 @@ function renderMemberTable(list) {
 
     // 날짜 포맷팅
     const joinRaw = m.join_date || m.created_at || '';
-    const joinDate = (typeof joinRaw === 'string' && joinRaw.includes('T'))
-      ? joinRaw.split('T')[0]
-      : (joinRaw || '-');
+    const joinDate = joinRaw ? formatAdminMemberKstDate(joinRaw) : '-';
 
     const status = m.status || '-';
     const totalCapital = Number(m.total_capital || 0).toLocaleString() + '원';
@@ -4397,11 +4553,7 @@ async function loadConsultLogs(uuid) { // uuid는 유지(호출부 호환), 내�
   });
 
   sorted.forEach(log => {
-    let dateStr = '-';
-    if (log.created_at) {
-      const d = new Date(log.created_at);
-      dateStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
-    }
+    const dateStr = formatAdminMemberKstDateTime(log.created_at, '-');
 
     listEl.innerHTML += `
       <div class="list-group-item bg-light border-0 mb-1 rounded">
@@ -4531,7 +4683,7 @@ function openFundEditor(type, rowDataStr) {
     // 필드 초기화
     document.getElementById('fund-edit-type').value = type;
     document.getElementById('fund-edit-id').value = ''; 
-    document.getElementById('fund-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('fund-date').value = getAdminMemberKstDateString();
     document.getElementById('fund-amount').value = '';
     document.getElementById('fund-note').value = '';
     document.getElementById('fund-depositor').value = '';
@@ -4895,20 +5047,30 @@ list.innerHTML = '';
 
 if(!data || data.length===0) { list.innerHTML = '<div class="p-3 text-center text-muted">결과 없음</div>'; return; }
 
-data.forEach(g => {
-// 관리자 정보 표시
-const status = g.rep_name 
-? `<span class="badge bg-warning text-dark">현재 관리자: ${g.rep_name}</span>` 
-: `<span class="badge bg-success">관리자 없음</span>`;
+    data.forEach(g => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'list-group-item list-group-item-action';
+    btn.addEventListener('click', () => tryConnectGroup(g.id, g.name || '', g.rep_name || ''));
 
-list.innerHTML += `
-           <button class="list-group-item list-group-item-action" onclick="tryConnectGroup('${g.id}', '${g.name}', '${g.rep_name||''}')">
-               <div class="d-flex justify-content-between align-items-center">
-                   <span class="fw-bold">${g.name}</span>
-                   <small>${status}</small>
-               </div>
-           </button>`;
-});
+    const row = document.createElement('div');
+    row.className = 'd-flex justify-content-between align-items-center';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'fw-bold';
+    nameEl.innerText = g.name || '';
+
+    const statusWrap = document.createElement('small');
+    const statusBadge = document.createElement('span');
+    statusBadge.className = g.rep_name ? 'badge bg-warning text-dark' : 'badge bg-success';
+    statusBadge.innerText = g.rep_name ? `현재 관리자: ${g.rep_name}` : '관리자 없음';
+    statusWrap.appendChild(statusBadge);
+
+    row.appendChild(nameEl);
+    row.appendChild(statusWrap);
+    btn.appendChild(row);
+    list.appendChild(btn);
+    });
 }
 
 // 3. 연결 시도
@@ -5143,7 +5305,7 @@ async function fetchAdminLogs() {
 
     } catch (err) {
         console.error("로그 로드 실패:", err);
-        tbody.innerHTML = `<tr><td colspan="6" class="py-5 text-danger">데이터를 불러오지 못했습니다.<br><small>${err.message}</small></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-5 text-danger">데이터를 불러오지 못했습니다.<br><small>${escapeHtml(err.message)}</small></td></tr>`;
     }
 }
 
@@ -5158,13 +5320,8 @@ function renderLogTable(list) {
     }
 
     list.forEach(log => {
-        // 날짜 포맷팅 (YYYY-MM-DD HH:MM:SS)
-        let dateStr = '-';
-        if (log.created_at) {
-            const d = new Date(log.created_at);
-            dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ` +
-                      `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-        }
+        // 날짜 포맷팅 (KST, YYYY-MM-DD HH:MM:SS)
+        const dateStr = formatAdminMemberKstDateTimeSeconds(log.created_at, '-');
 
         // 유형별 뱃지 스타일
         let typeBadge = `<span class="badge bg-secondary">${log.action_type}</span>`;
@@ -5224,7 +5381,7 @@ async function fetchGlobalDonations() {
 
     if (error) {
         console.error(error);
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-4">데이터 로드 실패: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-4">데이터 로드 실패: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
 
@@ -5303,7 +5460,7 @@ async function fetchGlobalDividends() {
 
     if (error) {
         console.error("이용고배당 조회 실패:", error);
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-4">조회 실패: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-4">조회 실패: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
 
@@ -5344,7 +5501,7 @@ async function fetchGlobalDividends() {
     }
 
     filtered.forEach(p => {
-        const dateStr = p.created_at ? p.created_at.substring(0, 16).replace('T', ' ') : '-';
+        const dateStr = formatAdminMemberKstDateTime(p.created_at, '-');
         const amt = Number(p.change_amount || 0);
         
         // 뱃지 처리
@@ -5642,7 +5799,7 @@ async function fetchApplications() {
     // 2. DB 응답 확인
     if (error) {
         console.error("❌ DB 에러 발생:", error);
-        tbody.innerHTML = `<tr><td colspan="7" class="text-danger py-4">로딩 실패: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger py-4">로딩 실패: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
 
@@ -5674,7 +5831,7 @@ function renderAppList() {
     const typeMap = { 'extra': '추가출자', 'reduction': '감자', 'withdraw': '탈퇴', 'connect': '계정연결' };
 
     list.forEach(app => {
-        const dateStr = app.created_at.substring(0, 10);
+        const dateStr = formatAdminMemberKstDate(app.created_at);
         const amountStr = app.amount ? Number(app.amount).toLocaleString() + '원' : '-';
         const safeName = escapeHtml(app.name || '');
         const safeMemberId = escapeHtml(app.member_id || '');
@@ -5855,6 +6012,98 @@ async function submitProxyData() {
         bootstrap.Modal.getInstance(document.getElementById('proxyModal')).hide();
         fetchApplications();
     }
+}
+
+
+
+async function loadOfficialSignatures() {
+    const body = document.getElementById('officialSignBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">로딩 중...</td></tr>';
+
+    const { data: officials, error } = await _supabase
+        .from('coop_officials')
+        .select('id, member_id, role, category, seal_url, status');
+
+    if (error || !Array.isArray(officials)) {
+        body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">임원 정보를 불러오지 못했습니다.</td></tr>';
+        myAlert('임원 목록 로드 실패: ' + (error?.message || 'Unknown error'), 'error');
+        return;
+    }
+
+    const memberIds = [...new Set(officials.map(o => o.member_id).filter(Boolean))];
+    let nameMap = {};
+    if (memberIds.length > 0) {
+        const { data: members } = await _supabase
+            .from('coop_members')
+            .select('member_id, name')
+            .in('member_id', memberIds);
+        if (Array.isArray(members)) {
+            members.forEach(m => { nameMap[m.member_id] = m.name; });
+        }
+    }
+
+    const rows = officials.map(o => {
+        const name = escapeHtml(nameMap[o.member_id] || o.member_id || '-');
+        const role = escapeHtml(o.role || '');
+        const category = String(o.category || '').toLowerCase() === 'delegate' ? '대의원' : '임원';
+        const sealStatus = o.seal_url ? '<span class="badge bg-success">등록됨</span>' : '<span class="badge bg-secondary">없음</span>';
+        return `
+            <tr>
+                <td>${name}</td>
+                <td>${category}</td>
+                <td>${role || '-'}</td>
+                <td>${sealStatus}</td>
+                <td>
+                    <input type="file" id="seal-file-${o.id}" accept="image/*" class="form-control form-control-sm">
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="uploadOfficialSeal('${o.id}')">업로드</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    body.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" class="text-center text-muted">등록된 임원이 없습니다.</td></tr>';
+}
+
+async function uploadOfficialSeal(officialId) {
+    const input = document.getElementById(`seal-file-${officialId}`);
+    if (!input || !input.files || input.files.length === 0) {
+        myAlert('업로드할 이미지 파일을 선택해주세요.', 'warning');
+        return;
+    }
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) {
+        myAlert('이미지 파일만 업로드할 수 있습니다.', 'warning');
+        return;
+    }
+
+    const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'png';
+    const fileName = `official_seals/${officialId}_${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await _supabase
+        .storage
+        .from('attachments')
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+
+    if (uploadError) {
+        myAlert('업로드 실패: ' + uploadError.message, 'error');
+        return;
+    }
+
+    const { error: updateError } = await _supabase
+        .from('coop_officials')
+        .update({ seal_url: fileName })
+        .eq('id', officialId);
+
+    if (updateError) {
+        myAlert('저장 실패: ' + updateError.message, 'error');
+        return;
+    }
+
+    myAlert('서명 이미지가 등록되었습니다.');
+    loadOfficialSignatures();
 }
 
 </script>

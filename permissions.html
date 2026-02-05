@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!--
+Version: v1.0.3
+Change: 2026-02-04 - Render permissions table with safe DOM nodes.
+-->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.1 | permissions.html');</script>
+  <script>console.log('[Version] v1.0.3 | permissions.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>권한 관리</title>
@@ -160,11 +163,15 @@ async function loadPermissions(user) {
   const roleKey = user.role || '';
   const posKey = user.position || '';
   if (!roleKey && !posKey) return result;
+
+    const roleKeys = [roleKey, posKey].filter(Boolean);
+    if (roleKey === 'admin_all') roleKeys.push('admin');
+    if (roleKey === 'admin') roleKeys.push('admin_all');
   const { data } = await _supabase
     .from('erp_role_permissions')
     .select('permission_key')
     .in('scope', ['role','position'])
-    .in('role_key', [roleKey, posKey])
+    .in('role_key', roleKeys)
     .eq('is_enabled', true);
   if (Array.isArray(data)) {
     data.forEach(r => r.permission_key && result.add(r.permission_key));
@@ -224,18 +231,43 @@ async function loadPermissionList() {
   body.innerHTML = '';
   data.forEach(row => {
     const tr = document.createElement('tr');
-    const enabledBadge = row.is_enabled ? '<span class="badge bg-success">ON</span>' : '<span class="badge bg-secondary">OFF</span>';
-    tr.innerHTML = `
-      <td>${row.scope}</td>
-      <td>${row.role_key}</td>
-      <td>${row.permission_key}</td>
-      <td>${row.description || ''}</td>
-      <td>${enabledBadge}</td>
-      <td>
-        <button class="btn btn-outline-primary btn-sm me-1" onclick="togglePermission('${row.id}', ${row.is_enabled})">토글</button>
-        <button class="btn btn-outline-danger btn-sm" onclick="deletePermission('${row.id}')">삭제</button>
-      </td>
-    `;
+
+    const tdScope = document.createElement('td');
+    tdScope.textContent = row.scope || '';
+    tr.appendChild(tdScope);
+
+    const tdRole = document.createElement('td');
+    tdRole.textContent = row.role_key || '';
+    tr.appendChild(tdRole);
+
+    const tdPerm = document.createElement('td');
+    tdPerm.textContent = row.permission_key || '';
+    tr.appendChild(tdPerm);
+
+    const tdDesc = document.createElement('td');
+    tdDesc.textContent = row.description || '';
+    tr.appendChild(tdDesc);
+
+    const tdEnabled = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = row.is_enabled ? 'badge bg-success' : 'badge bg-secondary';
+    badge.textContent = row.is_enabled ? 'ON' : 'OFF';
+    tdEnabled.appendChild(badge);
+    tr.appendChild(tdEnabled);
+
+    const tdActions = document.createElement('td');
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'btn btn-outline-primary btn-sm me-1';
+    toggleBtn.innerText = '토글';
+    toggleBtn.addEventListener('click', () => togglePermission(row.id, row.is_enabled));
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-outline-danger btn-sm';
+    deleteBtn.innerText = '삭제';
+    deleteBtn.addEventListener('click', () => deletePermission(row.id));
+    tdActions.appendChild(toggleBtn);
+    tdActions.appendChild(deleteBtn);
+    tr.appendChild(tdActions);
+
     body.appendChild(tr);
   });
 }
