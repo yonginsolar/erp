@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.20 | Change: 2026-02-05 - Prepay sub-tabs, fixed bank for input, expense account picker reuse. -->
+<!-- Version: v1.0.31 | Change: 2026-02-09 - Simplify single-entry view to cashbook-style inflow/outflow only. -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.20 | accounting.html');</script>
+  <script>console.log('[Version] v1.0.31 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계 관리</title>
@@ -24,7 +24,8 @@
     .text-cash { color: #0d6efd; font-weight: bold; }
     
     .btn-report { width: 100%; font-weight: bold; border-radius: 10px; }
-    .readonly-input { background-color: #f8f9fa; cursor: pointer; }
+	    .readonly-input { background-color: #f8f9fa; cursor: pointer; }
+	    .history-mode .btn { min-width: 94px; }
     
     /* 리포트 스타일 */
     #reportContent { font-family: "Malgun Gothic", serif; font-size: 12px; }
@@ -92,7 +93,7 @@
 
   <ul class="nav nav-tabs mb-4 no-print" id="accTab" role="tablist">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabForm">📝 전표입력</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPrepay">💳 선급금</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPrepay">💳 선급·미수 관리</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSync">🔄 자동연동</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabHistory" onclick="loadHistory()">🕒 최근전표</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGuide">ℹ️ 설명</button></li>
@@ -200,118 +201,240 @@
         <button type="submit" class="btn btn-primary w-100 btn-lg shadow-sm mt-4" id="submitBtn">저장하기</button>
       </form>
     </div>
-
     <div class="tab-pane fade" id="tabPrepay">
       <div class="card p-3 border-start border-5 border-primary bg-light mb-3">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h6 class="fw-bold mb-1">선급금 관리</h6>
-            <small class="text-muted">선급금 입력과 차감을 한 곳에서 관리합니다.</small>
+            <h6 class="fw-bold mb-1">선급·미수 관리</h6>
+            <small class="text-muted">선급금과 미수금을 한 곳에서 입력/정산합니다.</small>
           </div>
           <button class="btn btn-outline-secondary btn-sm" onclick="refreshPrepayTab()">새로고침</button>
         </div>
       </div>
 
-      <div class="mb-2">
-        <label class="small text-muted">거래처(선급금)</label>
-        <select class="form-select" id="prepayVendorSelect" onchange="onPrepayVendorChange()"></select>
-        <input type="text" class="form-control mt-2 hidden" id="prepayVendorInput" placeholder="거래처명 직접 입력" oninput="onPrepayVendorChange()">
-        <div class="small text-muted mt-1" id="prepayBalanceText">잔액 조회 중...</div>
-        <div class="small text-muted">팁: 선급금 입력 시 적요에 `[선급금-업체명]` 태그를 넣으면 자동 매칭이 더 정확합니다.</div>
-      </div>
-
       <div class="mb-3">
-        <ul class="nav nav-pills small" id="prepayModeTab" role="tablist">
+        <ul class="nav nav-pills small" id="advanceMainTab" role="tablist">
           <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#prepayInPane">선급금 입력</button>
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#prepayMainPane">선급금</button>
           </li>
           <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#prepayOutPane">선급금 차감</button>
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#receivableMainPane">미수금</button>
           </li>
         </ul>
       </div>
 
       <div class="tab-content">
-        <div class="tab-pane fade show active" id="prepayInPane">
-          <div class="border rounded p-3 bg-white mb-3">
-            <div class="fw-bold mb-2">선급금 입력</div>
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="small text-muted">전표일자</label>
-                <input type="date" class="form-control" id="prepayInDate">
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">입력 금액</label>
-                <input type="number" class="form-control" id="prepayInAmount" min="0">
+        <div class="tab-pane fade show active" id="prepayMainPane">
+          <div class="mb-2">
+            <label class="small text-muted">거래처(선급금)</label>
+            <select class="form-select" id="prepayVendorSelect" onchange="onPrepayVendorChange()"></select>
+            <input type="text" class="form-control mt-2 hidden" id="prepayVendorInput" placeholder="거래처명 직접 입력" oninput="onPrepayVendorChange()">
+            <div class="small text-muted mt-1" id="prepayBalanceText">잔액 조회 중...</div>
+            <div class="small text-muted">팁: 선급금 입력 시 적요에 `[선급금-업체명]` 태그를 넣으면 자동 매칭이 더 정확합니다.</div>
+          </div>
+
+          <div class="mb-3">
+            <ul class="nav nav-pills small" id="prepayModeTab" role="tablist">
+              <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#prepayInPane">선급금 입력</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#prepayOutPane">선급금 차감</button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="prepayInPane">
+              <div class="border rounded p-3 bg-white mb-3">
+                <div class="fw-bold mb-2">선급금 입력</div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">전표일자</label>
+                    <input type="date" class="form-control" id="prepayInDate">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">입력 금액</label>
+                    <input type="number" class="form-control" id="prepayInAmount" min="0">
+                  </div>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">출금 계정</label>
+                    <input type="text" class="form-control bg-light" id="prepayInAccount" value="보통예금" readonly>
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">적요</label>
+                    <input type="text" class="form-control ime-kr" id="prepayInDesc" placeholder="예: 알리고 선급금 충전">
+                  </div>
+                </div>
+                <button class="btn btn-outline-primary w-100" onclick="submitPrepayInput()">선급금 입력</button>
               </div>
             </div>
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="small text-muted">출금 계정</label>
-                <input type="text" class="form-control bg-light" id="prepayInAccount" value="보통예금" readonly>
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">적요</label>
-                <input type="text" class="form-control ime-kr" id="prepayInDesc" placeholder="예: 알리고 선급금 충전">
+
+            <div class="tab-pane fade" id="prepayOutPane">
+              <div class="border rounded p-3 bg-white">
+                <div class="fw-bold mb-2">선급금 차감</div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">사용월</label>
+                    <input type="month" class="form-control" id="prepayUseMonth">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">전표일자</label>
+                    <input type="date" class="form-control" id="prepayDate">
+                  </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">공급가액</label>
+                    <input type="number" class="form-control" id="prepaySupply" min="0" oninput="onPrepaySupplyChange()">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">부가세</label>
+                    <input type="number" class="form-control" id="prepayVat" min="0" oninput="onPrepayVatChange()">
+                  </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="prepayVatToggle" checked onchange="togglePrepayVat()">
+                    <label class="form-check-label small" for="prepayVatToggle">부가세 포함</label>
+                  </div>
+                  <div class="fw-bold">합계: <span id="prepayTotal">0</span>원</div>
+                </div>
+
+                <div class="mb-2">
+                  <label class="small text-muted">비용 계정</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control readonly-input ime-kr" id="prepayExpenseDisplay" placeholder="선택하세요" readonly onclick="openPrepayExpenseModal()">
+                    <button class="btn btn-secondary" type="button" onclick="openPrepayExpenseModal()">🔍</button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="openPrepayExpenseAddModal()">➕</button>
+                  </div>
+                  <input type="hidden" id="prepayExpenseAccount">
+                </div>
+
+                <div class="mb-3">
+                  <label class="small text-muted">적요</label>
+                  <input type="text" class="form-control ime-kr" id="prepayDesc" placeholder="예: 알리고 2026-02 사용분">
+                </div>
+
+                <button class="btn btn-primary w-100" onclick="submitPrepayDeduction()">선급금 차감 처리</button>
               </div>
             </div>
-            <button class="btn btn-outline-primary w-100" onclick="submitPrepayInput()">선급금 입력</button>
           </div>
         </div>
 
-        <div class="tab-pane fade" id="prepayOutPane">
-          <div class="border rounded p-3 bg-white">
-            <div class="fw-bold mb-2">선급금 차감</div>
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="small text-muted">사용월</label>
-                <input type="month" class="form-control" id="prepayUseMonth">
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">전표일자</label>
-                <input type="date" class="form-control" id="prepayDate">
+        <div class="tab-pane fade" id="receivableMainPane">
+          <div class="mb-2">
+            <label class="small text-muted">거래처(미수금)</label>
+            <select class="form-select" id="receivableVendorSelect" onchange="onReceivableVendorChange()"></select>
+            <input type="text" class="form-control mt-2 hidden" id="receivableVendorInput" placeholder="거래처명 직접 입력" oninput="onReceivableVendorChange()">
+            <div class="small text-muted mt-1" id="receivableBalanceText">잔액 조회 중...</div>
+            <div class="small text-muted" id="receivableVatInfo">선택 거래처 세액: 0원</div>
+            <div class="small text-muted">팁: 미수금 발생 시 적요에 `[미수금-거래처]` 태그를 자동 저장합니다.</div>
+          </div>
+
+          <div class="mb-3">
+            <ul class="nav nav-pills small" id="receivableModeTab" role="tablist">
+              <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#receivableInPane">미수금 발생</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#receivableOutPane">미수금 회수</button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="receivableInPane">
+              <div class="border rounded p-3 bg-white mb-3">
+                <div class="fw-bold mb-2">미수금 발생</div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">전표일자</label>
+                    <input type="date" class="form-control" id="receivableInDate">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">해당월</label>
+                    <input type="month" class="form-control" id="receivableUseMonth">
+                  </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">공급가(미수금)</label>
+                    <input type="number" class="form-control" id="receivableSupply" min="0" oninput="onReceivableSupplyChange()">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">세액(부가세예수금)</label>
+                    <input type="number" class="form-control" id="receivableVat" min="0" oninput="onReceivableVatChange()">
+                  </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="receivableVatToggle" checked onchange="toggleReceivableVat()">
+                    <label class="form-check-label small" for="receivableVatToggle">부가세 포함</label>
+                  </div>
+                  <div class="fw-bold">청구합계: <span id="receivableTotal">0</span>원</div>
+                </div>
+
+                <div class="mb-2">
+                  <label class="small text-muted">수익 유형</label>
+                  <select class="form-select" id="receivableIncomeType" onchange="onReceivableIncomeTypeChange()">
+                    <option value="매출">매출</option>
+                    <option value="영업외수익">영업외수익</option>
+                  </select>
+                </div>
+
+                <div class="mb-2">
+                  <label class="small text-muted">수익 계정</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control readonly-input ime-kr" id="receivableIncomeDisplay" placeholder="선택하세요" readonly onclick="openReceivableIncomeModal()">
+                    <button class="btn btn-secondary" type="button" onclick="openReceivableIncomeModal()">🔍</button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="openReceivableIncomeAddModal()">➕</button>
+                  </div>
+                  <input type="hidden" id="receivableIncomeAccount">
+                </div>
+
+                <div class="mb-3">
+                  <label class="small text-muted">적요</label>
+                  <input type="text" class="form-control ime-kr" id="receivableInDesc" placeholder="예: 2월 조합원 분담금 미수분">
+                </div>
+
+                <button class="btn btn-outline-primary w-100" onclick="submitReceivableInput()">미수금 발생 처리</button>
               </div>
             </div>
 
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="small text-muted">공급가액</label>
-                <input type="number" class="form-control" id="prepaySupply" min="0" oninput="onPrepaySupplyChange()">
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">부가세</label>
-                <input type="number" class="form-control" id="prepayVat" min="0" oninput="onPrepayVatChange()">
+            <div class="tab-pane fade" id="receivableOutPane">
+              <div class="border rounded p-3 bg-white">
+                <div class="fw-bold mb-2">미수금 회수</div>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="small text-muted">전표일자</label>
+                    <input type="date" class="form-control" id="receivableOutDate">
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-muted">회수 금액</label>
+                    <input type="number" class="form-control" id="receivableOutAmount" min="0">
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="small text-muted">적요</label>
+                  <input type="text" class="form-control ime-kr" id="receivableOutDesc" placeholder="예: 2월 미수금 입금 확인">
+                </div>
+
+                <button class="btn btn-primary w-100" onclick="submitReceivableCollection()">미수금 회수 처리</button>
               </div>
             </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="prepayVatToggle" checked onchange="togglePrepayVat()">
-                <label class="form-check-label small" for="prepayVatToggle">부가세 포함</label>
-              </div>
-              <div class="fw-bold">합계: <span id="prepayTotal">0</span>원</div>
-            </div>
-
-            <div class="mb-2">
-              <label class="small text-muted">비용 계정</label>
-              <div class="input-group">
-                <input type="text" class="form-control readonly-input ime-kr" id="prepayExpenseDisplay" placeholder="선택하세요" readonly onclick="openPrepayExpenseModal()">
-                <button class="btn btn-secondary" type="button" onclick="openPrepayExpenseModal()">🔍</button>
-                <button class="btn btn-outline-secondary" type="button" onclick="openPrepayExpenseAddModal()">➕</button>
-              </div>
-              <input type="hidden" id="prepayExpenseAccount">
-            </div>
-
-            <div class="mb-3">
-              <label class="small text-muted">적요</label>
-              <input type="text" class="form-control ime-kr" id="prepayDesc" placeholder="예: 알리고 2026-02 사용분">
-            </div>
-
-            <button class="btn btn-primary w-100" onclick="submitPrepayDeduction()">선급금 차감 처리</button>
           </div>
         </div>
       </div>
     </div>
+
 
     <div class="tab-pane fade" id="tabSync">
       <div class="d-grid gap-3">
@@ -334,6 +457,12 @@
              <div class="d-flex justify-content-between align-items-center">
                <div><h6 class="fw-bold mb-1">💰 출자금 연동</h6><small class="text-muted">신규 입금 내역 전표 처리</small></div>
                <button class="btn btn-success btn-sm text-white" onclick="confirmSync('capital')">실행</button>
+             </div>
+          </div>
+          <div class="card p-3 border-start border-5 bg-light" style="border-color:#e91e63 !important;">
+             <div class="d-flex justify-content-between align-items-center">
+               <div><h6 class="fw-bold mb-1">💖 기부금 연동</h6><small class="text-muted">기부금 입금 내역 전표 처리</small></div>
+               <button class="btn btn-sm text-white" style="background:#e91e63;" onclick="confirmSync('donation')">실행</button>
              </div>
           </div>
           <div class="card p-3 border-start border-5 border-primary bg-light">
@@ -363,13 +492,20 @@
       </div>
     </div>
 
-    <div class="tab-pane fade" id="tabHistory">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-          <h6 class="fw-bold m-0">최근 전표 10건</h6>
-          <button class="btn btn-sm btn-outline-primary" onclick="loadHistory()">🔄 새로고침</button>
-      </div>
-      <div id="historyList" class="list-group"></div>
-    </div>
+	    <div class="tab-pane fade" id="tabHistory">
+	      <div class="d-flex justify-content-between align-items-center mb-2">
+	          <h6 class="fw-bold m-0">최근 전표</h6>
+	          <button class="btn btn-sm btn-outline-primary" onclick="loadHistory()">🔄 새로고침</button>
+	      </div>
+	      <div class="d-flex justify-content-between align-items-center mb-3">
+	          <div class="btn-group btn-group-sm history-mode" role="group">
+	              <button class="btn btn-primary" id="historySingleBtn" onclick="setHistoryView('single')">단식 보기</button>
+	              <button class="btn btn-outline-primary" id="historyDoubleBtn" onclick="setHistoryView('double')">복식 원장</button>
+	          </div>
+	          <small class="text-muted" id="historyMeta"></small>
+	      </div>
+	      <div id="historyList" class="list-group"></div>
+	    </div>
 
     <div class="tab-pane fade" id="tabGuide">
       <div class="alert alert-secondary small">
@@ -381,7 +517,7 @@
         <div class="list-group-item">이자수익: 15.4% 원천징수액을 선납세금으로 자동 처리합니다.</div>
         <div class="list-group-item">대출상환: 입력 금액 중 이자를 분리해 이자비용/부채상환으로 나눕니다.</div>
         <div class="list-group-item">고급모드: 자산/부채/자본은 증감 방향과 상대계정을 직접 지정해야 하며, 기본 모드보다 정확한 분개가 가능합니다.</div>
-        <div class="list-group-item">선급금 차감: 거래처별 선급금 잔액을 조회하고 통신비/부가세/선급금을 자동 상계합니다.</div>
+        <div class="list-group-item">선급·미수 관리: 선급금(입력/차감)과 미수금(발생/회수)을 거래처별 잔액 기반으로 처리합니다.</div>
         <div class="list-group-item">연말결산: 법정적립금은 출자금 납입총액의 3배에 도달할 때까지 순이익의 10% 이상 적립이 필요합니다.</div>
       </div>
     </div>
@@ -576,9 +712,12 @@ let yearModalCallback = null;
 let lastReportParts = null;
 let prepayCache = { vendors: [], balances: {}, costMap: {} };
 let prepayVatManual = false;
+let receivableCache = { vendors: [], balances: {}, incomeMap: {}, summary: { balance: 0, vat: 0 } };
+let receivableVatManual = false;
 let selectContext = null;
 let addContext = null;
 let permissionSet = new Set();
+let historyViewMode = 'single';
 
 // 1. 초기화
 window.onload = async function() {
@@ -591,7 +730,29 @@ window.onload = async function() {
     closingModal = new bootstrap.Modal(document.getElementById('closingModal'));
     yearModal = new bootstrap.Modal(document.getElementById('yearModal'));
 
-    document.getElementById("btnConfirmYes").onclick = function() { if(confirmCallback) confirmCallback(); confirmModal.hide(); };
+    const blurActiveIfInside = (modalEl) => {
+        const activeEl = document.activeElement;
+        if (modalEl && activeEl && modalEl.contains(activeEl) && typeof activeEl.blur === 'function') {
+            activeEl.blur();
+        }
+    };
+    ['alertModal', 'confirmModal', 'yearModal', 'closingModal', 'selectModal', 'reportModal', 'addModal', 'infoModal']
+        .forEach((id) => {
+            const modalEl = document.getElementById(id);
+            if (!modalEl) return;
+            modalEl.addEventListener('hide.bs.modal', () => blurActiveIfInside(modalEl));
+        });
+
+    document.getElementById("btnConfirmYes").onclick = function() {
+        const cb = confirmCallback;
+        confirmCallback = null;
+        const confirmEl = document.getElementById('confirmModal');
+        blurActiveIfInside(confirmEl);
+        confirmModal.hide();
+        if (typeof cb === 'function') {
+            setTimeout(() => cb(), 0);
+        }
+    };
     document.getElementById('selectModal').addEventListener('hidden.bs.modal', () => { selectContext = null; });
     document.getElementById("btnYearModalYes").onclick = function() {
         const yearVal = Number(document.getElementById("yearModalInput").value);
@@ -623,6 +784,9 @@ window.onload = async function() {
     const prepayInAcc = document.getElementById('prepayInAccount');
     if (prepayInAcc) prepayInAcc.value = '보통예금';
     document.getElementById('prepayUseMonth').value = today.toISOString().slice(0, 7);
+    document.getElementById('receivableInDate').valueAsDate = today;
+    document.getElementById('receivableOutDate').valueAsDate = today;
+    document.getElementById('receivableUseMonth').value = today.toISOString().slice(0, 7);
 
     // 보고서 연도 옵션 생성
     const yearSel = document.getElementById("reportYearSelect");
@@ -636,7 +800,10 @@ window.onload = async function() {
     await loadProjects(); 
     await Promise.all([ loadMasterData(), loadCards(), refreshDashboard() ]);
     loadPrepayExpenseAccounts();
+    loadReceivableIncomeAccounts();
     renderPrepayVendorSelect();
+    renderReceivableVendorSelect();
+    onReceivableIncomeTypeChange();
     toggleAdvancedMode();
 };
 
@@ -883,6 +1050,7 @@ async function refreshDashboard() {
     });
 
     buildPrepayCache(data);
+    buildReceivableCache(data);
     
     // UI 반영
     document.getElementById("valRev").innerText = rev.toLocaleString(); // 올해 총 매출
@@ -983,6 +1151,12 @@ function filterAccounts() {
         d.onclick = () => {
             if (selectContext && selectContext.mode === 'prepayExpense') {
                 setPrepayExpenseAccount(acc.Item);
+                selectContext = null;
+                selectModal.hide();
+                return;
+            }
+            if (selectContext && selectContext.mode === 'receivableIncome') {
+                setReceivableIncomeAccount(acc.Item);
                 selectContext = null;
                 selectModal.hide();
                 return;
@@ -1244,6 +1418,7 @@ function renderPrepayVendorSelect() {
 async function refreshPrepayTab() {
     await refreshDashboard();
     renderPrepayVendorSelect();
+    renderReceivableVendorSelect();
 }
 
 function loadPrepayExpenseAccounts() {
@@ -1291,7 +1466,6 @@ function onPrepayVendorChange() {
     const value = sel.value;
     const isCustom = value === "__custom__";
     input.classList.toggle("hidden", !isCustom);
-    if (isCustom) input.value = "";
 
     const vendor = isCustom ? normalizeVendorName(input.value) : normalizeVendorName(value);
     const bal = vendor ? (prepayCache.balances[vendor]?.balance ?? 0) : 0;
@@ -1457,6 +1631,363 @@ async function applyPrepayInput() {
     document.getElementById("prepayInDesc").value = "";
     await refreshDashboard();
     renderPrepayVendorSelect();
+}
+
+
+function extractReceivableVendor(desc) {
+    const tagged = extractTagValue(desc, '미수금-');
+    if (tagged) return normalizeVendorName(tagged);
+
+    let cleaned = String(desc || '').replace(/\[[^\]]+\]/g, '');
+    cleaned = cleaned.replace(/미수금|회수|수금|외상|발생/gi, '').trim();
+    if (!cleaned) return '미지정';
+    return normalizeVendorName(cleaned);
+}
+
+function buildReceivableCache(data) {
+    const balances = {};
+    const incomeMap = {};
+    const transVendor = {};
+    let totalBalance = 0;
+    let totalVat = 0;
+    const rows = Array.isArray(data) ? data : [];
+
+    rows.forEach(r => {
+        const db = Number(r.Debit || 0);
+        const cr = Number(r.Credit || 0);
+        const desc = r.Description || '';
+        const accountCompact = String(r.Account || '').replace(/\s+/g, '');
+        const typeCompact = String(r.Type || '').replace(/\s+/g, '');
+        const transId = String(r.Trans_ID || '').trim();
+
+        if ((accountCompact === '미수금' || accountCompact === '매출채권') && typeCompact === '자산') {
+            const vendor = extractReceivableVendor(desc);
+            if (!balances[vendor]) balances[vendor] = { debit: 0, credit: 0, balance: 0, vat: 0 };
+            balances[vendor].debit += db;
+            balances[vendor].credit += cr;
+            totalBalance += (db - cr);
+            if (transId) transVendor[transId] = vendor;
+        }
+
+        if (typeCompact === '매출' || typeCompact === '영업외수익') {
+            const vendorTag = extractTagValue(desc, '미수금-');
+            const incomeTag = extractTagValue(desc, '수익-');
+            if (vendorTag && incomeTag) {
+                incomeMap[normalizeVendorName(vendorTag)] = {
+                    account: normalizeVendorName(incomeTag.replace(/\s+/g, '')),
+                    type: typeCompact
+                };
+            }
+        }
+    });
+
+    rows.forEach(r => {
+        const db = Number(r.Debit || 0);
+        const cr = Number(r.Credit || 0);
+        const desc = r.Description || '';
+        const accountCompact = String(r.Account || '').replace(/\s+/g, '');
+        const transId = String(r.Trans_ID || '').trim();
+
+        if (accountCompact === '부가세예수금' || accountCompact === '매출세액') {
+            const taggedVendor = normalizeVendorName(extractTagValue(desc, '미수금-'));
+            const transMatchedVendor = normalizeVendorName(transVendor[transId] || '');
+            const fallbackVendor = normalizeVendorName(extractReceivableVendor(desc));
+            const vendor = taggedVendor || transMatchedVendor || fallbackVendor;
+
+            if (vendor) {
+                if (!balances[vendor]) balances[vendor] = { debit: 0, credit: 0, balance: 0, vat: 0 };
+                balances[vendor].vat += (cr - db);
+            }
+            totalVat += (cr - db);
+        }
+    });
+
+    Object.keys(balances).forEach(v => {
+        balances[v].balance = balances[v].debit - balances[v].credit;
+    });
+
+    receivableCache = {
+        vendors: Object.keys(balances).sort((a, b) => a.localeCompare(b)),
+        balances,
+        incomeMap,
+        summary: { balance: totalBalance, vat: totalVat }
+    };
+}
+
+function renderReceivableVendorSelect() {
+    const sel = document.getElementById('receivableVendorSelect');
+    if (!sel) return;
+    const current = sel.value;
+    const vendors = receivableCache.vendors || [];
+    sel.innerHTML = '';
+
+    if (vendors.length === 0) {
+        const sumBal = receivableCache.summary?.balance || 0;
+        const sumVat = receivableCache.summary?.vat || 0;
+        if (sumBal !== 0 || sumVat !== 0) {
+            sel.add(new Option(`전체 미수 (청구 ${sumBal.toLocaleString()}원 / 세액 ${sumVat.toLocaleString()}원)`, '__all__'));
+        } else {
+            sel.add(new Option('미수금 내역 없음', ''));
+        }
+    } else {
+        sel.add(new Option('선택하세요', ''));
+        vendors.forEach(v => {
+            const row = receivableCache.balances[v] || { balance: 0, vat: 0 };
+            const bal = row.balance || 0;
+            const vat = row.vat || 0;
+            const label = `${v} (청구 ${bal.toLocaleString()}원 / 세액 ${vat.toLocaleString()}원)`;
+            sel.add(new Option(label, v));
+        });
+    }
+    sel.add(new Option('직접 입력', '__custom__'));
+
+    if (current && Array.from(sel.options).some(o => o.value === current)) {
+        sel.value = current;
+    }
+    onReceivableVendorChange();
+}
+
+function getReceivableIncomeAccount() {
+    const hidden = document.getElementById('receivableIncomeAccount');
+    return hidden ? hidden.value : '';
+}
+
+function setReceivableIncomeAccount(name) {
+    const display = document.getElementById('receivableIncomeDisplay');
+    const hidden = document.getElementById('receivableIncomeAccount');
+    if (display) display.value = name || '';
+    if (hidden) hidden.value = name || '';
+}
+
+function getReceivableIncomeType() {
+    return document.getElementById('receivableIncomeType')?.value || '매출';
+}
+
+function loadReceivableIncomeAccounts() {
+    const selectedType = getReceivableIncomeType();
+    if (getReceivableIncomeAccount()) return;
+    const first = (mData || []).find(m => (m.Type || m.type) === selectedType);
+    if (first) setReceivableIncomeAccount(first.Item || first.item || '');
+}
+
+function onReceivableIncomeTypeChange() {
+    const selectedType = getReceivableIncomeType();
+    const current = getReceivableIncomeAccount();
+    if (current) {
+        const exists = (mData || []).some(m => (m.Type || m.type) === selectedType && (m.Item || m.item) === current);
+        if (!exists) setReceivableIncomeAccount('');
+    }
+    loadReceivableIncomeAccounts();
+}
+
+function openReceivableIncomeModal() {
+    selectContext = { mode: 'receivableIncome', forcedType: getReceivableIncomeType() };
+    filterAccounts();
+    selectModal.show();
+    setTimeout(() => document.getElementById('accountSearchInput').focus(), 300);
+}
+
+function openReceivableIncomeAddModal() {
+    addContext = 'receivableIncome';
+    const selectedType = getReceivableIncomeType();
+    document.getElementById('addTypeSelect').value = selectedType;
+    const catSel = document.getElementById('addCategorySelect');
+    catSel.innerHTML = '';
+    const cats = [...new Set((mData || []).filter(m => (m.Type || m.type) === selectedType).map(m => m.Standard || m.standard))].sort();
+    cats.forEach(c => catSel.add(new Option(c, c)));
+    addModal.show();
+}
+
+function onReceivableVendorChange() {
+    const sel = document.getElementById('receivableVendorSelect');
+    const input = document.getElementById('receivableVendorInput');
+    const balanceEl = document.getElementById('receivableBalanceText');
+    const vatInfoEl = document.getElementById('receivableVatInfo');
+
+    const value = sel.value;
+    const isCustom = value === '__custom__';
+    const isAll = value === '__all__';
+    input.classList.toggle('hidden', !isCustom);
+
+    const vendor = isCustom ? normalizeVendorName(input.value) : (isAll ? '' : normalizeVendorName(value));
+    const row = isAll
+        ? (receivableCache.summary || { balance: 0, vat: 0 })
+        : (vendor ? (receivableCache.balances[vendor] || { balance: 0, vat: 0 }) : { balance: 0, vat: 0 });
+    const bal = row.balance || 0;
+    const vat = row.vat || 0;
+    const supply = bal - vat;
+    balanceEl.innerText = (vendor || isAll)
+        ? `현재 청구잔액: ${bal.toLocaleString()}원 (공급가 ${supply.toLocaleString()}원 / 세액 ${vat.toLocaleString()}원)`
+        : '거래처를 선택하세요.';
+    if (vatInfoEl) {
+        vatInfoEl.innerText = (vendor || isAll)
+            ? `선택 거래처 세액: ${vat.toLocaleString()}원`
+            : '선택 거래처 세액: 0원';
+    }
+
+    const mapped = vendor ? receivableCache.incomeMap[vendor] : null;
+    if (mapped && !isAll) {
+        const typeSel = document.getElementById('receivableIncomeType');
+        if (typeSel && mapped.type) typeSel.value = mapped.type;
+        setReceivableIncomeAccount(mapped.account || '');
+    }
+
+    if (!getReceivableIncomeAccount()) onReceivableIncomeTypeChange();
+    calcReceivableTotals();
+}
+
+function onReceivableSupplyChange() {
+    receivableVatManual = false;
+    calcReceivableTotals();
+}
+
+function onReceivableVatChange() {
+    receivableVatManual = true;
+    calcReceivableTotals();
+}
+
+function toggleReceivableVat() {
+    receivableVatManual = false;
+    calcReceivableTotals();
+}
+
+function calcReceivableTotals() {
+    const supplyEl = document.getElementById('receivableSupply');
+    const vatEl = document.getElementById('receivableVat');
+    const totalEl = document.getElementById('receivableTotal');
+    const useVat = document.getElementById('receivableVatToggle').checked;
+
+    const supply = Number(supplyEl.value || 0);
+    let vat = Number(vatEl.value || 0);
+
+    vatEl.disabled = !useVat;
+    if (useVat) {
+        if (!receivableVatManual) {
+            vat = Math.round(supply * 0.1);
+            vatEl.value = vat;
+        }
+    } else {
+        vat = 0;
+        vatEl.value = 0;
+    }
+
+    const total = supply + vat;
+    totalEl.innerText = total.toLocaleString();
+}
+
+function getSelectedReceivableVendor() {
+    const sel = document.getElementById('receivableVendorSelect').value;
+    if (sel === '__custom__') {
+        return normalizeVendorName(document.getElementById('receivableVendorInput').value);
+    }
+    if (sel === '__all__') return '';
+    return normalizeVendorName(sel);
+}
+
+async function submitReceivableInput() {
+    if (!canPerform('accounting.edit')) return showAlert('수정 권한이 없습니다.');
+    const vendor = getSelectedReceivableVendor();
+    if (!vendor) return showAlert('오류', '거래처를 선택하거나 입력하세요.');
+
+    const fDate = document.getElementById('receivableInDate').value;
+    const dateWarning = getDateGuardMessage(fDate);
+    if (dateWarning) {
+        showConfirm('날짜 확인', dateWarning, async () => { await applyReceivableInput(); });
+        return;
+    }
+    await applyReceivableInput();
+}
+
+async function applyReceivableInput() {
+    const vendor = getSelectedReceivableVendor();
+    const fDate = document.getElementById('receivableInDate').value;
+    const useMonth = document.getElementById('receivableUseMonth').value;
+    const supply = Number(document.getElementById('receivableSupply').value || 0);
+    const vat = Number(document.getElementById('receivableVat').value || 0);
+    const useVat = document.getElementById('receivableVatToggle').checked;
+    const incomeType = getReceivableIncomeType();
+    const incomeAccount = getReceivableIncomeAccount();
+    const descInput = document.getElementById('receivableInDesc').value;
+    const project = document.getElementById('projectSelect').value || '본사';
+
+    if (!vendor) return showAlert('오류', '거래처를 입력하세요.');
+    if (!fDate) return showAlert('오류', '전표일자를 입력하세요.');
+    if (supply <= 0) return showAlert('오류', '공급가액을 입력하세요.');
+    if (!incomeType || !incomeAccount) return showAlert('오류', '수익 유형/계정을 선택하세요.');
+
+    const total = supply + (useVat ? vat : 0);
+    const writer = myInfo ? myInfo.emp_name : 'WebUser';
+    const monthLabel = useMonth || fDate.slice(0, 7);
+    const baseDesc = descInput || `${vendor} ${monthLabel} 미수 발생`;
+    const taggedDesc = `[미수금-${vendor}][수익-${incomeAccount}] ${baseDesc}`;
+
+    const entries = [];
+    entries.push({ Date: fDate, Type: incomeType, Account: incomeAccount, Description: taggedDesc, Debit: 0, Credit: supply, Project: project, Operator: writer, Evidence_Type: useVat ? '세금계산서' : '기타(영수증)' });
+    if (useVat && vat > 0) {
+        entries.push({ Date: fDate, Type: '부채', Account: '부가세예수금', Description: taggedDesc, Debit: 0, Credit: vat, Project: project, Operator: writer, Evidence_Type: '세금계산서' });
+    }
+    entries.push({ Date: fDate, Type: '자산', Account: '미수금', Description: taggedDesc, Debit: total, Credit: 0, Project: project, Operator: writer, Evidence_Type: useVat ? '세금계산서' : '기타(영수증)' });
+
+    applyTransId(entries);
+    const { error } = await _supabase.from('ac_journal').insert(entries);
+    if (error) return showAlert('오류', '저장 실패: ' + error.message);
+
+    showAlert('완료', `미수금 ${total.toLocaleString()}원 발생이 완료되었습니다.`);
+    document.getElementById('receivableSupply').value = '';
+    document.getElementById('receivableVat').value = '';
+    document.getElementById('receivableInDesc').value = '';
+    receivableVatManual = false;
+    await refreshDashboard();
+    renderReceivableVendorSelect();
+}
+
+async function submitReceivableCollection() {
+    if (!canPerform('accounting.edit')) return showAlert('수정 권한이 없습니다.');
+    const vendor = getSelectedReceivableVendor();
+    if (!vendor) return showAlert('오류', '거래처를 선택하거나 입력하세요.');
+
+    const fDate = document.getElementById('receivableOutDate').value;
+    const dateWarning = getDateGuardMessage(fDate);
+    if (dateWarning) {
+        showConfirm('날짜 확인', dateWarning, async () => { await applyReceivableCollection(); });
+        return;
+    }
+    await applyReceivableCollection();
+}
+
+async function applyReceivableCollection() {
+    const vendor = getSelectedReceivableVendor();
+    const fDate = document.getElementById('receivableOutDate').value;
+    const amount = Number(document.getElementById('receivableOutAmount').value || 0);
+    const descInput = document.getElementById('receivableOutDesc').value;
+    const project = document.getElementById('projectSelect').value || '본사';
+
+    if (!vendor) return showAlert('오류', '거래처를 입력하세요.');
+    if (!fDate) return showAlert('오류', '전표일자를 입력하세요.');
+    if (amount <= 0) return showAlert('오류', '회수 금액을 입력하세요.');
+
+    const balance = receivableCache.balances[vendor]?.balance ?? 0;
+    if (balance <= 0) return showAlert('오류', '미수금 잔액이 없습니다.');
+    if (amount > balance) return showAlert('오류', `잔액(${balance.toLocaleString()}원)보다 큰 금액은 회수할 수 없습니다.`);
+
+    const writer = myInfo ? myInfo.emp_name : 'WebUser';
+    const baseDesc = descInput || `${vendor} 미수금 회수`;
+    const taggedDesc = `[미수금-${vendor}] ${baseDesc}`;
+
+    const entries = [
+        { Date: fDate, Type: '자산', Account: '보통예금', Description: taggedDesc, Debit: amount, Credit: 0, Project: project, Operator: writer, Evidence_Type: '금융거래' },
+        { Date: fDate, Type: '자산', Account: '미수금', Description: taggedDesc, Debit: 0, Credit: amount, Project: project, Operator: writer, Evidence_Type: '금융거래' }
+    ];
+
+    applyTransId(entries);
+    const { error } = await _supabase.from('ac_journal').insert(entries);
+    if (error) return showAlert('오류', '저장 실패: ' + error.message);
+
+    showAlert('완료', `미수금 ${amount.toLocaleString()}원 회수가 완료되었습니다.`);
+    document.getElementById('receivableOutAmount').value = '';
+    document.getElementById('receivableOutDesc').value = '';
+    await refreshDashboard();
+    renderReceivableVendorSelect();
 }
 
 async function handleFormSubmit(e) {
@@ -1796,30 +2327,30 @@ async function executeClosing(ctx, legal, vol) {
     const relatedKey = `CLOSE-${ctx.year}`;
     const writer = myInfo ? myInfo.emp_name : "System";
 
-    const { data: dup } = await _supabase.from('ac_journal').select('id').eq('RelatedID', relatedKey).limit(1);
+    const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Trans_ID', relatedKey).limit(1);
     if (dup && dup.length > 0) return showAlert("중복", `이미 ${ctx.year}년도 결산이 완료되었습니다.`);
 
     let entries = [];
     for (const [acc, info] of Object.entries(ctx.balances)) {
         if(info.amount === 0) continue;
         if(info.type === '비용') { // 비용(차변) -> 대변 기입
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: info.amount, Credit: 0, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '비용', Account: acc, Description: `[손익마감]`, Debit: 0, Credit: info.amount, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: info.amount, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '비용', Account: acc, Description: `[손익마감]`, Debit: 0, Credit: info.amount, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
         } else { // 수익(대변) -> 차변 기입
             const abs = Math.abs(info.amount);
-            entries.push({ Date: ctx.endDate, Type: info.type, Account: acc, Description: `[손익마감]`, Debit: abs, Credit: 0, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: 0, Credit: abs, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: info.type, Account: acc, Description: `[손익마감]`, Debit: abs, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: 0, Credit: abs, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
         }
     }
 
     if(ctx.netIncome > 0) {
         if(legal > 0) {
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[이익처분] 법정적립`, Debit: legal, Credit: 0, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '법정적립금', Description: `[이익처분] 법정적립`, Debit: 0, Credit: legal, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[이익처분] 법정적립`, Debit: legal, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '법정적립금', Description: `[이익처분] 법정적립`, Debit: 0, Credit: legal, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
         }
         if(vol > 0) {
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[이익처분] 임의적립`, Debit: vol, Credit: 0, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '임의적립금', Description: `[이익처분] 임의적립`, Debit: 0, Credit: vol, RelatedID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[이익처분] 임의적립`, Debit: vol, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            entries.push({ Date: ctx.endDate, Type: '자본', Account: '임의적립금', Description: `[이익처분] 임의적립`, Debit: 0, Credit: vol, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
         }
     }
 
@@ -1836,7 +2367,7 @@ async function executeClosing(ctx, legal, vol) {
     }
 }
 
-// 6. 자동 연동 기능 (6종 완벽 구현)
+// 6. 자동 연동 기능
 function confirmSync(type) {
     if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
     const today = new Date().toISOString().slice(0,10);
@@ -1959,19 +2490,22 @@ function confirmSync(type) {
             const { data: approvals } = await _supabase.from('ac_approval').select('*').eq('status', '완료').ilike('doc_type', '%지출%');
             if(!approvals || !approvals.length) return showAlert("알림", "불러올 결재 건이 없습니다.");
             
-            const appIds = approvals.map(a => String(a.id));
-            const { data: existing } = await _supabase.from('ac_journal').select('RelatedID').in('RelatedID', appIds);
-            const existingSet = new Set(existing ? existing.map(e => e.RelatedID) : []);
-            const targetDocs = approvals.filter(a => !existingSet.has(String(a.id)));
+            const { data: existing, error: existingError } = await _supabase
+                .from('ac_journal')
+                .select('Trans_ID')
+                .like('Trans_ID', 'APR-%');
+            if (existingError) return showAlert("오류", "기존 전표 확인 실패: " + existingError.message);
+            const existingSet = new Set(existing ? existing.map(e => e.Trans_ID) : []);
+            const targetDocs = approvals.filter(a => !existingSet.has(`APR-${a.id}`));
             
             if(targetDocs.length === 0) return showAlert("알림", "이미 모두 연동되었습니다.");
 
             let entries = [];
             targetDocs.forEach(doc => {
                 const amt = Number(doc.amount);
-                const transId = generateTransId();
-                entries.push({Date: today, Type: '비용', Account: '미분류비용', Description: `[전자결재] ${doc.title}`, Debit: amt, Credit: 0, RelatedID: String(doc.id), Trans_ID: transId, Project: '본사', Operator: doc.drafter_name});
-                entries.push({Date: today, Type: '부채', Account: '미지급금', Description: `[전자결재] ${doc.title}`, Debit: 0, Credit: amt, RelatedID: String(doc.id), Trans_ID: transId, Project: '본사', Operator: doc.drafter_name});
+                const transId = `APR-${doc.id}`;
+                entries.push({Date: today, Type: '비용', Account: '미분류비용', Description: `[전자결재] ${doc.title}`, Debit: amt, Credit: 0, Trans_ID: transId, Project: '본사', Operator: doc.drafter_name});
+                entries.push({Date: today, Type: '부채', Account: '미지급금', Description: `[전자결재] ${doc.title}`, Debit: 0, Credit: amt, Trans_ID: transId, Project: '본사', Operator: doc.drafter_name});
             });
 
             const { error } = await _supabase.from('ac_journal').insert(entries);
@@ -2005,7 +2539,7 @@ function confirmSync(type) {
                         Description: desc, 
                         Debit: amt, 
                         Credit: 0, 
-                        // RelatedID 제거함 (불필요)
+                        // 전표 식별은 Trans_ID를 사용
                         Trans_ID: transId,
                         Project: '본사', 
                         Operator: writer
@@ -2019,7 +2553,7 @@ function confirmSync(type) {
                         Description: desc, 
                         Debit: 0, 
                         Credit: amt, 
-                        // RelatedID 제거함 (불필요)
+                        // 전표 식별은 Trans_ID를 사용
                         Trans_ID: transId,
                         Project: '본사', 
                         Operator: writer
@@ -2054,8 +2588,112 @@ function confirmSync(type) {
         });
     }
       
-    // (4) 배당금 연동
-// (4) 배당금 연동
+    // (4) 기부금 연동
+    else if (type === 'donation') {
+        showConfirm("기부금 연동", "미처리된 기부금 내역을 전표로 생성하시겠습니까?", async () => {
+            const { data: donations, error: fetchError } = await _supabase
+                .from('coop_donations')
+                .select('*')
+                .order('donation_date', { ascending: true });
+
+            if (fetchError) return showAlert("오류", "기부금 조회 실패: " + fetchError.message);
+            if (!donations || donations.length === 0) return showAlert("알림", "연동할 기부금 내역이 없습니다.");
+
+            // note가 NULL/빈값이면 미처리로 간주, [전표완료]가 없으면 처리 대상
+            const targets = donations.filter((d) => {
+                const note = String(d.note || '').trim();
+                return note === '' || !note.includes('[전표완료]');
+            });
+            if (targets.length === 0) return showAlert("알림", "이미 모두 연동되었습니다.");
+
+            let existingSet = new Set();
+            const { data: existingRows, error: existingError } = await _supabase
+                .from('ac_journal')
+                .select('Trans_ID')
+                .like('Trans_ID', 'DON-%');
+            if (existingError) return showAlert("오류", "기존 전표 확인 실패: " + existingError.message);
+            existingSet = new Set((existingRows || []).map((row) => String(row.Trans_ID || '')));
+
+            let entries = [];
+            let markTargets = [];
+            let createdCount = 0;
+
+            targets.forEach((d) => {
+                const amount = Number(d.amount || 0);
+                if (!(amount > 0)) return;
+
+                const transId = `DON-${d.id}`;
+                const currentNote = String(d.note || '').trim();
+                markTargets.push({ id: d.id, note: currentNote });
+                if (existingSet.has(String(transId))) return;
+
+                const donorLabel = d.member_id || d.member_uid || '익명';
+                const methodLabel = d.type ? `/${d.type}` : '';
+                const description = `[기부금] ${donorLabel}${methodLabel}`;
+                const txDate = d.donation_date || today;
+
+                // 입금 기준: (차) 보통예금 / (대) 자산수증이익
+                entries.push({
+                    Date: txDate,
+                    Type: '자산',
+                    Account: '보통예금',
+                    Description: description,
+                    Debit: amount,
+                    Credit: 0,
+                    Trans_ID: transId,
+                    Project: d.project || '본사',
+                    Operator: writer
+                });
+                entries.push({
+                    Date: txDate,
+                    Type: '영업외수익',
+                    Account: '자산수증이익',
+                    Description: description,
+                    Debit: 0,
+                    Credit: amount,
+                    Trans_ID: transId,
+                    Project: d.project || '본사',
+                    Operator: writer
+                });
+
+                createdCount += 1;
+            });
+
+            if (entries.length > 0) {
+                const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+                if (insertError) return showAlert("오류", "기부금 전표 저장 실패: " + insertError.message);
+            }
+
+            // 전표 처리 완료 마킹 (중복 방지)
+            let markFailed = 0;
+            for (const row of markTargets) {
+                const current = String(row.note || '').trim();
+                const hasDone = current.includes('[전표완료]');
+                const nextNote = hasDone
+                    ? current
+                    : (current ? `${current} [전표완료]` : '[전표완료]');
+                const { error: markError } = await _supabase
+                    .from('coop_donations')
+                    .update({ note: nextNote })
+                    .eq('id', row.id);
+                if (markError) {
+                    markFailed += 1;
+                    console.error('기부금 처리완료 마킹 실패:', row.id, markError);
+                }
+            }
+
+            const doneCount = markTargets.length;
+            if (markFailed > 0) {
+                showAlert("부분 완료", `전표 ${createdCount}건 생성, 처리표시 ${doneCount - markFailed}/${doneCount}건 완료`);
+            } else {
+                showAlert("성공", `기부금 연동 완료: 전표 ${createdCount}건 생성, 처리표시 ${doneCount}건 완료`);
+            }
+            refreshDashboard();
+            loadHistory();
+        });
+    }
+
+    // (5) 배당금 연동
     else if (type === 'dividend') {
         showConfirm("배당금 연동", "미처리된 배당금 지급 내역을 전표로 생성하시겠습니까?", async () => {
             // 1. 미처리 내역 조회 (is_accounted가 null이거나 false인 것)
@@ -2076,7 +2714,7 @@ function confirmSync(type) {
                 if (amt > 0) {
                     const desc = `[배당] ${d.member_id} 지급`; // 적요
                     const pDate = d.payment_date || today;   // 지급일
-                    const transId = generateTransId();
+                    const transId = `DIV-${d.id}`;
 
                     // 분개 1: (차변) 이월이익잉여금 - 자본 감소
                     entries.push({
@@ -2086,7 +2724,6 @@ function confirmSync(type) {
                         Description: desc,
                         Debit: amt,  // 자본은 대변이 증가이므로, 차변에 넣으면 감소 효과
                         Credit: 0,
-                        RelatedID: `DIV-${d.id}`,
                         Trans_ID: transId,
                         Project: d.project || '본사',
                         Operator: writer
@@ -2100,7 +2737,6 @@ function confirmSync(type) {
                         Description: desc,
                         Debit: 0,
                         Credit: amt,
-                        RelatedID: `DIV-${d.id}`,
                         Trans_ID: transId,
                         Project: d.project || '본사',
                         Operator: writer
@@ -2126,8 +2762,8 @@ function confirmSync(type) {
             }
         });
     }
-    // (5) 감가상각
-// (5) 감가상각 실행
+    // (6) 감가상각
+// (6) 감가상각 실행
     else if (type === 'depreciation') {
         const thisYear = new Date().getFullYear();
         
@@ -2187,7 +2823,6 @@ function confirmSync(type) {
                             Description: desc, 
                             Debit: yearDep, 
                             Credit: 0, 
-                            RelatedID: `DEP-${a.asset_code}`, 
                             Trans_ID: transId,
                             Project: a.project || '본사', 
                             Operator: writer
@@ -2201,7 +2836,6 @@ function confirmSync(type) {
                             Description: desc, 
                             Debit: 0, 
                             Credit: yearDep, 
-                            RelatedID: `DEP-${a.asset_code}`, 
                             Trans_ID: transId,
                             Project: a.project || '본사', 
                             Operator: writer
@@ -2224,12 +2858,12 @@ function confirmSync(type) {
         });
     }
 
-    // (6) 연말결산 (손익마감) - 모달 입력 방식
+    // (7) 연말결산 (손익마감) - 모달 입력 방식
     else if (type === 'closing') {
         openClosingModal();
     }
 
-    // (7) 연말결산 취소 (되돌리기) - 연도 입력 모달
+    // (8) 연말결산 취소 (되돌리기) - 연도 입력 모달
     else if (type === 'undo_closing') {
         const defaultYear = new Date().getFullYear() - 1;
         openYearModal("결산 취소", "취소할 결산 연도를 입력하세요.", defaultYear, async (targetYear) => {
@@ -2239,14 +2873,14 @@ function confirmSync(type) {
                 const { count } = await _supabase
                     .from('ac_journal')
                     .select('*', { count: 'exact', head: true })
-                    .eq('RelatedID', relatedKey);
+                    .eq('Trans_ID', relatedKey);
 
                 if (!count || count === 0) return showAlert("알림", `${targetYear}년도 결산 내역이 없습니다.`);
 
                 const { error } = await _supabase
                     .from('ac_journal')
                     .delete()
-                    .eq('RelatedID', relatedKey);
+                    .eq('Trans_ID', relatedKey);
 
                 if (error) {
                     showAlert("오류", "취소 실패: " + error.message);
@@ -2262,18 +2896,233 @@ function confirmSync(type) {
 
 function loadHistory() {
     const el = document.getElementById("historyList");
+    const metaEl = document.getElementById("historyMeta");
+    updateHistoryViewButtons();
     el.innerHTML = "로딩 중...";
-    _supabase.from('ac_journal').select('*').order('Date', {ascending:false}).limit(10).then(({data}) => {
-        el.innerHTML = "";
-        if(data) data.forEach(item => {
-            const amt = Number(item.Debit||0) + Number(item.Credit||0);
-            const safeType = escapeHtml(item.Type);
-            const safeAccount = escapeHtml(item.Account);
-            const safeDesc = escapeHtml(item.Description);
-            const transId = item.Trans_ID ? String(item.Trans_ID) : "";
-            el.innerHTML += `<div class="list-group-item d-flex justify-content-between"><div><span class="badge bg-secondary me-1">${safeType}</span><b>${safeAccount}</b> <small>${safeDesc}</small></div><div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" onclick="deleteTx('${item.id}', '${transId}')">×</span></div></div>`;
+    if (metaEl) metaEl.textContent = '';
+    const rowLimit = historyViewMode === 'single' ? 140 : 20;
+    _supabase
+        .from('ac_journal')
+        .select('*')
+        .order('Date', { ascending: false })
+        .limit(rowLimit)
+        .then(({ data, error }) => {
+            if (error) {
+                el.innerHTML = `<div class="list-group-item text-danger small">조회 실패: ${escapeHtml(error.message)}</div>`;
+                return;
+            }
+            if (historyViewMode === 'single') {
+                renderHistorySingle(data || []);
+            } else {
+                renderHistoryDouble(data || []);
+            }
+        });
+}
+
+function setHistoryView(mode) {
+    if (mode !== 'single' && mode !== 'double') return;
+    historyViewMode = mode;
+    updateHistoryViewButtons();
+    loadHistory();
+}
+
+function updateHistoryViewButtons() {
+    const singleBtn = document.getElementById("historySingleBtn");
+    const doubleBtn = document.getElementById("historyDoubleBtn");
+    if (!singleBtn || !doubleBtn) return;
+    const singleOn = historyViewMode === 'single';
+    singleBtn.className = `btn btn-sm ${singleOn ? 'btn-primary' : 'btn-outline-primary'}`;
+    doubleBtn.className = `btn btn-sm ${singleOn ? 'btn-outline-primary' : 'btn-primary'}`;
+}
+
+function isCashLikeAccount(accountName) {
+    const name = String(accountName || '');
+    if (!name) return false;
+    const keys = ['보통예금', '현금', '당좌예금', '예금'];
+    return keys.some((keyword) => name.includes(keyword));
+}
+
+function cleanTagPrefix(text) {
+    return String(text || '')
+        .replace(/\[[^\]]+\]\s*/g, '')
+        .trim();
+}
+
+function inferCashbookLabel(description, flow) {
+    const raw = String(description || '').trim();
+    if (!raw) {
+        return flow === '입금' ? '입금' : (flow === '지출' ? '지출' : '대체');
+    }
+    if (raw.includes('[기부금]')) return '기부금 입금';
+    if (raw.includes('[출자]')) return '출자금 입금';
+    if (raw.includes('[배당]')) return '배당금 지급';
+    if (raw.includes('[전자결재]')) return flow === '지출' ? '전자결재 지출' : '전자결재';
+    if (raw.includes('[손익마감]') || raw.includes('[이익처분]')) return '결산 대체';
+    if (raw.includes('감가상각')) return '감가상각 반영';
+    const cleaned = cleanTagPrefix(raw);
+    if (cleaned) return cleaned;
+    return flow === '입금' ? '입금' : (flow === '지출' ? '지출' : '대체');
+}
+
+function buildSingleEntryHistory(rows) {
+    const grouped = new Map();
+    rows.forEach((row, index) => {
+        const transId = row && row.Trans_ID ? String(row.Trans_ID).trim() : '';
+        const key = transId ? `T:${transId}` : `I:${row.id || index}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                id: row.id || '',
+                transId,
+                rows: [],
+                sortIndex: index
+            });
+        }
+        grouped.get(key).rows.push(row);
+    });
+
+    const list = [];
+    grouped.forEach((group) => {
+        let debitTotal = 0;
+        let creditTotal = 0;
+        let cashDelta = 0;
+        let date = '';
+        let desc = '';
+        let operator = '';
+
+        group.rows.forEach((entry) => {
+            const debit = Number(entry.Debit || 0);
+            const credit = Number(entry.Credit || 0);
+            const account = String(entry.Account || '').trim();
+            if (!date && entry.Date) date = String(entry.Date);
+            if (!desc && entry.Description) desc = String(entry.Description);
+            if (!operator && entry.Operator) operator = String(entry.Operator);
+
+            debitTotal += debit;
+            creditTotal += credit;
+
+            if (isCashLikeAccount(account)) {
+                cashDelta += (debit - credit);
+            }
+        });
+
+        // 용돈기입장형 단식 보기: 현금성 계정 변동이 없는 전표는 제외
+        if (cashDelta === 0) return;
+
+        let flow = '대체';
+        if (cashDelta > 0) flow = '입금';
+        else if (cashDelta < 0) flow = '지출';
+
+        const amount = Math.abs(cashDelta) > 0 ? Math.abs(cashDelta) : Math.max(debitTotal, creditTotal);
+        const inAmount = cashDelta > 0 ? cashDelta : 0;
+        const outAmount = cashDelta < 0 ? Math.abs(cashDelta) : 0;
+        const label = inferCashbookLabel(desc, flow);
+        list.push({
+            id: group.id,
+            transId: group.transId,
+            date,
+            desc: desc || '',
+            label,
+            operator: operator || '작성자 미상',
+            flow,
+            amount,
+            inAmount,
+            outAmount,
+            sortIndex: group.sortIndex
         });
     });
+
+    list.sort((a, b) => {
+        const ad = a.date || '';
+        const bd = b.date || '';
+        if (ad === bd) return a.sortIndex - b.sortIndex;
+        return ad < bd ? 1 : -1;
+    });
+    return list;
+}
+
+function deleteTxByButton(buttonEl) {
+    if (!buttonEl) return;
+    const id = buttonEl.getAttribute('data-id') || '';
+    const transId = buttonEl.getAttribute('data-trans-id') || '';
+    deleteTx(id, transId);
+}
+
+function renderHistorySingle(rows) {
+    const el = document.getElementById("historyList");
+    const metaEl = document.getElementById("historyMeta");
+    const items = buildSingleEntryHistory(rows).slice(0, 20);
+    el.innerHTML = "";
+    if (items.length === 0) {
+        el.innerHTML = `<div class="list-group-item text-muted small">표시할 전표가 없습니다.</div>`;
+        if (metaEl) metaEl.textContent = '단식 0건';
+        return;
+    }
+
+    items.forEach((item) => {
+        const dateText = escapeHtml(item.date || '-');
+        const labelText = escapeHtml(item.label || '(항목 없음)');
+        const descText = escapeHtml(cleanTagPrefix(item.desc || ''));
+        const operatorText = escapeHtml(item.operator);
+        const transText = item.transId ? ` · ${escapeHtml(item.transId)}` : '';
+        const inAmountText = item.inAmount > 0 ? `${Number(item.inAmount).toLocaleString()}원` : '-';
+        const outAmountText = item.outAmount > 0 ? `${Number(item.outAmount).toLocaleString()}원` : '-';
+        const idAttr = escapeHtml(item.id || '');
+        const transAttr = escapeHtml(item.transId || '');
+
+        el.innerHTML += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold mb-1">${labelText}</div>
+                        <div class="small text-muted">${dateText} · ${operatorText}${transText}</div>
+                        ${descText ? `<div class="small text-muted mt-1">${descText}</div>` : ''}
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-primary">들어옴: <b>${inAmountText}</b></div>
+                        <div class="small text-danger">나감: <b>${outAmountText}</b></div>
+                        <button class="btn btn-sm btn-outline-danger mt-1" data-id="${idAttr}" data-trans-id="${transAttr}" onclick="deleteTxByButton(this)">삭제</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    const totalIn = items.reduce((sum, item) => sum + Number(item.inAmount || 0), 0);
+    const totalOut = items.reduce((sum, item) => sum + Number(item.outAmount || 0), 0);
+    if (metaEl) metaEl.textContent = `단식 ${items.length}건 · 들어옴 ${totalIn.toLocaleString()}원 · 나감 ${totalOut.toLocaleString()}원`;
+}
+
+function renderHistoryDouble(rows) {
+    const el = document.getElementById("historyList");
+    const metaEl = document.getElementById("historyMeta");
+    el.innerHTML = "";
+    if (!rows || rows.length === 0) {
+        el.innerHTML = `<div class="list-group-item text-muted small">표시할 전표가 없습니다.</div>`;
+        if (metaEl) metaEl.textContent = '복식 0행';
+        return;
+    }
+    rows.forEach((item) => {
+        const amt = Number(item.Debit || 0) + Number(item.Credit || 0);
+        const safeType = escapeHtml(item.Type);
+        const safeAccount = escapeHtml(item.Account);
+        const safeDesc = escapeHtml(item.Description);
+        const safeDate = escapeHtml(item.Date);
+        const transId = item.Trans_ID ? String(item.Trans_ID) : "";
+        const safeTransId = escapeHtml(transId);
+        const idAttr = escapeHtml(item.id || '');
+        const transAttr = safeTransId;
+        el.innerHTML += `
+            <div class="list-group-item d-flex justify-content-between">
+                <div>
+                    <small class="text-muted me-2">${safeDate}</small>
+                    <span class="badge bg-secondary me-1">${safeType}</span>
+                    <b>${safeAccount}</b> <small>${safeDesc}</small>
+                    ${safeTransId ? `<small class="text-muted ms-1">(${safeTransId})</small>` : ''}
+                </div>
+                <div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" data-id="${idAttr}" data-trans-id="${transAttr}" onclick="deleteTxByButton(this)">×</span></div>
+            </div>
+        `;
+    });
+    if (metaEl) metaEl.textContent = `복식 ${rows.length}행`;
 }
 
 async function deleteTx(id, transId) {
@@ -2360,8 +3209,12 @@ async function confAdd() {
         addModal.hide(); 
         loadMasterData();
         loadPrepayExpenseAccounts();
+        loadReceivableIncomeAccounts();
         if (addContext === 'prepayExpense') {
             setPrepayExpenseAccount(name);
+            addContext = null;
+        } else if (addContext === 'receivableIncome') {
+            setReceivableIncomeAccount(name);
             addContext = null;
         }
     }
@@ -2389,7 +3242,8 @@ async function printReport() {
     const endDate = (selYear === currYear) ? todayStr : `${selYear}-12-31`;
     let rangeText = (selYear === currYear) ? `${startDate} ~ ${endDate} (가결산)` : `${startDate} ~ ${endDate} (확정)`;
 
-    const { data } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate);
+    const { data: periodData } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate);
+    const { data: closingData } = await _supabase.from('ac_journal').select('*').lte('Date', endDate);
     const { data: infoData } = await _supabase.from('ref_company_info').select('*');
     const { data: masterData } = await _supabase.from('ac_master').select('Type, Standard, Item, Code');
     const info = {}; if(infoData) infoData.forEach(i=>info[i.key]=i.value);
@@ -2406,33 +3260,63 @@ async function printReport() {
     
     // [신규] 잉여금 처분 집계용
     let surplus = { legal: 0, voluntary: 0, dividend: 0 }; 
+    const accountAliasByCompact = {
+        '부가세대급금': '부가세대급금',
+        '부가세예수금': '부가세예수금',
+        '잡이익': '잡이익',
+        '잡손실': '잡손실'
+    };
 
-    if (data) data.forEach(r => {
-        const db = Number(r.Debit||0), cr = Number(r.Credit||0);
+    function normalizeAccountName(name) {
+        const raw = String(name || '').trim();
+        if (!raw) return '';
+        const compact = raw.replace(/\s+/g, '');
+        return accountAliasByCompact[compact] || raw;
+    }
+
+    function normalizeTypeByAccount(type, account) {
+        if (account === '부가세대급금' || account === '보통예금' || account === '현금' || account === '선급금' || account === '미수금') return '자산';
+        if (account === '부가세예수금') return '부채';
+        if (account === '잡이익') return '매출';
+        if (account === '잡손실') return '비용';
+        return type || '';
+    }
+
+    if (closingData) closingData.forEach(r => {
+        const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
         const valDr = db - cr;
         const valCr = cr - db;
-        
-        // 1. 재무제표 집계
-        if(r.Type==='자산') { asset[r.Account]=(asset[r.Account]||0)+valDr; tAsset+=valDr; }
-        else if(r.Type==='부채') { liab[r.Account]=(liab[r.Account]||0)+valCr; tLiab+=valCr; }
-        else if(r.Type==='자본') { 
-            equity[r.Account]=(equity[r.Account]||0)+valCr; 
-            tEquity+=valCr; 
-            if(r.Account==='출자금') capital+=valCr; 
-            
-            // 잉여금 처분 내역 파악 (결산 분개에서 대변에 적힌 적립금)
-            if(r.Account === '법정적립금') surplus.legal += cr;
-            if(r.Account === '임의적립금') surplus.voluntary += cr;
+        const account = normalizeAccountName(r.Account);
+        const type = normalizeTypeByAccount(r.Type, account);
+
+        if(type === '자산') { asset[account] = (asset[account] || 0) + valDr; tAsset += valDr; }
+        else if(type === '부채') { liab[account] = (liab[account] || 0) + valCr; tLiab += valCr; }
+        else if(type === '자본') {
+            equity[account] = (equity[account] || 0) + valCr;
+            tEquity += valCr;
+            if(account === '출자금') capital += valCr;
         }
-        else if(r.Type==='매출') { rev[r.Account]=(rev[r.Account]||0)+valCr; tRev+=valCr; }
-        else if(r.Type==='비용') { exp[r.Account]=(exp[r.Account]||0)+valDr; tExp+=valDr; }
-        else if(r.Type==='영업외수익') { otherRev[r.Account]=(otherRev[r.Account]||0)+valCr; tOtherRev+=valCr; }
-        
-        // 2. 법인세 조정 분석
-        if(r.Type === '비용') {
-            if(r.Account === '세금과공과' && (r.Description.includes('과태료') || r.Description.includes('벌금'))) taxAdjust.fines += db;
-            if(r.Account === '접대비') taxAdjust.entertain += db;
-            if(r.Account === '기부금') taxAdjust.donations += db;
+    });
+
+    if (periodData) periodData.forEach(r => {
+        const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
+        const valDr = db - cr;
+        const valCr = cr - db;
+        const account = normalizeAccountName(r.Account);
+        const type = normalizeTypeByAccount(r.Type, account);
+
+        if(type === '매출') { rev[account] = (rev[account] || 0) + valCr; tRev += valCr; }
+        else if(type === '비용') { exp[account] = (exp[account] || 0) + valDr; tExp += valDr; }
+        else if(type === '영업외수익') { otherRev[account] = (otherRev[account] || 0) + valCr; tOtherRev += valCr; }
+        else if(type === '자본') {
+            if(account === '법정적립금') surplus.legal += cr;
+            if(account === '임의적립금') surplus.voluntary += cr;
+        }
+
+        if(type === '비용') {
+            if(account === '세금과공과' && r.Description && (r.Description.includes('과태료') || r.Description.includes('벌금'))) taxAdjust.fines += db;
+            if(account === '접대비') taxAdjust.entertain += db;
+            if(account === '기부금') taxAdjust.donations += db;
             if(db > 30000 && r.Evidence_Type === '기타(영수증)') taxAdjust.noProof += db;
         }
     });
@@ -2450,15 +3334,36 @@ async function printReport() {
     const totalSurplus = netIncome; 
     const totalAppropriation = surplus.legal + surplus.voluntary;
     const carriedForward = totalSurplus - totalAppropriation;
+    const vatReceivable = asset['부가세대급금'] || 0;
+    const vatPayable = liab['부가세예수금'] || 0;
+    const vatNet = vatPayable - vatReceivable;
 
     const masterList = masterData || [];
     const codeMap = {};
+    const typedCodeMap = {};
     masterList.forEach(m => {
-        const name = m.Item || m.item;
-        if (!name) return;
+        const type = m.Type || m.type || "";
+        const item = m.Item || m.item || "";
+        const standard = m.Standard || m.standard || "";
         const code = m.Code || m.code || m.Standard || "-";
-        if (!codeMap[name]) codeMap[name] = code;
+
+        const itemCompact = item.replace(/\s+/g, '');
+        const standardCompact = standard.replace(/\s+/g, '');
+
+        if (item && !codeMap[item]) codeMap[item] = code;
+        if (itemCompact && !codeMap[itemCompact]) codeMap[itemCompact] = code;
+        if (standard && !codeMap[standard]) codeMap[standard] = code;
+        if (standardCompact && !codeMap[standardCompact]) codeMap[standardCompact] = code;
+        if (type && item && !typedCodeMap[`${type}::${item}`]) typedCodeMap[`${type}::${item}`] = code;
+        if (type && standard && !typedCodeMap[`${type}::${standard}`]) typedCodeMap[`${type}::${standard}`] = code;
+        if (type && itemCompact && !typedCodeMap[`${type}::${itemCompact}`]) typedCodeMap[`${type}::${itemCompact}`] = code;
+        if (type && standardCompact && !typedCodeMap[`${type}::${standardCompact}`]) typedCodeMap[`${type}::${standardCompact}`] = code;
     });
+
+    if (!codeMap['잡이익']) codeMap['잡이익'] = codeMap['기타수익'] || '910';
+    if (!codeMap['잡손실']) codeMap['잡손실'] = codeMap['기타비용'] || '960';
+    if (!codeMap['부가세대급금']) codeMap['부가세대급금'] = codeMap['매입세액'] || '136';
+    if (!codeMap['부가세예수금']) codeMap['부가세예수금'] = codeMap['매출세액'] || '255';
 
     const toStandard = (m) => (m.Standard || m.standard || "");
     const toCode = (m) => (m.Code || m.code || m.Standard || "");
@@ -2487,7 +3392,9 @@ async function printReport() {
         });
         Object.keys(amounts).forEach(name => {
             if (!seen.has(name)) {
-                list.push({ name, standard: "", code: codeMap[name] || "-" });
+                const compactName = String(name || '').replace(/\s+/g, '');
+                const fallbackCode = typedCodeMap[`${type}::${name}`] || typedCodeMap[`${type}::${compactName}`] || codeMap[name] || codeMap[compactName] || "-";
+                list.push({ name, standard: "", code: fallbackCode });
                 seen.add(name);
             }
         });
@@ -2509,7 +3416,8 @@ async function printReport() {
 
     const renderPLRows = (list, amounts) => list.map(row => {
         const val = (amounts[row.name] ?? 0);
-        const code = codeMap[row.name] || row.code || "-";
+        const compactName = String(row.name || '').replace(/\s+/g, '');
+        const code = codeMap[row.name] || codeMap[compactName] || row.code || "-";
         return `<tr><td class="rpt-indent">${e(row.name)}</td><td class="text-center text-muted text-small">${e(String(code))}</td><td class="rpt-amt">${Number(val).toLocaleString()}</td></tr>`;
     }).join('');
 
@@ -2566,6 +3474,9 @@ async function printReport() {
         </div>
         <table class="rpt-tbl mt-2">
             <tr><td class="bg-light fw-bold">1. 당기순이익 (결산서상)</td><td class="rpt-amt fw-bold">${netIncome.toLocaleString()}</td></tr>
+            <tr><td class="bg-light fw-bold">1-1. 부가세대급금 (환급예정 자산)</td><td class="rpt-amt fw-bold text-primary">${vatReceivable.toLocaleString()}</td></tr>
+            <tr><td class="bg-light fw-bold">1-2. 부가세예수금 (납부예정 부채)</td><td class="rpt-amt fw-bold text-danger">${vatPayable.toLocaleString()}</td></tr>
+            <tr><td class="rpt-indent">1-3. 부가세 순액 (예수금-대급금)</td><td class="rpt-amt">${vatNet.toLocaleString()}</td></tr>
             <tr><td class="bg-light fw-bold text-primary">2. 익금산입 / 손금불산입 (+)</td><td class="rpt-amt fw-bold text-primary">${taxAdjust.fines.toLocaleString()}</td></tr>
             <tr><td class="rpt-indent">과태료/벌금 (손금불산입)</td><td class="rpt-amt">${taxAdjust.fines.toLocaleString()}</td></tr>
             <tr><td class="rpt-indent">접대비 한도초과 (별도계산필요)</td><td class="rpt-amt text-muted">(${taxAdjust.entertain.toLocaleString()})</td></tr>
