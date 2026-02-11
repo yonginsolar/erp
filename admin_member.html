@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.14
-Change: 2026-02-05 - Avoid KST helper name collision with shared scripts.
+Version: v1.0.15
+Change: 2026-02-10 - Add editable member email field in detail modal and save flow.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.14';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.15';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -1389,6 +1389,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="tab-content p-4">
 <div class="tab-pane fade show active" id="md-tab-basic">
     <input type="hidden" id="md-uid">
+    <input type="hidden" id="md-email-original">
 
     <div class="row g-3 mb-3">
         <div class="col-md-3">
@@ -1398,6 +1399,11 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
         <div class="col-md-3">
             <label class="form-label small fw-bold text-muted">연락처</label>
             <input type="text" id="md-phone" class="form-control" maxlength="13" oninput="autoHyphen(this)">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label small fw-bold text-muted">이메일</label>
+            <input type="email" id="md-email" class="form-control" placeholder="example@email.com">
+            <div class="form-text x-small text-end">* 조합원 프로필 이메일(coop_members.email) 수정</div>
         </div>
         <div class="col-md-3">
             <label class="form-label small fw-bold text-muted">상태</label>
@@ -4144,6 +4150,7 @@ async function fetchMembers() {
                 'name',
                 'member_type',
                 'phone',
+                'email',
                 'status',
                 'join_date',
                 'created_at',
@@ -4350,6 +4357,8 @@ async function openMemberDetail(id) {
     // 폼 값 채우기
     document.getElementById('md-name').value = m.name || '';
     document.getElementById('md-phone').value = m.phone || '';
+    document.getElementById('md-email').value = m.email || '';
+    document.getElementById('md-email-original').value = m.email || '';
     document.getElementById('md-status').value = m.status || '승인대기';
     document.getElementById('md-type').value = typeStr;
     document.getElementById('md-addr').value = m.address || '';
@@ -4543,6 +4552,13 @@ async function saveMemberBasic() {
             // [수정] 단체 정보도 함께 수집
             const corpNum = document.getElementById('md-corp-num').value || null;
             const bizNum = document.getElementById('md-biz-num').value || null;
+            const emailInput = (document.getElementById('md-email').value || '').trim();
+            const emailOriginal = (document.getElementById('md-email-original').value || '').trim();
+            const nextEmail = emailInput || null;
+
+            if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+                throw new Error('이메일 형식이 올바르지 않습니다.');
+            }
 
             // 2. 기본 정보 업데이트 (기존 로직 유지 + 단체 파라미터 추가)
             const updates = {
@@ -4565,6 +4581,16 @@ async function saveMemberBasic() {
 
             const { error: basicError } = await _supabase.rpc('update_member_details_secure', updates);
             if (basicError) throw basicError;
+
+            // 2-1. 이메일(coop_members.email) 별도 저장
+            if ((emailOriginal || '').toLowerCase() !== (emailInput || '').toLowerCase()) {
+                const { error: emailError } = await _supabase
+                    .from('coop_members')
+                    .update({ email: nextEmail })
+                    .eq('id', memberUid);
+                if (emailError) throw new Error('이메일 저장 실패: ' + emailError.message);
+                document.getElementById('md-email-original').value = emailInput;
+            }
 
             // ============================================================
             // ★ [추가됨] 뱃지 저장 (문자 Code -> 숫자 ID 변환)

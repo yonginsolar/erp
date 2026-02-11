@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.3 | Change: 2026-02-05 - Avoid KST helper name collision with shared scripts. -->
+<!-- Version: v1.1.5 | Change: 2026-02-10 - Roll back physical print layout to v1.1.5 baseline. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.3 | approval.html');</script>
+  <script>console.log('[Version] v1.1.5 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -29,6 +29,43 @@
     
     .file-item { font-size: 0.9rem; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; border: 1px solid #eee; }
     .file-size { font-size: 0.8rem; color: #888; float: right; }
+    .html-preview-box {
+      min-height: 280px;
+      max-height: 65vh;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+      background: #fff;
+      line-height: 1.7;
+    }
+    .html-preview-box h1, .html-preview-box h2, .html-preview-box h3, .html-preview-box h4 { margin-top: 0.8rem; margin-bottom: 0.5rem; }
+    .html-preview-box p { margin-bottom: 0.6rem; }
+    .html-preview-box ul, .html-preview-box ol { margin-bottom: 0.8rem; padding-left: 1.25rem; }
+    .approval-editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .approval-editor-tabs { display: flex; gap: 8px; margin: 6px 0 10px; }
+    .approval-editor-panel { display: none; }
+    .approval-editor-panel.active { display: block; }
+    .approval-visual-editor {
+      min-height: 500px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      line-height: 1.65;
+      background: #fff;
+      overflow: auto;
+      color: #1f2937;
+    }
+    .approval-visual-editor:focus {
+      outline: none;
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.35);
+    }
+    .approval-visual-editor:empty::before {
+      content: attr(data-placeholder);
+      color: #94a3b8;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -147,6 +184,10 @@
           <label class="small text-muted fw-bold">제목</label>
           <input type="text" class="form-control" id="noticeSubject" placeholder="예: 공문 제목">
         </div>
+        <div class="col-12 hidden mb-3" id="divProposalSubject">
+          <label class="small text-muted fw-bold">품의 제목</label>
+          <input type="text" class="form-control" id="proposalSubject" placeholder="예: 2026년 2월 사무국 운영비 집행 건">
+        </div>
         <div class="col-12" id="divAmount">
           <label class="small text-muted" id="amountLabel">금액 (원)</label>
           <input type="number" class="form-control" id="appAmount" placeholder="0">
@@ -214,8 +255,32 @@
       </div>
 
       <div class="mb-3">
-        <label class="small text-muted">내용</label>
-        <textarea class="form-control large-textarea" id="appDesc" placeholder="내용을 상세히 입력하세요." required rows="20"></textarea>
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <label class="small text-muted fw-bold m-0">내용</label>
+          <button type="button" class="btn btn-sm btn-outline-secondary hidden" id="btnAppDescPreview" onclick="openAppDescPreview()">👁️ HTML 미리보기</button>
+        </div>
+        <div id="appDescEditorControls" class="hidden">
+          <div class="approval-editor-toolbar">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<h3>','</h3>')">제목</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<p>','</p>')">문단</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<strong>','</strong>')">굵게</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<ul><li>','</li></ul>')">목록</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<ol><li>','</li></ol>')">번호목록</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<table>','</table>')">테이블</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<br>','')">줄바꿈</button>
+          </div>
+          <div class="approval-editor-tabs">
+            <button type="button" id="app-desc-tab-visual" class="btn btn-sm btn-primary" onclick="switchApprovalEditorTab('visual')">미리보기 편집</button>
+            <button type="button" id="app-desc-tab-html" class="btn btn-sm btn-outline-primary" onclick="switchApprovalEditorTab('html')">HTML 편집</button>
+          </div>
+        </div>
+        <div id="app-desc-panel-visual" class="approval-editor-panel">
+          <div id="appDescVisual" class="approval-visual-editor" contenteditable="true" data-placeholder="여기에 내용을 입력하세요."></div>
+        </div>
+        <div id="app-desc-panel-html" class="approval-editor-panel active">
+          <textarea class="form-control large-textarea" id="appDesc" placeholder="내용을 상세히 입력하세요." rows="20"></textarea>
+        </div>
+        <div class="small text-muted mt-2 hidden" id="appDescHtmlHelp">일반품의서는 테이블 포함 HTML 본문을 작성할 수 있습니다. `미리보기 편집` 또는 `HTML 편집` 탭으로 작성하고 제출 전 미리보기로 확인하세요.</div>
       </div>
 
       <div class="mb-4">
@@ -245,6 +310,7 @@
 <div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">📄 관련 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
 <div class="modal fade" id="physicalRejectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 실물결재 반려</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">반려 사유</label><textarea id="physicalRejectReason" class="form-control" rows="5" placeholder="반려 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-danger btn-sm" id="btnPhysicalRejectSubmit" onclick="submitPhysicalReject()">반려 처리</button></div></div></div></div>
 <div class="modal fade" id="cancelDraftModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">🗑️ 상신 취소</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">취소 사유</label><textarea id="cancelDraftReason" class="form-control" rows="4" placeholder="취소 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button><button class="btn btn-danger btn-sm" id="btnCancelDraftSubmit" onclick="submitDraftCancel()">취소 확정</button></div></div></div></div>
+<div class="modal fade" id="appDescPreviewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1" id="appDescPreviewTitle">본문 미리보기</h6><div class="small text-muted" id="appDescPreviewMeta">HTML 렌더링 결과</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="appDescPreviewBody" class="html-preview-box"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <input type="file" id="signedDocInput" class="hidden" accept=".pdf,.png,.jpg,.jpeg">
 
   <script>
@@ -264,6 +330,8 @@ let pendingCancelDocId = null;
 let salaryExpenseState = null;
 let physicalRejectModalInstance = null;
 let cancelDraftModalInstance = null;
+let appDescPreviewModalInstance = null;
+let approvalEditorMode = 'html';
 const KST_TZ_APPROVAL = 'Asia/Seoul';
 const formatApprovalKstDateISO = (value, fallback = '') => {
     if (!value) return fallback;
@@ -369,6 +437,254 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function hasHtmlTag(value) {
+    return /<\s*\/?\s*[a-zA-Z][^>]*>/.test(String(value || ''));
+}
+
+function sanitizeApprovalStyle(rawStyle) {
+    const style = String(rawStyle || '');
+    if (!style.trim()) return '';
+    const blockedValue = /(expression\s*\(|javascript:|vbscript:|data:text\/html|@import|behavior:|-moz-binding)/i;
+    const safeRules = [];
+    style.split(';').forEach(rule => {
+        const idx = rule.indexOf(':');
+        if (idx <= 0) return;
+        const prop = rule.slice(0, idx).trim().toLowerCase();
+        const value = rule.slice(idx + 1).trim();
+        if (!prop || !value) return;
+        if (!/^[a-z-]+$/.test(prop)) return;
+        if (blockedValue.test(value)) return;
+        safeRules.push(`${prop}: ${value}`);
+    });
+    return safeRules.join('; ');
+}
+
+function sanitizeApprovalUrl(rawUrl) {
+    const input = String(rawUrl || '').trim();
+    if (!input) return '';
+    if (input.startsWith('#')) return '#';
+    if (/^data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=\s]+$/i.test(input)) return input;
+    try {
+        const parsed = new URL(input, window.location.origin);
+        if (['http:', 'https:', 'mailto:', 'tel:'].includes(parsed.protocol)) return parsed.href;
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
+function sanitizeApprovalHtml(rawHtml) {
+    const source = String(rawHtml || '');
+    if (!source.trim()) return '';
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${source}</div>`, 'text/html');
+    const root = doc.body.firstElementChild || doc.body;
+    const blockedTags = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'META', 'LINK']);
+
+    Array.from(root.querySelectorAll('*')).forEach(node => {
+        const tag = node.tagName.toUpperCase();
+        if (blockedTags.has(tag)) {
+            node.remove();
+            return;
+        }
+
+        Array.from(node.attributes).forEach(attr => {
+            const name = String(attr.name || '').toLowerCase();
+            if (name.startsWith('on') || name === 'srcdoc') {
+                node.removeAttribute(attr.name);
+                return;
+            }
+            if (name === 'style') {
+                const safeStyle = sanitizeApprovalStyle(attr.value);
+                if (safeStyle) node.setAttribute('style', safeStyle);
+                else node.removeAttribute(attr.name);
+                return;
+            }
+            if (name === 'href' || name === 'src' || name === 'xlink:href' || name === 'formaction') {
+                const safeUrl = sanitizeApprovalUrl(attr.value);
+                if (safeUrl) node.setAttribute(attr.name, safeUrl);
+                else node.removeAttribute(attr.name);
+                }
+        });
+
+        if (tag === 'A' && node.getAttribute('target') === '_blank') {
+            node.setAttribute('rel', 'noopener noreferrer');
+        }
+    });
+
+    return root.innerHTML;
+}
+
+function renderApprovalContent(rawValue, allowHtml = false) {
+    const raw = String(rawValue || '');
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    if (allowHtml && hasHtmlTag(trimmed)) return sanitizeApprovalHtml(trimmed);
+    return escapeHtml(trimmed).replace(/\n/g, '<br>');
+}
+
+function mergeSystemAppendContent(baseContent, appendContent, allowHtml = false) {
+    const base = String(baseContent || '');
+    const extra = String(appendContent || '');
+    if (!extra) return base;
+    if (allowHtml && hasHtmlTag(base)) {
+        const noteHtml = escapeHtml(extra.trim()).replace(/\n/g, '<br>');
+        return `${base}\n<p>${noteHtml}</p>`;
+    }
+    return `${base}${extra}`;
+}
+
+function getApprovalHtmlEditor() {
+    return document.getElementById("appDesc");
+}
+
+function getApprovalVisualEditor() {
+    return document.getElementById("appDescVisual");
+}
+
+function normalizeApprovalVisualHtml(rawHtml) {
+    return String(rawHtml || '')
+        .replace(/^\s*<br>\s*$/i, '')
+        .replace(/^\s*<div><br><\/div>\s*$/i, '')
+        .trim();
+}
+
+function syncApprovalVisualFromSource() {
+    const source = getApprovalHtmlEditor();
+    const visual = getApprovalVisualEditor();
+    if (!source || !visual) return;
+    visual.innerHTML = renderApprovalContent(source.value, true);
+}
+
+function syncApprovalSourceFromVisual() {
+    const source = getApprovalHtmlEditor();
+    const visual = getApprovalVisualEditor();
+    if (!source || !visual) return;
+    source.value = normalizeApprovalVisualHtml(visual.innerHTML);
+}
+
+function setApprovalEditorContent(rawValue) {
+    const source = getApprovalHtmlEditor();
+    if (!source) return;
+    source.value = String(rawValue || '');
+    syncApprovalVisualFromSource();
+}
+
+function getApprovalEditorContent() {
+    if (approvalEditorMode === 'visual') syncApprovalSourceFromVisual();
+    return getApprovalHtmlEditor()?.value || '';
+}
+
+function ensureApprovalVisualSelection(editor) {
+    if (!editor) return;
+    const selection = window.getSelection();
+    if (!selection) return;
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) return;
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+function buildDefaultTableHtml() {
+    return '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%;"><thead><tr><th>항목</th><th>내용</th></tr></thead><tbody><tr><td></td><td></td></tr></tbody></table>';
+}
+
+function applyApprovalVisualFormat(beforeTag) {
+    const visual = getApprovalVisualEditor();
+    if (!visual) return false;
+    visual.focus();
+    ensureApprovalVisualSelection(visual);
+
+    if (beforeTag === '<h3>') document.execCommand('formatBlock', false, 'h3');
+    else if (beforeTag === '<p>') document.execCommand('formatBlock', false, 'p');
+    else if (beforeTag === '<strong>') document.execCommand('bold', false, null);
+    else if (beforeTag === '<ul><li>') document.execCommand('insertUnorderedList', false, null);
+    else if (beforeTag === '<ol><li>') document.execCommand('insertOrderedList', false, null);
+    else if (beforeTag === '<br>') document.execCommand('insertHTML', false, '<br>');
+    else if (beforeTag === '<table>') document.execCommand('insertHTML', false, buildDefaultTableHtml());
+    else return false;
+
+    syncApprovalSourceFromVisual();
+    return true;
+}
+
+window.insertApprovalTag = (before, after = '') => {
+    if (approvalEditorMode === 'visual' && applyApprovalVisualFormat(before)) return;
+
+    const editor = getApprovalHtmlEditor();
+    if (!editor) return;
+    const start = editor.selectionStart || 0;
+    const end = editor.selectionEnd || 0;
+    const selected = editor.value.slice(start, end);
+    let inserted = `${before}${selected}${after}`;
+    if (before === '<table>') {
+        inserted = buildDefaultTableHtml();
+    }
+    editor.setRangeText(inserted, start, end, 'end');
+    editor.focus();
+    if (approvalEditorMode === 'html') syncApprovalVisualFromSource();
+};
+
+window.switchApprovalEditorTab = (mode = 'visual') => {
+    const visualBtn = document.getElementById('app-desc-tab-visual');
+    const htmlBtn = document.getElementById('app-desc-tab-html');
+    const visualPanel = document.getElementById('app-desc-panel-visual');
+    const htmlPanel = document.getElementById('app-desc-panel-html');
+    if (!visualBtn || !htmlBtn || !visualPanel || !htmlPanel) return;
+
+    const isVisual = mode !== 'html';
+    if (isVisual) syncApprovalVisualFromSource();
+    else syncApprovalSourceFromVisual();
+
+    approvalEditorMode = isVisual ? 'visual' : 'html';
+    visualPanel.classList.toggle('active', isVisual);
+    htmlPanel.classList.toggle('active', !isVisual);
+    visualBtn.classList.toggle('btn-primary', isVisual);
+    visualBtn.classList.toggle('btn-outline-primary', !isVisual);
+    htmlBtn.classList.toggle('btn-primary', !isVisual);
+    htmlBtn.classList.toggle('btn-outline-primary', isVisual);
+};
+
+function setApprovalEditorForCategory(docType) {
+    const controls = document.getElementById('appDescEditorControls');
+    const visualPanel = document.getElementById('app-desc-panel-visual');
+    const htmlPanel = document.getElementById('app-desc-panel-html');
+    if (!controls || !visualPanel || !htmlPanel) return;
+
+    const isGeneralProposal = docType === '일반품의';
+    if (isGeneralProposal) {
+        controls.classList.remove('hidden');
+        window.switchApprovalEditorTab('visual');
+    } else {
+        controls.classList.add('hidden');
+        syncApprovalSourceFromVisual();
+        approvalEditorMode = 'html';
+        visualPanel.classList.remove('active');
+        htmlPanel.classList.add('active');
+    }
+}
+
+function initializeApprovalEditor() {
+    const source = getApprovalHtmlEditor();
+    const visual = getApprovalVisualEditor();
+    if (!source || !visual) return;
+
+    source.addEventListener('input', () => {
+        if (approvalEditorMode === 'html') syncApprovalVisualFromSource();
+    });
+    visual.addEventListener('input', () => {
+        if (approvalEditorMode === 'visual') syncApprovalSourceFromVisual();
+    });
+    visual.addEventListener('blur', () => {
+        if (approvalEditorMode === 'visual') syncApprovalSourceFromVisual();
+    });
+
+    syncApprovalVisualFromSource();
+}
+
 async function createNotification(targetEmpId, title, message, linkUrl, meta = null) {
     try {
         if (!targetEmpId) return;
@@ -424,6 +740,7 @@ window.onload = async function() {
     alertModalInstance = new bootstrap.Modal(document.getElementById('alertModal'));
     physicalRejectModalInstance = new bootstrap.Modal(document.getElementById('physicalRejectModal'));
     cancelDraftModalInstance = new bootstrap.Modal(document.getElementById('cancelDraftModal'));
+    appDescPreviewModalInstance = new bootstrap.Modal(document.getElementById('appDescPreviewModal'));
     
     const stored = localStorage.getItem('erp_user');
     if (!stored) { location.href = 'index.html'; return; }
@@ -462,6 +779,7 @@ window.onload = async function() {
         });
     }
 
+    initializeApprovalEditor();
     calculateLeave(); // 연차 계산 (대리상신 고려하여 함수 분리됨)
     handleCategoryChange(); // UI 초기화
 };
@@ -546,7 +864,6 @@ function handleExpenseSubTypeChange() {
     const summary = document.getElementById("payrollSummary");
     const amountLabel = document.getElementById("amountLabel");
     const amountInput = document.getElementById("appAmount");
-    const desc = document.getElementById("appDesc");
     const monthInput = document.getElementById("payrollMonth");
 
     if (mode !== '급여') {
@@ -578,9 +895,10 @@ function handleExpenseSubTypeChange() {
     }
     if (amountLabel) amountLabel.innerText = "실지급 합계 (원)";
     if (amountInput) amountInput.placeholder = "급여대장 불러오기 시 자동 입력";
-    if (desc && (!desc.value.trim() || desc.value.includes("지출하고자 하오니 승인하여"))) {
+    const currentDesc = getApprovalEditorContent();
+    if (desc && (!currentDesc.trim() || currentDesc.includes("지출하고자 하오니 승인하여"))) {
         const ymLabel = formatYearMonthLabel(monthInput?.value || '');
-        desc.value = `${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.`;
+        setApprovalEditorContent(`${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.`);
     }
 }
 
@@ -619,7 +937,6 @@ async function loadSalaryLedgerForExpense() {
         summary.innerHTML = `연동 완료: ${ymLabel} · ${empCount}명 · 실지급 합계 <strong>${formatMoney(netTotal)}원</strong>`;
     }
 
-    const desc = document.getElementById("appDesc");
     const autoBlock = [
         `[급여대장 연동] ${ymLabel}`,
         `- 대상 인원: ${empCount}명`,
@@ -627,8 +944,9 @@ async function loadSalaryLedgerForExpense() {
         `- 공제총액: ${formatMoney(dedTotal)}원`,
         `- 실지급총액: ${formatMoney(netTotal)}원`
     ].join('\n');
-    if (!desc.value.trim() || desc.value.includes('[급여대장 연동]')) {
-        desc.value = `${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.\n\n${autoBlock}`;
+    const currentDesc = getApprovalEditorContent();
+    if (!currentDesc.trim() || currentDesc.includes('[급여대장 연동]')) {
+        setApprovalEditorContent(`${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.\n\n${autoBlock}`);
     }
 }
 
@@ -720,7 +1038,6 @@ function switchTab(tab) {
 // [수정] 카테고리 변경 핸들러 (관련 문서 UI 제어 추가)
 function handleCategoryChange() {
     const type = document.getElementById("appCategory").value;
-    const desc = document.getElementById("appDesc");
     const amtLabel = document.getElementById("amountLabel");
     const amountInput = document.getElementById("appAmount");
     const fileHelp = document.getElementById("fileHelp");
@@ -735,6 +1052,9 @@ function handleCategoryChange() {
     const divNoticeReceiver = document.getElementById("divNoticeReceiver");
     const divNoticeVia = document.getElementById("divNoticeVia");
     const divNoticeSubject = document.getElementById("divNoticeSubject");
+    const divProposalSubject = document.getElementById("divProposalSubject");
+    const btnAppDescPreview = document.getElementById("btnAppDescPreview");
+    const appDescHtmlHelp = document.getElementById("appDescHtmlHelp");
 
     // 전체 초기화
     divLeave.classList.add("hidden");
@@ -745,6 +1065,9 @@ function handleCategoryChange() {
     divNoticeReceiver.classList.add("hidden");
     divNoticeVia.classList.add("hidden");
     divNoticeSubject.classList.add("hidden");
+    divProposalSubject.classList.add("hidden");
+    btnAppDescPreview.classList.add("hidden");
+    appDescHtmlHelp.classList.add("hidden");
     divAmt.classList.remove("hidden");
     fileHelp.classList.add("hidden");
     
@@ -760,7 +1083,7 @@ function handleCategoryChange() {
         divLeave.classList.remove("hidden");
         divLeaveType.classList.remove("hidden");
         divAmt.classList.add("hidden");
-        desc.value = "위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.";
+        setApprovalEditorContent("위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.");
         
         const lType = document.getElementById("leaveTypeSelect").value;
         if(lType === '반차' || lType === '생일반차') {
@@ -784,26 +1107,58 @@ function handleCategoryChange() {
         } else {
             resetSalaryExpenseUi();
         }
-        if(!desc.value) desc.value = "위와 같이 지출하고자 하오니 승인하여 주시기 바랍니다.";
+        const currentDesc = getApprovalEditorContent();
+        if(!currentDesc) setApprovalEditorContent("위와 같이 지출하고자 하오니 승인하여 주시기 바랍니다.");
     }
     else if (type === '공문') {
         divNoticeReceiver.classList.remove("hidden");
         divNoticeVia.classList.remove("hidden");
         divNoticeSubject.classList.remove("hidden");
         divAmt.classList.add("hidden");
-        if(!desc.value) desc.value = "아래와 같이 안내드립니다.";
+        const currentDesc = getApprovalEditorContent();
+        if(!currentDesc) setApprovalEditorContent("아래와 같이 안내드립니다.");
+    }
+    else if (type === '일반품의') {
+        divProposalSubject.classList.remove("hidden");
+        btnAppDescPreview.classList.remove("hidden");
+        appDescHtmlHelp.classList.remove("hidden");
+        const currentDesc = getApprovalEditorContent();
+        if (!currentDesc.trim() || currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) {
+            setApprovalEditorContent("위와 같이 품의하오니 승인하여 주시기 바랍니다.");
+        }
     }
     else {
-        if(desc.value.includes("휴가를 신청") || desc.value.includes("부양가족")) desc.value = "";
+        const currentDesc = getApprovalEditorContent();
+        if(currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) setApprovalEditorContent("");
     }
+    setApprovalEditorForCategory(type);
+}
+
+function openAppDescPreview() {
+    const type = String(document.getElementById("appCategory")?.value || '');
+    const rawContent = getApprovalEditorContent();
+    if (!rawContent.trim()) return showAlert("본문 내용을 먼저 입력하세요.");
+
+    const proposalTitle = document.getElementById("proposalSubject")?.value?.trim() || '';
+    const modalTitle = document.getElementById("appDescPreviewTitle");
+    const modalMeta = document.getElementById("appDescPreviewMeta");
+    const modalBody = document.getElementById("appDescPreviewBody");
+    if (!modalTitle || !modalMeta || !modalBody) return;
+
+    const allowHtml = type === '일반품의';
+    modalTitle.textContent = proposalTitle || `${type || '문서'} 본문 미리보기`;
+    modalMeta.textContent = allowHtml
+        ? '일반품의서 HTML 렌더링 미리보기'
+        : '줄바꿈 기준 본문 미리보기';
+    modalBody.innerHTML = renderApprovalContent(rawContent, allowHtml);
+    if (appDescPreviewModalInstance) appDescPreviewModalInstance.show();
 }
 
 // [기능] 부양가족 템플릿 업데이트
 function updateDepTemplate() {
     const mode = document.querySelector('input[name="depOption"]:checked').value;
-    const desc = document.getElementById("appDesc");
     const actionText = mode === 'add' ? "등재" : "해제";
-    desc.value = `[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`;
+    setApprovalEditorContent(`[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`);
 }
 
 // [수정] 휴가일수 계산 (반차 0.5일 고정)
@@ -1070,7 +1425,7 @@ async function handleDraftSubmit(e) {
             finalAmt = Number(document.getElementById("appAmount").value || 0);
             if (finalAmt <= 0) return showAlert("실지급 합계 금액을 확인해주세요.");
 
-            const descValue = document.getElementById("appDesc").value || '';
+            const descValue = getApprovalEditorContent();
             if (!descValue.includes('[급여대장 연동]')) {
                 const ymLabel = formatYearMonthLabel(payrollMonth);
                 appendDesc += `\n\n[급여대장 연동] ${ymLabel} / 대상 ${salaryExpenseState.empCount}명 / 지급총액 ${formatMoney(salaryExpenseState.payTotal)}원 / 공제총액 ${formatMoney(salaryExpenseState.dedTotal)}원 / 실지급총액 ${formatMoney(salaryExpenseState.netTotal)}원`;
@@ -1088,9 +1443,17 @@ async function handleDraftSubmit(e) {
         subType = '공문';
         finalAmt = 0;
     }
+    else if (mainType === '일반품의') {
+        const proposalTitle = document.getElementById("proposalSubject").value.trim();
+        if (!proposalTitle) return showAlert("일반품의 제목을 입력하세요.");
+        title = proposalTitle;
+        subType = '일반품의';
+    }
     else {
         title = `${mainType}`;
     }
+    const draftBodyForValidation = getApprovalEditorContent();
+    if (!String(draftBodyForValidation || '').trim()) return showAlert("내용을 입력하세요.");
     
     // 증빙 필수 체크 (경조사, 병가) - 대리상신 제외
     if (mainType === '휴가') {
@@ -1192,6 +1555,12 @@ async function handleDraftSubmit(e) {
     }
 
     const relatedDocId = document.getElementById("relDocId").value || null;
+    const allowHtmlContent = mainType === '일반품의';
+    const rawBodyContent = getApprovalEditorContent();
+    const mergedBodyContent = mergeSystemAppendContent(rawBodyContent, appendDesc, allowHtmlContent);
+    const savedBodyContent = allowHtmlContent
+        ? renderApprovalContent(mergedBodyContent, true)
+        : mergedBodyContent;
 
     // 4. DB 저장
     const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
@@ -1201,7 +1570,7 @@ async function handleDraftSubmit(e) {
     const { data: insertedDoc, error } = await _supabase.from('ref_approval').insert({
         doc_type: subType, 
         title: title,
-        content: document.getElementById("appDesc").value + appendDesc, // 시스템 기록 추가
+        content: savedBodyContent,
         amount: Number(finalAmt),
         drafter_id: drafterId,
         drafter_name: drafterName,
@@ -1674,7 +2043,9 @@ function buildPhysicalPrintHtml(doc) {
         return `${text}원`;
     };
     const safeAmountKor = escapeHtml(toKoreanWon(amount));
-    const safeContent = escapeHtml(doc.content || '').replace(/\n/g, '<br>');
+    const renderedContent = isProposalDoc
+        ? renderApprovalContent(doc.content || '', true)
+        : escapeHtml(doc.content || '').replace(/\n/g, '<br>');
     const safeDocNo = escapeHtml(doc.doc_no || '');
     const safeReceiver = escapeHtml(doc.receiver || '');
     const safeVia = escapeHtml(doc.via || '');
@@ -1756,7 +2127,6 @@ function buildPhysicalPrintHtml(doc) {
     const emptyText = '<span class="text-muted-light">-</span>';
     const safePrintedAt = escapeHtml(formatApprovalKstDateISO(new Date().toISOString(), ''));
     const pageRule = 'A4 portrait';
-    const printAreaWidth = '980px';
 
     return `
       <html>
@@ -1766,8 +2136,21 @@ function buildPhysicalPrintHtml(doc) {
           <style>
             @page { size: ${pageRule}; margin: 10mm; }
             html, body { margin: 0; padding: 0; background: #fff !important; color: #111 !important; }
-            body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; padding: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .print-area { max-width: ${printAreaWidth}; margin: 0 auto; position: relative; border: 2px solid #111; padding: 18px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+            body {
+              font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+              padding: 10mm;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .print-area {
+              max-width: 1000px;
+              margin: 0 auto;
+              border: 2px solid #111;
+              padding: 18px;
+              padding-bottom: 14px;
+              background: #fff;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            }
             .doc-title { text-align: center; font-size: 1.9rem; font-weight: 800; letter-spacing: 0.35em; text-indent: 0.35em; margin-bottom: 4px; color: #111; }
             .doc-subtitle { text-align: center; color: #4b5563; font-size: 0.85rem; margin-bottom: 12px; }
             .header-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 10px; align-items: stretch; }
@@ -1787,8 +2170,12 @@ function buildPhysicalPrintHtml(doc) {
             .stamp.drafted { border-color: #2563eb; color: #2563eb; }
             .stamp-date { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
             .text-muted-light { color: #9ca3af; }
-            .section-title { margin-top: 14px; border: 1px solid #111; border-bottom: none; background: #f3f4f6; padding: 7px 10px; font-size: 0.88rem; font-weight: 700; color: #111; }
-            .content-box { border: 1px solid #111; padding: 14px; min-height: 255px; font-size: 0.95rem; line-height: 1.7; color: #111; }
+            .section-title { margin-top: 14px; border: 1px solid #111; border-bottom: none; background: #f3f4f6; padding: 7px 10px; font-size: 0.88rem; font-weight: 700; color: #111; break-inside: avoid; page-break-inside: avoid; }
+            .content-box { border: 1px solid #111; padding: 14px; min-height: 255px; font-size: 0.95rem; line-height: 1.7; color: #111; overflow-wrap: anywhere; word-break: break-word; }
+            .content-box table { width: 100% !important; border-collapse: collapse !important; table-layout: auto; margin: 8px 0; }
+            .content-box table th, .content-box table td { border: 1px solid #111 !important; padding: 6px 8px !important; vertical-align: top; }
+            .content-box tr { break-inside: avoid; page-break-inside: avoid; }
+            .content-box img { max-width: 100% !important; height: auto !important; }
             .attach-box { border: 1px solid #111; padding: 10px 14px; font-size: 0.86rem; color: #111; }
             .attach-list { margin: 0; padding-left: 20px; }
             .attach-list li { margin: 2px 0; }
@@ -1796,17 +2183,28 @@ function buildPhysicalPrintHtml(doc) {
             .text-end { text-align: right; }
             .text-center { text-align: center; }
             .fw-bold { font-weight: 700; }
-            .footer-row { margin-top: 8px; display: flex; justify-content: space-between; gap: 8px; font-size: 0.74rem; color: #6b7280; }
+            .footer-row { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #9ca3af; display: flex; justify-content: space-between; gap: 8px; font-size: 0.74rem; color: #6b7280; }
             .print-actions { position: fixed; bottom: 20px; right: 20px; }
             @media print {
-              body { padding: 0; background: #fff !important; color: #000 !important; }
-              .print-area { border-width: 1.7px; box-shadow: none; }
+              body {
+                padding: 0;
+                background: #fff !important;
+                color: #000 !important;
+              }
+              .print-area {
+                border: none;
+                padding: 0;
+                box-shadow: none;
+              }
+              .header-grid { break-inside: avoid; page-break-inside: avoid; }
+              .content-box { min-height: 0; }
+              .footer-row { break-inside: avoid; page-break-inside: avoid; }
               .print-actions { display: none; }
             }
           </style>
         </head>
         <body>
-          <div class="print-area">
+          <div class="print-area" id="printArea">
             <div class="doc-title">${safeDocHeading}</div>
             <div class="doc-subtitle">${safeType || '결재문서'}${safeDate ? ` · 작성일 ${safeDate}` : ''}</div>
 
@@ -1861,7 +2259,7 @@ function buildPhysicalPrintHtml(doc) {
             </div>
 
             <div class="section-title">${safeSectionHeading}</div>
-            <div class="content-box">${safeContent || emptyText}</div>
+            <div class="content-box">${renderedContent || emptyText}</div>
             ${attachmentSectionHtml}
             <div class="footer-row">
               <span>출력일시: ${safePrintedAt || emptyText}</span>
@@ -2169,9 +2567,14 @@ async function openRelView(docId) {
 
     const contentBox = document.createElement("div");
     contentBox.className = "p-3 bg-light rounded";
-    contentBox.style.whiteSpace = "pre-wrap";
     contentBox.style.minHeight = "200px";
-    contentBox.textContent = data.content || "";
+    const allowHtmlContent = String(data.doc_type || '').startsWith('일반품의');
+    if (allowHtmlContent) {
+        contentBox.innerHTML = renderApprovalContent(data.content || '', true);
+    } else {
+        contentBox.style.whiteSpace = "pre-wrap";
+        contentBox.textContent = data.content || "";
+    }
 
     const amountEl = document.createElement("div");
     amountEl.className = "mt-3 text-end fw-bold";
