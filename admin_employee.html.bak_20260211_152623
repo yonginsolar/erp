@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.6
-Change: 2026-02-11 - Leave remain now subtracts approved future leave reservations in admin view.
+Version: v1.0.5
+Change: 2026-02-05 - Avoid KST helper name collision with shared scripts.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.6 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.5 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>임직원 관리 v2.7 (최종)</title>
@@ -17,7 +17,6 @@ Change: 2026-02-11 - Leave remain now subtracts approved future leave reservatio
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="print_service.js"></script>
   <script src="salary_ledger_module.js"></script>
-  <script src="leave_ledger.js"></script>
   
   <style>
     body { background-color: #f0f2f5; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; padding: 20px; }
@@ -225,7 +224,7 @@ Change: 2026-02-11 - Leave remain now subtracts approved future leave reservatio
 </div>
 </div>
           <div class="tab-pane fade" id="tabLog">
-            <div class="card bg-light border-0 p-3 mb-3 text-center"><small class="text-muted">현재 잔여 연차</small><h3 class="fw-bold text-primary m-0" id="displayLeaveRemain">0일</h3><div class="small text-muted mt-1" id="displayLeaveReserved">결재 반영 예정 0일</div></div>
+            <div class="card bg-light border-0 p-3 mb-3 text-center"><small class="text-muted">현재 잔여 연차</small><h3 class="fw-bold text-primary m-0" id="displayLeaveRemain">0일</h3></div>
             <div class="mb-2"><label class="small text-muted">구분</label><select id="logType" class="form-select"><option value="지급">🎁 지급 (포상 등)</option><option value="차감">⚠️ 차감 (징계 등)</option></select></div>
             <div class="mb-2"><label class="small text-muted">일수</label><input type="number" id="logValue" class="form-control" placeholder="예: 1"></div>
             <div class="mb-3"><label class="small text-muted">사유</label><input type="text" id="logReason" class="form-control" placeholder="사유를 입력하세요"></div>
@@ -536,81 +535,7 @@ async function loadAdvancedSettings() { const tbody = document.getElementById("a
 function calcHalf(type) { document.getElementById(`half_${type}`).innerText = (Number(document.getElementById(`set_${type}_total`).value)/2).toFixed(3); }
 
 function openInviteModal() { inviteModal.show(); }
-async function runInvite() {
-    if (runInvite._inFlight) {
-        showAlert("이미 등록 처리 중입니다. 잠시만 기다려주세요.");
-        return;
-    }
-
-    const name = document.getElementById("newName").value.trim();
-    const email = document.getElementById("newEmail").value.trim();
-    if (!name || !email) {
-        showAlert("이름/이메일 입력 필요");
-        return;
-    }
-
-    const submitBtn = document.querySelector('#inviteModal .btn.btn-primary.w-100');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerText = '등록 중...';
-    }
-
-    runInvite._inFlight = true;
-    try {
-        const year = new Date().getFullYear();
-        let savedEmpId = null;
-
-        for (let attempt = 1; attempt <= 5; attempt += 1) {
-            const { data: latestRows, error: latestErr } = await _supabase
-                .from('ref_employees')
-                .select('emp_id')
-                .like('emp_id', `${year}%`)
-                .order('emp_id', { ascending: false })
-                .limit(1);
-            if (latestErr) throw latestErr;
-
-            let nextSeq = 1;
-            if (Array.isArray(latestRows) && latestRows.length > 0 && latestRows[0]?.emp_id) {
-                const matched = String(latestRows[0].emp_id).match(new RegExp(`^${year}(\\d{3})$`));
-                if (matched) nextSeq = Number(matched[1]) + 1;
-            }
-            const empId = `${year}${String(nextSeq).padStart(3, '0')}`;
-
-            const { error } = await _supabase.from('ref_employees').insert({
-                emp_id: empId,
-                emp_name: name,
-                email: email,
-                position: document.getElementById("newRank").value,
-                role: document.getElementById("newRole").value,
-                department: document.getElementById("newDept").value,
-                hire_date: formatAdminEmployeeKstDate(new Date())
-            });
-
-            if (!error) {
-                savedEmpId = empId;
-                break;
-            }
-
-            const code = String(error.code || '');
-            const message = String(error.message || '').toLowerCase();
-            const details = String(error.details || '').toLowerCase();
-            const isEmpIdConflict = code === '23505' && (message.includes('emp_id') || details.includes('emp_id'));
-            if (!isEmpIdConflict || attempt === 5) throw error;
-        }
-
-        showAlert(`등록됨: ${savedEmpId}`);
-        inviteModal.hide();
-        loadList();
-    } catch (err) {
-        showAlert("오류: " + err.message);
-    } finally {
-        runInvite._inFlight = false;
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerText = '등록하기';
-        }
-    }
-}
+async function runInvite() { const name = document.getElementById("newName").value; const email = document.getElementById("newEmail").value; if(!name || !email) return showAlert("이름/이메일 입력 필요"); const year = new Date().getFullYear(); const { count } = await _supabase.from('ref_employees').select('*', {count:'exact', head:true}).like('emp_id', `${year}%`); const empId = `${year}${String((count||0)+1).padStart(3,'0')}`; const { error } = await _supabase.from('ref_employees').insert({ emp_id: empId, emp_name: name, email: email, position: document.getElementById("newRank").value, role: document.getElementById("newRole").value, department: document.getElementById("newDept").value, hire_date: formatAdminEmployeeKstDate(new Date()) }); if(error) showAlert("오류: "+error.message); else { showAlert(`등록됨: ${empId}`); inviteModal.hide(); loadList(); } }
 // 1. 설정 모달 열기 (연도 초기화 로직 추가)
 function openSettings() {
     // 1. 연도 Select 박스 초기화 (올해 ~ 2년 전까지)
@@ -1103,35 +1028,17 @@ async function saveSalary() {
     }
 }
 
-// [수정] 관리자용 연차 조회 (특정 직원 + 결재완료 예정 차감 반영)
+// [수정] 관리자용 연차 조회 (특정 직원)
 async function loadLeave() { 
-    try {
-        if (window.LeaveLedger && typeof window.LeaveLedger.getLeaveSnapshot === 'function') {
-            const snapshot = await window.LeaveLedger.getLeaveSnapshot(_supabase, currentEmpId, {
-                reservedStatuses: ['완료', '가승인', '증빙확인중', '실물결재대기', '실물결재완료'],
-                includeToday: true,
-                unknownAsReserved: false
-            });
-            const remain = Number(snapshot?.effectiveRemainDays || 0);
-            const reserved = Number(snapshot?.reservedDays || 0);
-            document.getElementById("displayLeaveRemain").innerText = remain + "일";
-            const reservedEl = document.getElementById("displayLeaveReserved");
-            if (reservedEl) reservedEl.innerText = `결재 반영 예정 ${reserved}일`;
-            return;
-        }
-    } catch (error) {
-        console.error(error);
-    }
-
-    // 공통 모듈 미사용/오류 시 기존 RPC로 폴백
+    // 전역변수 currentEmpId 사용
     const { data: remainDays, error } = await _supabase.rpc('calculate_leave_days', { p_emp_id: currentEmpId });
+    
     if (error) {
         showAlert("연차 조회 실패: " + error.message);
         return;
     }
-    document.getElementById("displayLeaveRemain").innerText = remainDays + "일";
-    const reservedEl = document.getElementById("displayLeaveReserved");
-    if (reservedEl) reservedEl.innerText = "결재 반영 예정 0일";
+    
+    document.getElementById("displayLeaveRemain").innerText = remainDays + "일"; 
 }
 async function saveLog() { const type = document.getElementById("logType").value; const val = Number(document.getElementById("logValue").value); const reason = document.getElementById("logReason").value; if(!val || !reason) return showAlert("입력 필요"); await _supabase.from('hr_leave_adj').insert({ emp_id: currentEmpId, adj_type: type, days: val, reason: reason }); showAlert("반영됨"); document.getElementById("logValue").value = ""; document.getElementById("logReason").value = ""; loadLeave(); }
 

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.9 | Change: 2026-02-11 - Improve modal focus handoff to avoid aria-hidden focus warning on leave detail modal close. -->
+<!-- Version: v1.0.6 | Change: 2026-02-05 - Fix invalid escape sequence in calendar event title. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.9 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.6 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -12,7 +12,6 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="print_service.js"></script>
-<script src="leave_ledger.js"></script>
   
 <style>
 body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-serif}
@@ -53,8 +52,8 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="d-flex align-items-center mb-1">
 <h4 class="fw-bold m-0 me-2"><span id="dspName">Loading...</span></h4>
 <span class="badge bg-primary rounded-pill fs-6" id="dspRank">-</span>
-<div class="leave-badge" role="button" tabindex="0" onclick="showLeaveDetail()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showLeaveDetail();}" title="상세 내역 보기">
-<span>잔여 연차: <span id="lvRemain">0</span>일</span><span class="small" id="lvReservedInline"></span><span>🔍</span>
+<div class="leave-badge" onclick="showLeaveDetail()" title="상세 내역 보기">
+<span>잔여 연차: <span id="lvRemain">0</span>일</span><span>🔍</span>
 </div>
 </div>
 <div class="text-muted small">
@@ -179,34 +178,11 @@ const formatMypageKstMonth=(value=new Date())=>{const d=value instanceof Date?va
 const toUtcIsoFromKstInput=(value)=>{if(!value) return null; return new Date(`${value}:00+09:00`).toISOString()};
 const getMypageKstDateParts=(value)=>{if(!value) return {date:'',time:'',hasTime:false}; if(typeof value==='string' && !value.includes('T')) return {date:value,time:'',hasTime:false}; const d=new Date(value); if(Number.isNaN(d.getTime())) return {date:'',time:'',hasTime:false}; const date=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d); const time=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,hour:'2-digit',minute:'2-digit',hour12:false}).format(d); return {date,time,hasTime:true}};
 function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
-let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[],leaveSnapshotState=null;
+let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[];
 let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
-function focusLeaveBadgeFallback(){
-const badge=document.querySelector('.leave-badge');
-if(!badge) return null;
-if(!badge.hasAttribute('tabindex')) badge.setAttribute('tabindex','0');
-if(!badge.hasAttribute('role')) badge.setAttribute('role','button');
-return badge;
-}
-function setupLeaveDetailModalFocusGuard(){
-const leaveModalEl=document.getElementById('leaveDetailModal');
-if(!leaveModalEl) return;
-leaveModalEl.addEventListener('hide.bs.modal',function(){
-const active=document.activeElement;
-if(active&&leaveModalEl.contains(active)&&typeof active.blur==='function'){
-active.blur();
-}
-});
-leaveModalEl.addEventListener('hidden.bs.modal',function(){
-const target=focusLeaveBadgeFallback()||document.querySelector('button[onclick*=\"index.html\"]');
-if(target&&typeof target.focus==='function'){
-try{target.focus({preventScroll:true})}catch(_){try{target.focus()}catch(__){}}
-}
-});
-}
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
 leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
@@ -214,8 +190,6 @@ noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal
 alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
 eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
 confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
-setupLeaveDetailModalFocusGuard();
-focusLeaveBadgeFallback();
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);
@@ -379,82 +353,19 @@ if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+
 const el=document.getElementById('calendar');
 const cal=new FullCalendar.Calendar(el,{initialView:'dayGridMonth',locale:'ko',height:600,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},dayMaxEvents:true,events:evts,selectable:true,dateClick:function(i){openEventModal(null,i.dateStr)},eventClick:function(i){if(i.event.extendedProps.origin){openEventModal(i.event.extendedProps.origin,null)}}});
 cal.render()}
-function renderLeaveBadge(snapshot){
-const remain=Math.max(0,Number(snapshot?.effectiveRemainDays??0));
-const reserved=Math.max(0,Number(snapshot?.reservedDays??0));
-document.getElementById("lvRemain").innerText=remain;
-const inlineEl=document.getElementById("lvReservedInline");
-if(inlineEl) inlineEl.textContent=reserved>0?`(예정 ${reserved}일)`:'';
-const b=document.querySelector('.leave-badge');
-if(remain<=0){b.style.borderColor='#dc3545';b.style.color='#dc3545'}else{b.style.borderColor='#0d6efd';b.style.color='#0d6efd'}
-}
-async function calculateLeave(){
-try{
-if(window.LeaveLedger&&typeof window.LeaveLedger.getLeaveSnapshot==='function'){
-leaveSnapshotState=await window.LeaveLedger.getLeaveSnapshot(_supabase,myInfo.emp_id,{reservedStatuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'],includeToday:true,unknownAsReserved:false});
-renderLeaveBadge(leaveSnapshotState);
-return;
-}
-}catch(error){console.error('calculateLeave snapshot failed:',error)}
-const{data:r,error}=await _supabase.rpc('calculate_leave_days',{p_emp_id:myInfo.emp_id});if(error){console.error(error);return}
-leaveSnapshotState={effectiveRemainDays:(r!==null?r:0),reservedDays:0,summary:{reservedDocs:[],pastOrUsedDocs:[],unknownDateDocs:[]}};
-renderLeaveBadge(leaveSnapshotState);
-}
-function getLeaveStatusBadgeHtml(status){
-if(status==='가승인') return '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';
-if(status==='증빙확인중') return '<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';
-if(status==='실물결재대기') return '<span class="badge bg-secondary ms-1" style="font-size:0.7em">실물대기</span>';
-if(status==='실물결재완료') return '<span class="badge bg-success ms-1" style="font-size:0.7em">실물완료</span>';
-if(status==='완료') return '<span class="badge bg-primary ms-1" style="font-size:0.7em">완료</span>';
-return '';
-}
-function renderLeaveDocList(docs,emptyText){
-let html='<ul class="leave-list">';
-if(Array.isArray(docs)&&docs.length>0){
-docs.forEach(doc=>{
-const period=(window.LeaveLedger&&typeof window.LeaveLedger.formatLeavePeriodText==='function')?window.LeaveLedger.formatLeavePeriodText(doc):'';
-const periodLabel=period?` · ${escapeHtml(period)}`:'';
-const statusBadge=getLeaveStatusBadgeHtml(String(doc?.status||''));
-const createdAt=formatMypageKstDate(doc?.created_at,'-');
-const amount=Math.max(0,Number(doc?.amount||doc?._leave_amount||0));
-html+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${escapeHtml(doc?.doc_type||'휴가')} ${statusBadge}${periodLabel}</span><span class="fw-bold text-danger">-${amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${createdAt}</div></li>`;
-});
-}else{
-html+=`<li class="text-muted">${emptyText||'- 없음 -'}</li>`;
-}
-html+='</ul>';
-return html;
-}
+async function calculateLeave(){const{data:r,error}=await _supabase.rpc('calculate_leave_days',{p_emp_id:myInfo.emp_id});if(error){console.error(error);return}const v=r!==null?r:0;document.getElementById("lvRemain").innerText=v;const b=document.querySelector('.leave-badge');if(v<=0){b.style.borderColor='#dc3545';b.style.color='#dc3545'}else{b.style.borderColor='#0d6efd';b.style.color='#0d6efd'}}
 async function showLeaveDetail(){
 const el=document.getElementById('leaveDetailModal'),bd=el.querySelector('.modal-body');if(!el)return;
 bd.innerHTML='<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div></div>';leaveDetailModal.show();
-try{
 const{data:em}=await _supabase.from('ref_employees').select('hire_date').eq('emp_id',myInfo.emp_id).single();
 const{data:al}=await _supabase.from('hr_leave_adj').select('*').eq('emp_id',myInfo.emp_id).order('created_at',{ascending:false});
-let leaveDocs=[],summary={reservedDocs:[],pastOrUsedDocs:[],unknownDateDocs:[],reservedDays:0,pastOrUsedDays:0,unknownDateDays:0};
-if(window.LeaveLedger&&typeof window.LeaveLedger.fetchLeaveApprovals==='function'){
-leaveDocs=await window.LeaveLedger.fetchLeaveApprovals(_supabase,myInfo.emp_id,{statuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료']});
-summary=window.LeaveLedger.summarizeLeaveDocs(leaveDocs,{reservedStatuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'],includeToday:true,unknownAsReserved:false});
-}else{
-const{data:ul}=await _supabase.from('ref_approval').select('id,created_at,doc_type,title,content,amount,status').eq('drafter_id',myInfo.emp_id).in('status',['완료','가승인','증빙확인중']).or('doc_type.ilike.%(연차)%,doc_type.ilike.%(반차)%').order('created_at',{ascending:false});
-leaveDocs=ul||[];
-summary={reservedDocs:[],pastOrUsedDocs:leaveDocs,unknownDateDocs:[],reservedDays:0,pastOrUsedDays:0,unknownDateDays:0};
-}
+const{data:ul}=await _supabase.from('ref_approval').select('created_at,doc_type,amount,status').eq('drafter_id',myInfo.emp_id).in('status',['완료','가승인','증빙확인중']).or('doc_type.ilike.%(연차)%,doc_type.ilike.%(반차)%').order('created_at',{ascending:false});
 let h='<div class="d-flex flex-column gap-3">';
 let gh='<ul class="leave-list">';
 if(em&&em.hire_date){const hd=new Date(em.hire_date),n=new Date(),oy=new Date(hd);oy.setFullYear(oy.getFullYear()+1);if(n<oy){let m=(n.getFullYear()-hd.getFullYear())*12+(n.getMonth()-hd.getMonth());if(n.getDate()<hd.getDate())m--;gh+=`<li class="text-primary">🟢 1년 미만: ${Math.min(11,Math.max(0,m))}개</li>`}else{gh+=`<li class="text-muted">⚪ 1년 미만: 0개</li>`}if(n.getFullYear()>hd.getFullYear())gh+=`<li class="text-primary">🔵 회계연도(${n.getFullYear()}): 15개</li>`;else gh+=`<li class="text-muted">⚪ 회계연도: 0개</li>`}gh+='</ul>';h+=`<div class="leave-section"><h6>🎁 발생 내역</h6>${gh}</div>`;
 let ah='<ul class="leave-list">';if(al&&al.length>0)al.forEach(i=>{const c=(i.adj_type==='지급'||i.adj_type==='포상')?'text-success':'text-danger',s=(i.adj_type==='지급'||i.adj_type==='포상')?'+':'-';ah+=`<li><span class="${c} fw-bold">[${i.adj_type}]</span> ${i.reason||''} (${s}${i.days}일)</li>`});else ah+='<li class="text-muted">- 없음 -</li>';ah+='</ul>';h+=`<div class="leave-section"><h6>⚖️ 조정 내역</h6>${ah}</div>`;
-h+=`<div class="leave-section"><h6>🗓️ 결재완료(예정) 내역 <span class="text-primary">-${Number(summary.reservedDays||0)}일</span></h6>${renderLeaveDocList(summary.reservedDocs,'- 없음 -')}</div>`;
-h+=`<div class="leave-section"><h6>🎫 사용/처리 내역 <span class="text-danger">-${Number(summary.pastOrUsedDays||0)}일</span></h6>${renderLeaveDocList(summary.pastOrUsedDocs,'- 없음 -')}</div>`;
-if(Array.isArray(summary.unknownDateDocs)&&summary.unknownDateDocs.length>0){
-h+=`<div class="leave-section"><h6>ℹ️ 일자 미확인 내역</h6>${renderLeaveDocList(summary.unknownDateDocs,'- 없음 -')}</div>`;
-}
+let uh='<ul class="leave-list">';if(ul&&ul.length>0)ul.forEach(i=>{const d=formatMypageKstDate(i.created_at);let b='';if(i.status==='가승인')b='<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em">가승인</span>';if(i.status==='증빙확인중')b='<span class="badge bg-info text-dark ms-1" style="font-size:0.7em">증빙중</span>';uh+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${i.doc_type} ${b}</span><span class="fw-bold text-danger">-${i.amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${d}</div></li>`});else uh+='<li class="text-muted">- 없음 -</li>';uh+='</ul>';h+=`<div class="leave-section"><h6>🎫 사용 내역</h6>${uh}</div>`;
 h+='</div>';bd.innerHTML=h;
-}catch(error){
-console.error('showLeaveDetail failed:',error);
-const msg=escapeHtml(error?.message||'알 수 없는 오류');
-bd.innerHTML=`<div class="text-danger small">연차 상세 조회 중 오류가 발생했습니다.<br>${msg}</div>`;
-}
 }
 function openEventModal(e,d){
 const b=document.getElementById("btnDelEvent"),s=document.getElementById("btnSaveEvent");

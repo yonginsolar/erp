@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.36 | Change: 2026-02-09 - Donation sync new-only: if note has [전표완료], never correct/repost; skip entirely. -->
+<!-- Version: v1.0.39 | Change: 2026-02-11 - VAT forecast excludes settlement-direction entries (refund/payment clears). -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.36 | accounting.html');</script>
+  <script>console.log('[Version] v1.0.39 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계 관리</title>
@@ -458,7 +458,7 @@
           </div>
           <div class="card p-3 border-start border-5 border-warning bg-light">
              <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료된 지출결의서 불러오기</small></div>
+               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료/실물결재완료 지출결의서 불러오기</small></div>
                <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
              </div>
           </div>
@@ -805,6 +805,9 @@ window.onload = async function() {
         const opt = document.createElement("option");
         opt.value = y; opt.text = y + "년"; yearSel.add(opt);
     }
+    yearSel.addEventListener("change", () => {
+        refreshDashboard();
+    });
 
     // 데이터 로드 (순서 중요: 프로젝트 -> 마스터 -> 카드 -> 대시보드)
     await loadProjects(); 
@@ -1339,24 +1342,29 @@ async function loadCards() {
 }
 
 // 3. 대시보드 새로고침
-// [수정] 대시보드 새로고침 (하이브리드 집계 로직 적용)
-// [수정] 대시보드 새로고침 (자산 뻥튀기 오류 수정 및 하이브리드 집계)
-// [수정] 대시보드 새로고침 (부가세 분기별 집계 로직 적용)
+// [수정] 대시보드 새로고침 (연도 선택값 기준 집계 복구)
+function getDashboardYear() {
+    const selected = Number(document.getElementById("reportYearSelect")?.value);
+    if (Number.isFinite(selected) && selected > 1900) return selected;
+    return new Date().getFullYear();
+}
+
 async function refreshDashboard() {
     const { data } = await _supabase.from('ac_journal').select('*');
     if (!data) return;
 
     const now = new Date();
     const currentYear = now.getFullYear().toString();
+    const selectedYear = String(getDashboardYear());
     const currentMonth = now.getMonth() + 1; // 1~12월
-    
+
     // 현재 분기 계산 (1: 1~3월, 2: 4~6월, 3: 7~9월, 4: 10~12월)
     const currentQuarter = Math.ceil(currentMonth / 3);
     const startMonthOfQuarter = (currentQuarter - 1) * 3 + 1; // 분기 시작월 (1, 4, 7, 10)
 
-    let rev = 0;         // 매출 (금년도 전체)
-    let exp = 0;         // 비용 (금년도 전체)
-    let ast = 0;         // 총자산 (전체 누적)
+    let rev = 0;         // 선택 연도 매출 합계
+    let exp = 0;         // 선택 연도 비용 합계
+    let ast = 0;         // 선택 연도 자산 증감 합계
     let vatIn = 0;       // 부가세예수금 (현재 분기만)
     let vatOut = 0;      // 부가세대급금 (현재 분기만)
     let bankBalance = 0; // 보통예금 (전체 누적)
@@ -1369,37 +1377,44 @@ async function refreshDashboard() {
         const rYear = r.Date.substring(0, 4);
         const rMonth = Number(r.Date.substring(5, 7));
 
-        // 1. 자산 현황 및 통장 잔액 (전체 누적)
+        // 1. 자산 증감(선택 연도) + 통장 잔고(전체 누적)
         if (r.Type === '자산') {
-            ast += (db - cr);
+            if (rYear === selectedYear) ast += (db - cr);
             if (r.Account === '보통예금' || r.Account === '현금') {
                 bankBalance += (db - cr);
             }
         }
 
-        // 2. 매출/비용 (금년도 전체 합계)
-        if (rYear === currentYear) {
+        // 2. 매출/비용 (선택 연도 합계)
+        if (rYear === selectedYear) {
             if (r.Type === '매출') rev += cr;
             else if (r.Type === '비용') exp += db;
+        }
 
-            // 3. 부가세 (현재 분기 데이터만 집계)
-            // 전표 월(rMonth)이 현재 분기 시작월보다 크거나 같으면 해당 분기 데이터임
-            if (rMonth >= startMonthOfQuarter && rMonth <= (startMonthOfQuarter + 2)) {
-                if (r.Account === '부가세예수금') vatIn += (cr - db);
-                if (r.Account === '부가세대급금') vatOut += (db - cr);
+        // 3. 부가세 (현재 연도 현재 분기 데이터만 집계)
+        // 환급/납부 같은 정리 분개(반대방향)는 예상치에서 제외하고 발생분만 반영한다.
+        if (rYear === currentYear && rMonth >= startMonthOfQuarter && rMonth <= (startMonthOfQuarter + 2)) {
+            const acc = String(r.Account || '').replace(/\s+/g, '');
+            if (acc === '부가세예수금') {
+                const delta = cr - db;
+                if (delta > 0) vatIn += delta;
+            }
+            if (acc === '부가세대급금') {
+                const delta = db - cr;
+                if (delta > 0) vatOut += delta;
             }
         }
     });
 
     buildPrepayCache(data);
     buildReceivableCache(data);
-    
+
     // UI 반영
-    document.getElementById("valRev").innerText = rev.toLocaleString(); // 올해 총 매출
-    document.getElementById("valExp").innerText = exp.toLocaleString(); // 올해 총 비용
-    document.getElementById("valAst").innerText = ast.toLocaleString(); // 현재 총 자산
-    document.getElementById("valCash").innerText = bankBalance.toLocaleString(); // 현재 통장 잔고
-    document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString(); // ★현재 분기 예상 부가세
+    document.getElementById("valRev").innerText = rev.toLocaleString();
+    document.getElementById("valExp").innerText = exp.toLocaleString();
+    document.getElementById("valAst").innerText = ast.toLocaleString();
+    document.getElementById("valCash").innerText = bankBalance.toLocaleString();
+    document.getElementById("valVat").innerText = (vatIn - vatOut).toLocaleString();
 }
 
 // 4. 모달 및 UI 제어 로직
@@ -2912,7 +2927,7 @@ function confirmSync(type) {
             const { data: approvals, error: previewError } = await _supabase
                 .from('ref_approval')
                 .select('id,doc_type,status,amount,title,content,drafter_name,created_at')
-                .eq('status', '완료')
+                .in('status', ['완료', '실물결재완료'])
                 .ilike('doc_type', '%지출%');
             if (previewError) return showAlert("오류", "미리보기 조회 실패: " + previewError.message);
             if (!approvals || approvals.length === 0) return showAlert("알림", "불러올 결재 건이 없습니다.");
@@ -2942,7 +2957,7 @@ function confirmSync(type) {
                 const { data: runApprovals, error: runFetchError } = await _supabase
                     .from('ref_approval')
                     .select('id,doc_type,status,amount,title,content,drafter_name,created_at')
-                    .eq('status', '완료')
+                    .in('status', ['완료', '실물결재완료'])
                     .ilike('doc_type', '%지출%');
                 if (runFetchError) return showAlert("오류", "데이터 조회 실패: " + runFetchError.message);
                 if (!runApprovals || runApprovals.length === 0) return showAlert("알림", "불러올 결재 건이 없습니다.");

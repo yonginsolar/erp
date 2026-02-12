@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.9 | Change: 2026-02-11 - Improve modal focus handoff to avoid aria-hidden focus warning on leave detail modal close. -->
+<!-- Version: v1.0.8 | Change: 2026-02-11 - Hotfix leave detail query to avoid non-existent ref_approval.start_date dependency and guard modal errors. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.9 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.8 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -53,7 +53,7 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="d-flex align-items-center mb-1">
 <h4 class="fw-bold m-0 me-2"><span id="dspName">Loading...</span></h4>
 <span class="badge bg-primary rounded-pill fs-6" id="dspRank">-</span>
-<div class="leave-badge" role="button" tabindex="0" onclick="showLeaveDetail()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showLeaveDetail();}" title="상세 내역 보기">
+<div class="leave-badge" onclick="showLeaveDetail()" title="상세 내역 보기">
 <span>잔여 연차: <span id="lvRemain">0</span>일</span><span class="small" id="lvReservedInline"></span><span>🔍</span>
 </div>
 </div>
@@ -184,29 +184,6 @@ let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
-function focusLeaveBadgeFallback(){
-const badge=document.querySelector('.leave-badge');
-if(!badge) return null;
-if(!badge.hasAttribute('tabindex')) badge.setAttribute('tabindex','0');
-if(!badge.hasAttribute('role')) badge.setAttribute('role','button');
-return badge;
-}
-function setupLeaveDetailModalFocusGuard(){
-const leaveModalEl=document.getElementById('leaveDetailModal');
-if(!leaveModalEl) return;
-leaveModalEl.addEventListener('hide.bs.modal',function(){
-const active=document.activeElement;
-if(active&&leaveModalEl.contains(active)&&typeof active.blur==='function'){
-active.blur();
-}
-});
-leaveModalEl.addEventListener('hidden.bs.modal',function(){
-const target=focusLeaveBadgeFallback()||document.querySelector('button[onclick*=\"index.html\"]');
-if(target&&typeof target.focus==='function'){
-try{target.focus({preventScroll:true})}catch(_){try{target.focus()}catch(__){}}
-}
-});
-}
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
 leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
@@ -214,8 +191,6 @@ noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal
 alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
 eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
 confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
-setupLeaveDetailModalFocusGuard();
-focusLeaveBadgeFallback();
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.9 | Change: 2026-02-11 - Improve modal focus handoff to avoid aria-hidden focus warning on leave detail modal close. -->
+<!-- Version: v1.0.7 | Change: 2026-02-11 - Leave remaining now reflects approved future leave reservations and shows pending usage details. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.9 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.7 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -53,7 +53,7 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 <div class="d-flex align-items-center mb-1">
 <h4 class="fw-bold m-0 me-2"><span id="dspName">Loading...</span></h4>
 <span class="badge bg-primary rounded-pill fs-6" id="dspRank">-</span>
-<div class="leave-badge" role="button" tabindex="0" onclick="showLeaveDetail()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showLeaveDetail();}" title="상세 내역 보기">
+<div class="leave-badge" onclick="showLeaveDetail()" title="상세 내역 보기">
 <span>잔여 연차: <span id="lvRemain">0</span>일</span><span class="small" id="lvReservedInline"></span><span>🔍</span>
 </div>
 </div>
@@ -184,29 +184,6 @@ let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
-function focusLeaveBadgeFallback(){
-const badge=document.querySelector('.leave-badge');
-if(!badge) return null;
-if(!badge.hasAttribute('tabindex')) badge.setAttribute('tabindex','0');
-if(!badge.hasAttribute('role')) badge.setAttribute('role','button');
-return badge;
-}
-function setupLeaveDetailModalFocusGuard(){
-const leaveModalEl=document.getElementById('leaveDetailModal');
-if(!leaveModalEl) return;
-leaveModalEl.addEventListener('hide.bs.modal',function(){
-const active=document.activeElement;
-if(active&&leaveModalEl.contains(active)&&typeof active.blur==='function'){
-active.blur();
-}
-});
-leaveModalEl.addEventListener('hidden.bs.modal',function(){
-const target=focusLeaveBadgeFallback()||document.querySelector('button[onclick*=\"index.html\"]');
-if(target&&typeof target.focus==='function'){
-try{target.focus({preventScroll:true})}catch(_){try{target.focus()}catch(__){}}
-}
-});
-}
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
 leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
@@ -214,8 +191,6 @@ noticeDetailModal=new bootstrap.Modal(document.getElementById('noticeDetailModal
 alertModal=new bootstrap.Modal(document.getElementById('alertModal'));
 eventModal=new bootstrap.Modal(document.getElementById('eventModal'));
 confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
-setupLeaveDetailModalFocusGuard();
-focusLeaveBadgeFallback();
 const stored=localStorage.getItem('erp_user');
 if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html';return}
 myInfo=JSON.parse(stored);
@@ -428,7 +403,6 @@ return html;
 async function showLeaveDetail(){
 const el=document.getElementById('leaveDetailModal'),bd=el.querySelector('.modal-body');if(!el)return;
 bd.innerHTML='<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div></div>';leaveDetailModal.show();
-try{
 const{data:em}=await _supabase.from('ref_employees').select('hire_date').eq('emp_id',myInfo.emp_id).single();
 const{data:al}=await _supabase.from('hr_leave_adj').select('*').eq('emp_id',myInfo.emp_id).order('created_at',{ascending:false});
 let leaveDocs=[],summary={reservedDocs:[],pastOrUsedDocs:[],unknownDateDocs:[],reservedDays:0,pastOrUsedDays:0,unknownDateDays:0};
@@ -450,11 +424,6 @@ if(Array.isArray(summary.unknownDateDocs)&&summary.unknownDateDocs.length>0){
 h+=`<div class="leave-section"><h6>ℹ️ 일자 미확인 내역</h6>${renderLeaveDocList(summary.unknownDateDocs,'- 없음 -')}</div>`;
 }
 h+='</div>';bd.innerHTML=h;
-}catch(error){
-console.error('showLeaveDetail failed:',error);
-const msg=escapeHtml(error?.message||'알 수 없는 오류');
-bd.innerHTML=`<div class="text-danger small">연차 상세 조회 중 오류가 발생했습니다.<br>${msg}</div>`;
-}
 }
 function openEventModal(e,d){
 const b=document.getElementById("btnDelEvent"),s=document.getElementById("btnSaveEvent");

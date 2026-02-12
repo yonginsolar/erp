@@ -1494,41 +1494,6 @@ async function generateDocNo() {
 }
 
 
-
-function isDocNoConflictError(error) {
-    const code = String(error?.code || '');
-    const message = String(error?.message || '').toLowerCase();
-    const details = String(error?.details || '').toLowerCase();
-    return code === '23505' && (message.includes('doc_no') || details.includes('doc_no'));
-}
-
-async function insertApprovalWithDocNoRetry(basePayload, maxAttempts = 5) {
-    let lastConflictError = null;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const docNo = await generateDocNo();
-        const payload = { ...basePayload, doc_no: docNo, created_at: new Date() };
-        const { data, error } = await _supabase
-            .from('ref_approval')
-            .insert(payload)
-            .select('id, doc_no')
-            .single();
-
-        if (!error && data?.id) {
-            return { insertedDoc: data, docNo };
-        }
-        if (isDocNoConflictError(error)) {
-            lastConflictError = error;
-            continue;
-        }
-        throw error;
-    }
-
-    if (lastConflictError) {
-        throw new Error('문서번호 충돌이 반복되어 저장에 실패했습니다. 잠시 후 다시 시도해주세요.');
-    }
-    throw new Error('문서 저장에 실패했습니다.');
-}
-
 function buildNoticeContentFromApproval(doc) {
     const lines = [];
     if (doc?.doc_no) lines.push(`문서번호: ${doc.doc_no}`);
@@ -1773,47 +1738,44 @@ async function handleDraftSubmit(e) {
     // 4. DB 저장
     const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
     const refData = finalRefs.map(u => ({ emp_id: u.emp_id, name: u.emp_name }));
+    const docNo = await generateDocNo();
 
-    const approvalInsertPayload = {
-        doc_type: subType,
+    const { data: insertedDoc, error } = await _supabase.from('ref_approval').insert({
+        doc_type: subType, 
         title: title,
         content: savedBodyContent,
         amount: Number(finalAmt),
         drafter_id: drafterId,
         drafter_name: drafterName,
         approval_line: approvalLineData,
-        ref_line: refData,
-        file_links: uploadedUrls,
+        ref_line: refData, 
+        file_links: uploadedUrls, 
         current_approver: finalApprovers[0].emp_id,
         status: initialStatus, // 가승인 or 진행중
         related_doc_id: relatedDocId, // [New]
         receiver: receiver || null,
-        via: via || null
-    };
+        via: via || null,
+        doc_no: docNo,
+        created_at: new Date()
+    }).select('id').single();
 
-    let insertedDoc = null;
-    try {
-        const insertResult = await insertApprovalWithDocNoRetry(approvalInsertPayload);
-        insertedDoc = insertResult.insertedDoc;
-    } catch (error) {
+    if (error) {
         showAlert("상신 실패: " + error.message);
         btn.disabled = false;
         btn.innerText = "상신하기";
-        return;
     }
-
-    const docId = insertedDoc?.id;
-    if (docId) {
-        await logAudit('approval.submit', docId, `${title} 상신`, { status: initialStatus });
-        await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+    else {
+        const docId = insertedDoc?.id;
+        if (docId) {
+            await logAudit('approval.submit', docId, `${title} 상신`, { status: initialStatus });
+            await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        }
+        const firstApprover = finalApprovers[0];
+        const firstApproverName = firstApprover ? `${firstApprover.emp_name} ${firstApprover.position || ''}`.trim() : '-';
+        showAlert(`상신이 완료되었습니다.\n첫 결재자: ${firstApproverName}\n결재 요청 알림을 전송했습니다.`, () => {
+            switchTab('history');
+        });
     }
-    const firstApprover = finalApprovers[0];
-    const firstApproverName = firstApprover ? `${firstApprover.emp_name} ${firstApprover.position || ''}`.trim() : '-';
-    showAlert(`상신이 완료되었습니다.
-첫 결재자: ${firstApproverName}
-결재 요청 알림을 전송했습니다.`, () => {
-        switchTab('history');
-    });
 }
 
 // [핵심] 결재 처리
