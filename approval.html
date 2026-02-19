@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.8 | Change: 2026-02-11 - Leave balance now reflects approved-but-upcoming leave reservations to prevent duplicate requests. -->
+<!-- Version: v1.1.9 | Change: 2026-02-19 - Attachment display now preserves original upload filename in approval document views. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.8 | approval.html');</script>
+  <script>console.log('[Version] v1.1.9 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -519,6 +519,42 @@ function parseStorageObjectRef(value) {
         const sp = new URLSearchParams(query);
         const downloadName = sp.get('display_name') || sp.get('download') || '';
         return { bucket: m[1], path: cleanPath, raw, downloadName };
+    }
+}
+
+function compactFileName(name, maxLen = 18) {
+    const text = String(name || '').trim();
+    if (!text) return '';
+    if (text.length <= maxLen) return text;
+    const dotIdx = text.lastIndexOf('.');
+    if (dotIdx > 0) {
+        const ext = text.slice(dotIdx);
+        if (ext.length <= 8 && maxLen > ext.length + 2) {
+            const headLen = maxLen - ext.length - 1;
+            if (headLen > 0) return `${text.slice(0, headLen)}…${ext}`;
+        }
+    }
+    return `${text.slice(0, Math.max(1, maxLen - 1))}…`;
+}
+
+function extractDisplayFileName(rawRef, fallback = '첨부파일') {
+    const ref = parseStorageObjectRef(rawRef);
+    if (ref) {
+        const display = String(ref.downloadName || '').trim();
+        if (display) return display;
+        const leaf = String(ref.path || '').split('/').pop() || '';
+        const decodedLeaf = decodeURIComponent(leaf);
+        const withoutUuidPrefix = decodedLeaf.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+        return String(withoutUuidPrefix || decodedLeaf || fallback);
+    }
+    try {
+        const asUrl = new URL(String(rawRef || ''));
+        const fromQuery = asUrl.searchParams.get('display_name') || asUrl.searchParams.get('download') || '';
+        if (fromQuery) return fromQuery;
+        const pathnameLeaf = decodeURIComponent((asUrl.pathname || '').split('/').pop() || '');
+        return pathnameLeaf || fallback;
+    } catch (_) {
+        return String(fallback || '첨부파일');
     }
 }
 
@@ -1686,19 +1722,19 @@ async function handleDraftSubmit(e) {
     // 3. 파일 업로드
     const uploadedUrls = [];
     const isSalaryExpenseDoc = mainType === '지출결의' && expenseSubType === '급여';
-    for (let i = 0; i < fileInput.files.length; i++) {
-        const file = fileInput.files[i];
-        const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const { data, error } = await _supabase.storage.from('attachments').upload(safeName, file);
+	    for (let i = 0; i < fileInput.files.length; i++) {
+	        const file = fileInput.files[i];
+	        const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+	        const { data, error } = await _supabase.storage.from('attachments').upload(safeName, file);
         if (error) {
             showAlert("파일 오류: " + error.message);
             btn.disabled = false;
             btn.innerText = "상신하기";
-            return;
-        }
-        const { data: { publicUrl } } = _supabase.storage.from('attachments').getPublicUrl(safeName);
-        uploadedUrls.push(publicUrl);
-    }
+	            return;
+	        }
+	        // Store a storage reference (not a public URL). Download uses signed URLs at view time.
+	        uploadedUrls.push(`attachments/${safeName}?display_name=${encodeURIComponent(file.name || safeName)}`);
+	    }
     if (isSalaryExpenseDoc && salaryExpenseState?.loaded) {
         if (!window.SalaryLedgerModule) {
             showAlert("급여대장 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
@@ -1748,19 +1784,14 @@ async function handleDraftSubmit(e) {
         const { error: salaryAttachErr } = await _supabase.storage
             .from('attachments')
             .upload(salaryStoragePath, ledgerPdfBlob, { contentType: 'application/pdf' });
-        if (salaryAttachErr) {
-            showAlert("급여대장 첨부 업로드 실패: " + salaryAttachErr.message);
-            btn.disabled = false;
-            btn.innerText = "상신하기";
-            return;
-        }
-        const { data: { publicUrl: salaryLedgerUrl } } = _supabase.storage.from('attachments').getPublicUrl(salaryStoragePath);
-        if (salaryLedgerUrl) {
-            uploadedUrls.push(`${salaryLedgerUrl}?display_name=${encodeURIComponent(salaryLedgerFileName)}`);
-        } else {
-            uploadedUrls.push(`attachments/${salaryStoragePath}?display_name=${encodeURIComponent(salaryLedgerFileName)}`);
-        }
-    }
+	        if (salaryAttachErr) {
+	            showAlert("급여대장 첨부 업로드 실패: " + salaryAttachErr.message);
+	            btn.disabled = false;
+	            btn.innerText = "상신하기";
+	            return;
+	        }
+	        uploadedUrls.push(`attachments/${salaryStoragePath}?display_name=${encodeURIComponent(salaryLedgerFileName)}`);
+	    }
 
     const relatedDocId = document.getElementById("relDocId").value || null;
     const allowHtmlContent = mainType === '일반품의';
@@ -2153,7 +2184,11 @@ function renderDocs(target, list, isTodo) {
             if (attachmentLinks.length > 0) {
                 attachmentLinks.slice(0, 3).forEach((link, idx) => {
                     const safeUrl = encodeURIComponent(link);
-                    actions.push(`<button class="btn btn-sm btn-outline-dark me-1" onclick="openAttachment('${safeUrl}')">📎 첨부${idx + 1}</button>`);
+                    const fullName = extractDisplayFileName(link, `첨부파일 ${idx + 1}`);
+                    const shortName = compactFileName(fullName, 18);
+                    const safeFullName = escapeHtml(fullName);
+                    const safeShortName = escapeHtml(shortName);
+                    actions.push(`<button class="btn btn-sm btn-outline-dark me-1" title="${safeFullName}" onclick="openAttachment('${safeUrl}')">📎 ${safeShortName}</button>`);
                 });
                 if (attachmentLinks.length > 3) {
                     actions.push(`<span class="small text-muted">+${attachmentLinks.length - 3}건</span>`);
@@ -2242,21 +2277,9 @@ function buildPhysicalPrintHtml(doc) {
         sourceUrl,
         href: String(signedAttachmentLinks[idx] || sourceUrl || '')
     })).filter(item => item.href);
-    const extractFileName = (url, fallback) => {
-        try {
-            const u = new URL(url);
-            const qName = u.searchParams.get('display_name') || u.searchParams.get('download');
-            if (qName) return decodeURIComponent(qName);
-            const pathname = u.pathname || '';
-            const raw = pathname.split('/').pop() || '';
-            return decodeURIComponent(raw || fallback);
-        } catch (_) {
-            return fallback;
-        }
-    };
     const attachmentItemsHtml = attachmentLinks.map((item, idx) => {
         const safeUrl = escapeHtml(item.href);
-        const safeName = escapeHtml(extractFileName(item.sourceUrl, `첨부파일 ${idx + 1}`));
+        const safeName = escapeHtml(extractDisplayFileName(item.sourceUrl, `첨부파일 ${idx + 1}`));
         return `<li><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeName}</a></li>`;
     }).join('');
 
@@ -2590,10 +2613,10 @@ document.getElementById('signedDocInput').addEventListener('change', async (e) =
     if (!validation.ok) return showAlert(validation.message);
 
     const file = fileInput.files[0];
-    const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const { error: uploadErr } = await _supabase.storage.from('attachments').upload(safeName, file);
-    if (uploadErr) return showAlert("파일 오류: " + uploadErr.message);
-    const { data: { publicUrl } } = _supabase.storage.from('attachments').getPublicUrl(safeName);
+	    const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+	    const { error: uploadErr } = await _supabase.storage.from('attachments').upload(safeName, file);
+	    if (uploadErr) return showAlert("파일 오류: " + uploadErr.message);
+	    const signedDocRef = `attachments/${safeName}?display_name=${encodeURIComponent(file.name || safeName)}`;
 
     const { data: doc } = await _supabase
         .from('ref_approval')
@@ -2609,17 +2632,17 @@ document.getElementById('signedDocInput').addEventListener('change', async (e) =
         return l;
     });
 
-    await _supabase.from('ref_approval').update({
-        status: '실물결재완료',
-        signed_doc_url: publicUrl,
-        physical_approved_at: nowIso,
-        physical_approved_by: myInfo?.emp_id || null,
-        approval_line: line,
-        current_approver: null,
-        processed_at: nowIso
-    }).eq('id', pendingPhysicalDocId);
+	    await _supabase.from('ref_approval').update({
+	        status: '실물결재완료',
+	        signed_doc_url: signedDocRef,
+	        physical_approved_at: nowIso,
+	        physical_approved_by: myInfo?.emp_id || null,
+	        approval_line: line,
+	        current_approver: null,
+	        processed_at: nowIso
+	    }).eq('id', pendingPhysicalDocId);
 
-    await logAudit('approval.physical_complete', pendingPhysicalDocId, '실물결재 완료', { signed_doc_url: publicUrl });
+	    await logAudit('approval.physical_complete', pendingPhysicalDocId, '실물결재 완료', { signed_doc_url: signedDocRef });
     if (doc?.drafter_id && doc.drafter_id !== myInfo?.emp_id) {
         await createNotification(doc.drafter_id, '실물결재 완료', `${doc.title || '문서'} 실물결재가 완료되었습니다.`, `approval.html?doc=${pendingPhysicalDocId}`, { doc_id: pendingPhysicalDocId });
     }
