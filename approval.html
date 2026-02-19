@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.9 | Change: 2026-02-19 - Attachment display now preserves original upload filename in approval document views. -->
+<!-- Version: v1.1.12 | Change: 2026-02-19 - Separated notice public body from internal approval memo. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.9 | approval.html');</script>
+  <script>console.log('[Version] v1.1.12 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -66,6 +66,14 @@
       content: attr(data-placeholder);
       color: #94a3b8;
       pointer-events: none;
+    }
+    .history-filter-btn.active {
+      background: #0d6efd;
+      color: #fff;
+      border-color: #0d6efd;
+    }
+    .history-filter-select {
+      min-width: 140px;
     }
   </style>
 </head>
@@ -184,6 +192,11 @@
         <div class="col-12 hidden mb-3" id="divNoticeSubject">
           <label class="small text-muted fw-bold">제목</label>
           <input type="text" class="form-control" id="noticeSubject" placeholder="예: 공문 제목">
+        </div>
+        <div class="col-12 hidden mb-3" id="divNoticeApprovalMemo">
+          <label class="small text-muted fw-bold">결재 요청 메모 (내부용)</label>
+          <textarea class="form-control" id="noticeApprovalMemo" rows="3" placeholder="예: 아래 내용으로 공문 발송 결재를 요청드립니다."></textarea>
+          <div class="small text-muted mt-1">이 메모는 전자결재 내부에서만 사용되며 문서함 공개 본문에는 포함되지 않습니다.</div>
         </div>
         <div class="col-12 hidden mb-3" id="divProposalSubject">
           <label class="small text-muted fw-bold">품의 제목</label>
@@ -304,6 +317,44 @@
       <button class="btn btn-outline-secondary">🔍</button>
       <button class="btn btn-outline-success" onclick="exportHistoryCsv()">⬇ CSV</button>
     </div>
+    <div class="d-flex flex-wrap gap-2 mb-3" id="historyStatusFilterBar">
+      <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn active" data-history-filter="ALL" onclick="setHistoryStatusFilter('ALL')">전체 <span class="badge text-bg-light ms-1" id="historyCountAll">0</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn" data-history-filter="PENDING" onclick="setHistoryStatusFilter('PENDING')">대기 <span class="badge text-bg-light ms-1" id="historyCountPending">0</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn" data-history-filter="DONE" onclick="setHistoryStatusFilter('DONE')">완료 <span class="badge text-bg-light ms-1" id="historyCountDone">0</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn" data-history-filter="REJECTED" onclick="setHistoryStatusFilter('REJECTED')">반려 <span class="badge text-bg-light ms-1" id="historyCountRejected">0</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn" data-history-filter="CANCELED" onclick="setHistoryStatusFilter('CANCELED')">취소 <span class="badge text-bg-light ms-1" id="historyCountCanceled">0</span></button>
+    </div>
+    <div class="row g-2 mb-3" id="historyAdvancedFilters">
+      <div class="col-sm-4">
+        <label class="small text-muted mb-1">문서유형</label>
+        <select id="historyDocTypeFilter" class="form-select form-select-sm history-filter-select" onchange="onHistoryAdvancedFilterChange()">
+          <option value="ALL">전체</option>
+          <option value="GENERAL_PROPOSAL">일반품의</option>
+          <option value="EXPENSE">지출결의</option>
+          <option value="LEAVE">휴가</option>
+          <option value="DEPENDENT">부양가족</option>
+          <option value="NOTICE">공문</option>
+        </select>
+      </div>
+      <div class="col-sm-4">
+        <label class="small text-muted mb-1">기간</label>
+        <select id="historyPeriodFilter" class="form-select form-select-sm history-filter-select" onchange="onHistoryAdvancedFilterChange()">
+          <option value="ALL">전체</option>
+          <option value="D7">최근 7일</option>
+          <option value="D30">최근 30일</option>
+          <option value="THIS_MONTH">이번 달</option>
+          <option value="THIS_YEAR">올해</option>
+        </select>
+      </div>
+      <div class="col-sm-4">
+        <label class="small text-muted mb-1">처리방식</label>
+        <select id="historyProcessFilter" class="form-select form-select-sm history-filter-select" onchange="onHistoryAdvancedFilterChange()">
+          <option value="ALL">전체</option>
+          <option value="ELECTRONIC">전자결재</option>
+          <option value="PHYSICAL">실물결재</option>
+        </select>
+      </div>
+    </div>
     <div id="historyList" class="list-group"></div>
   </div>
 </div>
@@ -337,6 +388,16 @@ let cancelDraftModalInstance = null;
 let appDescPreviewModalInstance = null;
 let approvalEditorMode = 'html';
 let leaveSnapshotState = null;
+let historyStatusFilter = 'ALL';
+let historyDocTypeFilter = 'ALL';
+let historyPeriodFilter = 'ALL';
+let historyProcessFilter = 'ALL';
+const HISTORY_STATUS_GROUPS = Object.freeze({
+    PENDING: ['진행중', '가승인', '증빙확인중', '실물결재대기'],
+    DONE: ['완료', '실물결재완료'],
+    REJECTED: ['반려'],
+    CANCELED: ['결재취소']
+});
 const KST_TZ_APPROVAL = 'Asia/Seoul';
 const formatApprovalKstDateISO = (value, fallback = '') => {
     if (!value) return fallback;
@@ -614,6 +675,42 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+const APPROVAL_NOTICE_MEMO_START = '[[APPROVAL_NOTE]]';
+const APPROVAL_NOTICE_MEMO_END = '[[/APPROVAL_NOTE]]';
+
+function splitNoticeApprovalContent(rawContent) {
+    const raw = String(rawContent || '');
+    const startIdx = raw.indexOf(APPROVAL_NOTICE_MEMO_START);
+    const endIdx = startIdx >= 0 ? raw.indexOf(APPROVAL_NOTICE_MEMO_END, startIdx + APPROVAL_NOTICE_MEMO_START.length) : -1;
+
+    if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) {
+        return {
+            approvalMemo: '',
+            publicBody: raw.trim()
+        };
+    }
+
+    const memoRaw = raw.slice(startIdx + APPROVAL_NOTICE_MEMO_START.length, endIdx);
+    const head = raw.slice(0, startIdx).trim();
+    const tail = raw.slice(endIdx + APPROVAL_NOTICE_MEMO_END.length).trim();
+    const publicBody = [head, tail].filter(Boolean).join('\n\n').trim();
+
+    return {
+        approvalMemo: memoRaw.trim(),
+        publicBody
+    };
+}
+
+function composeNoticeApprovalContent(publicBody, approvalMemo) {
+    const body = String(publicBody || '').trim();
+    const memo = String(approvalMemo || '').trim();
+    if (!memo) return body;
+    if (!body) {
+        return `${APPROVAL_NOTICE_MEMO_START}\n${memo}\n${APPROVAL_NOTICE_MEMO_END}`;
+    }
+    return `${APPROVAL_NOTICE_MEMO_START}\n${memo}\n${APPROVAL_NOTICE_MEMO_END}\n\n${body}`;
 }
 
 function hasHtmlTag(value) {
@@ -1260,6 +1357,8 @@ function handleCategoryChange() {
     const divNoticeReceiver = document.getElementById("divNoticeReceiver");
     const divNoticeVia = document.getElementById("divNoticeVia");
     const divNoticeSubject = document.getElementById("divNoticeSubject");
+    const divNoticeApprovalMemo = document.getElementById("divNoticeApprovalMemo");
+    const noticeApprovalMemoInput = document.getElementById("noticeApprovalMemo");
     const divProposalSubject = document.getElementById("divProposalSubject");
     const btnAppDescPreview = document.getElementById("btnAppDescPreview");
     const appDescHtmlHelp = document.getElementById("appDescHtmlHelp");
@@ -1273,6 +1372,7 @@ function handleCategoryChange() {
     divNoticeReceiver.classList.add("hidden");
     divNoticeVia.classList.add("hidden");
     divNoticeSubject.classList.add("hidden");
+    divNoticeApprovalMemo.classList.add("hidden");
     divProposalSubject.classList.add("hidden");
     btnAppDescPreview.classList.add("hidden");
     appDescHtmlHelp.classList.add("hidden");
@@ -1322,9 +1422,13 @@ function handleCategoryChange() {
         divNoticeReceiver.classList.remove("hidden");
         divNoticeVia.classList.remove("hidden");
         divNoticeSubject.classList.remove("hidden");
+        divNoticeApprovalMemo.classList.remove("hidden");
         divAmt.classList.add("hidden");
         const currentDesc = getApprovalEditorContent();
         if(!currentDesc) setApprovalEditorContent("아래와 같이 안내드립니다.");
+        if (noticeApprovalMemoInput && !String(noticeApprovalMemoInput.value || '').trim()) {
+            noticeApprovalMemoInput.value = "하기 내용으로 공문 발송 결재를 요청드립니다.";
+        }
     }
     else if (type === '일반품의') {
         divProposalSubject.classList.remove("hidden");
@@ -1566,13 +1670,14 @@ async function insertApprovalWithDocNoRetry(basePayload, maxAttempts = 5) {
 }
 
 function buildNoticeContentFromApproval(doc) {
+    const parsed = splitNoticeApprovalContent(doc?.content || '');
     const lines = [];
     if (doc?.doc_no) lines.push(`문서번호: ${doc.doc_no}`);
     if (doc?.receiver) lines.push(`수신: ${doc.receiver}`);
     if (doc?.via) lines.push(`경유: ${doc.via}`);
     if (doc?.title) lines.push(`제목: ${doc.title}`);
     lines.push('');
-    if (doc?.content) lines.push(doc.content);
+    if (parsed.publicBody) lines.push(parsed.publicBody);
     return lines.join('\n');
 }
 
@@ -1609,6 +1714,7 @@ async function handleDraftSubmit(e) {
     let title = "";
     let receiver = null;
     let via = null;
+    let noticeApprovalMemo = '';
     
     // 대리 상신 여부
     const isProxy = document.getElementById("chkProxy").checked;
@@ -1683,6 +1789,7 @@ async function handleDraftSubmit(e) {
         if (!subject) return showAlert("공문 제목을 입력하세요.");
         receiver = document.getElementById("noticeReceiver").value.trim();
         via = document.getElementById("noticeVia").value.trim();
+        noticeApprovalMemo = String(document.getElementById("noticeApprovalMemo")?.value || '').trim();
         title = subject;
         subType = '공문';
         finalAmt = 0;
@@ -1796,10 +1903,15 @@ async function handleDraftSubmit(e) {
     const relatedDocId = document.getElementById("relDocId").value || null;
     const allowHtmlContent = mainType === '일반품의';
     const rawBodyContent = getApprovalEditorContent();
-    const mergedBodyContent = mergeSystemAppendContent(rawBodyContent, appendDesc, allowHtmlContent);
-    const savedBodyContent = allowHtmlContent
+    const isNoticeDraft = mainType === '공문';
+    const mergedBodyContent = mergeSystemAppendContent(rawBodyContent, isNoticeDraft ? '' : appendDesc, allowHtmlContent);
+    let savedBodyContent = allowHtmlContent
         ? renderApprovalContent(mergedBodyContent, true)
         : mergedBodyContent;
+    if (isNoticeDraft) {
+        const mergedNoticeMemo = mergeSystemAppendContent(noticeApprovalMemo, appendDesc, false);
+        savedBodyContent = composeNoticeApprovalContent(mergedBodyContent, mergedNoticeMemo);
+    }
 
     // 4. DB 저장
     const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
@@ -2050,17 +2162,135 @@ async function loadHistoryList() {
         ...doc,
         _cancel_reason: cancelReasonMap[String(doc.id)] || ''
     }));
-    renderDocs(el, historyCache, false);
+    renderFilteredHistoryList();
 }
+
+function mapHistoryStatusGroup(status) {
+    const safeStatus = String(status || '').trim();
+    if (!safeStatus) return 'PENDING';
+    if (HISTORY_STATUS_GROUPS.PENDING.includes(safeStatus)) return 'PENDING';
+    if (HISTORY_STATUS_GROUPS.DONE.includes(safeStatus)) return 'DONE';
+    if (HISTORY_STATUS_GROUPS.REJECTED.includes(safeStatus)) return 'REJECTED';
+    if (HISTORY_STATUS_GROUPS.CANCELED.includes(safeStatus)) return 'CANCELED';
+    return 'PENDING';
+}
+
+function mapHistoryDocTypeGroup(docType) {
+    const raw = String(docType || '').trim();
+    if (!raw) return 'OTHER';
+    if (raw.startsWith('일반품의')) return 'GENERAL_PROPOSAL';
+    if (raw.startsWith('지출결의')) return 'EXPENSE';
+    if (raw.startsWith('휴가')) return 'LEAVE';
+    if (raw.startsWith('부양가족')) return 'DEPENDENT';
+    if (raw.startsWith('공문')) return 'NOTICE';
+    return 'OTHER';
+}
+
+function mapHistoryProcessGroup(doc) {
+    const status = String(doc?.status || '').trim();
+    const hasSignedDoc = !!String(doc?.signed_doc_url || '').trim();
+    if (status.startsWith('실물결재') || hasSignedDoc) return 'PHYSICAL';
+    return 'ELECTRONIC';
+}
+
+function isHistoryWithinPeriod(doc, periodFilter) {
+    if (periodFilter === 'ALL') return true;
+    const createdAt = new Date(doc?.created_at || '');
+    if (Number.isNaN(createdAt.getTime())) return false;
+    const now = new Date();
+    const diffMs = now.getTime() - createdAt.getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (periodFilter === 'D7') return diffMs <= 7 * dayMs;
+    if (periodFilter === 'D30') return diffMs <= 30 * dayMs;
+    if (periodFilter === 'THIS_MONTH') {
+        return formatApprovalKstMonth(createdAt) === formatApprovalKstMonth(now);
+    }
+    if (periodFilter === 'THIS_YEAR') {
+        const c = formatApprovalKstDateISO(createdAt, '');
+        const n = formatApprovalKstDateISO(now, '');
+        return c.slice(0, 4) === n.slice(0, 4);
+    }
+    return true;
+}
+
+function applyHistoryFilters(list) {
+    const safeList = Array.isArray(list) ? list : [];
+    const key = String(document.getElementById("searchKeyword")?.value || '').toLowerCase();
+    const byStatus = safeList.filter(doc => {
+        if (historyStatusFilter === 'ALL') return true;
+        return mapHistoryStatusGroup(doc?.status) === historyStatusFilter;
+    });
+    const byDocType = byStatus.filter(doc => {
+        if (historyDocTypeFilter === 'ALL') return true;
+        return mapHistoryDocTypeGroup(doc?.doc_type) === historyDocTypeFilter;
+    });
+    const byPeriod = byDocType.filter(doc => isHistoryWithinPeriod(doc, historyPeriodFilter));
+    const byProcess = byPeriod.filter(doc => {
+        if (historyProcessFilter === 'ALL') return true;
+        return mapHistoryProcessGroup(doc) === historyProcessFilter;
+    });
+    if (!key) return byProcess;
+    return byProcess.filter(d => (d.title || '').toLowerCase().includes(key));
+}
+
+function renderHistoryFilterMeta() {
+    const safeList = Array.isArray(historyCache) ? historyCache : [];
+    const counters = {
+        ALL: safeList.length,
+        PENDING: safeList.filter(d => mapHistoryStatusGroup(d?.status) === 'PENDING').length,
+        DONE: safeList.filter(d => mapHistoryStatusGroup(d?.status) === 'DONE').length,
+        REJECTED: safeList.filter(d => mapHistoryStatusGroup(d?.status) === 'REJECTED').length,
+        CANCELED: safeList.filter(d => mapHistoryStatusGroup(d?.status) === 'CANCELED').length
+    };
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = String(value);
+    };
+    setText('historyCountAll', counters.ALL);
+    setText('historyCountPending', counters.PENDING);
+    setText('historyCountDone', counters.DONE);
+    setText('historyCountRejected', counters.REJECTED);
+    setText('historyCountCanceled', counters.CANCELED);
+
+    document.querySelectorAll('#historyStatusFilterBar [data-history-filter]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.historyFilter === historyStatusFilter);
+    });
+}
+
+function renderFilteredHistoryList() {
+    const listEl = document.getElementById("historyList");
+    if (!listEl) return;
+    const filtered = applyHistoryFilters(historyCache);
+    renderDocs(listEl, filtered, false);
+    renderHistoryFilterMeta();
+}
+
+function setHistoryStatusFilter(nextFilter) {
+    const allowed = ['ALL', 'PENDING', 'DONE', 'REJECTED', 'CANCELED'];
+    historyStatusFilter = allowed.includes(nextFilter) ? nextFilter : 'ALL';
+    renderFilteredHistoryList();
+}
+
+function onHistoryAdvancedFilterChange() {
+    const docTypeEl = document.getElementById('historyDocTypeFilter');
+    const periodEl = document.getElementById('historyPeriodFilter');
+    const processEl = document.getElementById('historyProcessFilter');
+    const allowedDocType = ['ALL', 'GENERAL_PROPOSAL', 'EXPENSE', 'LEAVE', 'DEPENDENT', 'NOTICE'];
+    const allowedPeriod = ['ALL', 'D7', 'D30', 'THIS_MONTH', 'THIS_YEAR'];
+    const allowedProcess = ['ALL', 'ELECTRONIC', 'PHYSICAL'];
+
+    historyDocTypeFilter = allowedDocType.includes(String(docTypeEl?.value || '')) ? String(docTypeEl.value) : 'ALL';
+    historyPeriodFilter = allowedPeriod.includes(String(periodEl?.value || '')) ? String(periodEl.value) : 'ALL';
+    historyProcessFilter = allowedProcess.includes(String(processEl?.value || '')) ? String(processEl.value) : 'ALL';
+    renderFilteredHistoryList();
+}
+
 function filterHistory() {
-    const key = document.getElementById("searchKeyword").value.toLowerCase();
-    const filtered = historyCache.filter(d => (d.title || '').toLowerCase().includes(key));
-    renderDocs(document.getElementById("historyList"), filtered, false);
+    renderFilteredHistoryList();
 }
 
 function exportHistoryCsv() {
-    const key = document.getElementById("searchKeyword").value.toLowerCase();
-    const list = key ? historyCache.filter(d => (d.title || '').toLowerCase().includes(key)) : historyCache;
+    const list = applyHistoryFilters(historyCache);
     if (!list || list.length === 0) return showAlert("내보낼 데이터가 없습니다.");
 
     const headers = ['id','doc_type','title','status','drafter_name','created_at','amount','current_approver','signed_doc_url'];
@@ -2258,9 +2488,20 @@ function buildPhysicalPrintHtml(doc) {
     const safeAmountMain = escapeHtml(amountDisplay.mainText || '');
     const safeAmountSub = amountDisplay.subText ? escapeHtml(amountDisplay.subText) : '';
     const safeAmountLabel = escapeHtml(amountDisplay.labelText || '금액');
+    const noticeParts = isNoticeDoc
+        ? splitNoticeApprovalContent(doc.content || '')
+        : { approvalMemo: '', publicBody: String(doc.content || '') };
+    const noticePublicBody = isNoticeDoc ? noticeParts.publicBody : String(doc.content || '');
+    const noticeApprovalMemo = isNoticeDoc ? noticeParts.approvalMemo : '';
     const renderedContent = isProposalDoc
         ? renderApprovalContent(doc.content || '', true)
-        : escapeHtml(doc.content || '').replace(/\n/g, '<br>');
+        : escapeHtml(noticePublicBody || '').replace(/\n/g, '<br>');
+    const renderedNoticeMemo = isNoticeDoc && noticeApprovalMemo
+        ? escapeHtml(noticeApprovalMemo).replace(/\n/g, '<br>')
+        : '';
+    const noticeMemoSectionHtml = renderedNoticeMemo
+        ? `<div class="section-title">결재 요청 메모 (내부)</div><div class="content-box" style="min-height: 0;">${renderedNoticeMemo}</div>`
+        : '';
     const safeDocNo = escapeHtml(doc.doc_no || '');
     const safeReceiver = escapeHtml(doc.receiver || '');
     const safeVia = escapeHtml(doc.via || '');
@@ -2461,6 +2702,7 @@ function buildPhysicalPrintHtml(doc) {
               </table>
             </div>
 
+            ${noticeMemoSectionHtml}
             <div class="section-title">${safeSectionHeading}</div>
             <div class="content-box">${renderedContent || emptyText}</div>
             ${attachmentSectionHtml}
@@ -2771,12 +3013,21 @@ async function openRelView(docId) {
     const contentBox = document.createElement("div");
     contentBox.className = "p-3 bg-light rounded";
     contentBox.style.minHeight = "200px";
-    const allowHtmlContent = String(data.doc_type || '').startsWith('일반품의');
+    const rawDocType = String(data.doc_type || '');
+    const allowHtmlContent = rawDocType.startsWith('일반품의');
+    const isNoticeDoc = rawDocType.startsWith('공문');
+    const noticeParts = isNoticeDoc ? splitNoticeApprovalContent(data.content || '') : null;
+    if (isNoticeDoc && String(noticeParts?.approvalMemo || '').trim()) {
+        const memoBox = document.createElement("div");
+        memoBox.className = "p-3 border rounded bg-white mb-3";
+        memoBox.innerHTML = `<div class="small fw-bold text-muted mb-2">결재 요청 메모 (내부)</div>${escapeHtml(noticeParts.approvalMemo).replace(/\n/g, '<br>')}`;
+        contentEl.appendChild(memoBox);
+    }
     if (allowHtmlContent) {
         contentBox.innerHTML = renderApprovalContent(data.content || '', true);
     } else {
         contentBox.style.whiteSpace = "pre-wrap";
-        contentBox.textContent = data.content || "";
+        contentBox.textContent = isNoticeDoc ? (noticeParts?.publicBody || "") : (data.content || "");
     }
 
     const amountEl = document.createElement("div");
