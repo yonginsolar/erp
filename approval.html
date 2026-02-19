@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.12 | Change: 2026-02-19 - Separated notice public body from internal approval memo. -->
+<!-- Version: v1.1.17 | Change: 2026-02-19 - Remove notice body default sample text and keep notice memo default only. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.12 | approval.html');</script>
+  <script>console.log('[Version] v1.1.17 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -297,7 +297,7 @@
         <div id="app-desc-panel-html" class="approval-editor-panel active">
           <textarea class="form-control large-textarea" id="appDesc" placeholder="내용을 상세히 입력하세요." rows="20"></textarea>
         </div>
-        <div class="small text-muted mt-2 hidden" id="appDescHtmlHelp">일반품의서는 테이블 포함 HTML 본문을 작성할 수 있습니다. `미리보기 편집` 또는 `HTML 편집` 탭으로 작성하고 제출 전 미리보기로 확인하세요.</div>
+        <div class="small text-muted mt-2 hidden" id="appDescHtmlHelp">일반품의/공문은 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.</div>
       </div>
 
       <div class="mb-4">
@@ -361,6 +361,7 @@
 
 <div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
+<div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header py-2"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-4" id="confirmBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="confirmOkBtn">확인</button></div></div></div></div>
 <div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
 <div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">📄 관련 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
 <div class="modal fade" id="physicalRejectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 실물결재 반려</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">반려 사유</label><textarea id="physicalRejectReason" class="form-control" rows="5" placeholder="반려 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-danger btn-sm" id="btnPhysicalRejectSubmit" onclick="submitPhysicalReject()">반려 처리</button></div></div></div></div>
@@ -375,7 +376,7 @@ const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let myInfo = null;
 let allUsers = [];
-let modalInstance, alertModalInstance;
+let modalInstance, alertModalInstance, confirmModalInstance;
 let modalType = ''; 
 let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [];
 let permissionSet = new Set();
@@ -930,8 +931,8 @@ function setApprovalEditorForCategory(docType) {
     const htmlPanel = document.getElementById('app-desc-panel-html');
     if (!controls || !visualPanel || !htmlPanel) return;
 
-    const isGeneralProposal = docType === '일반품의';
-    if (isGeneralProposal) {
+    const supportsHtmlEditor = (docType === '일반품의' || docType === '공문');
+    if (supportsHtmlEditor) {
         controls.classList.remove('hidden');
         window.switchApprovalEditorTab('visual');
     } else {
@@ -1014,6 +1015,7 @@ function validateAttachments(fileList) {
 window.onload = async function() {
     modalInstance = new bootstrap.Modal(document.getElementById('userModal'));
     alertModalInstance = new bootstrap.Modal(document.getElementById('alertModal'));
+    confirmModalInstance = new bootstrap.Modal(document.getElementById('confirmModal'));
     physicalRejectModalInstance = new bootstrap.Modal(document.getElementById('physicalRejectModal'));
     cancelDraftModalInstance = new bootstrap.Modal(document.getElementById('cancelDraftModal'));
     appDescPreviewModalInstance = new bootstrap.Modal(document.getElementById('appDescPreviewModal'));
@@ -1316,6 +1318,47 @@ function showAlert(msg, onClose = null) {
     alertModalInstance.show();
 }
 
+function showConfirm(msg, options = {}) {
+    const modalEl = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('confirmTitle');
+    const bodyEl = document.getElementById('confirmBody');
+    const okBtn = document.getElementById('confirmOkBtn');
+    if (!confirmModalInstance || !modalEl || !titleEl || !bodyEl || !okBtn) {
+        showAlert(String(msg || '확인이 필요합니다.'));
+        return Promise.resolve(false);
+    }
+
+    const title = String(options?.title || '확인').trim() || '확인';
+    const okText = String(options?.okText || '확인').trim() || '확인';
+    const okClass = String(options?.okClass || 'btn-danger').trim() || 'btn-danger';
+
+    titleEl.textContent = title;
+    bodyEl.textContent = String(msg || '');
+    okBtn.textContent = okText;
+    okBtn.className = `btn ${okClass} btn-sm`;
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            okBtn.removeEventListener('click', onConfirm);
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            resolve(!!result);
+        };
+        const onConfirm = () => {
+            finish(true);
+            confirmModalInstance.hide();
+        };
+        const onHidden = () => {
+            finish(false);
+        };
+        okBtn.addEventListener('click', onConfirm);
+        modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+        confirmModalInstance.show();
+    });
+}
+
 function canDrafterCancelPendingDoc(doc) {
     if (!doc || doc.drafter_id !== myInfo?.emp_id) return false;
     const status = String(doc.status || '');
@@ -1324,6 +1367,14 @@ function canDrafterCancelPendingDoc(doc) {
     if (line.length === 0) return true;
     const hasProcessed = line.some(step => ['승인', '반려'].includes(String(step?.status || '')));
     return !hasProcessed;
+}
+
+function canDeleteCanceledDoc(doc) {
+    if (!doc) return false;
+    if (String(doc.status || '') !== '결재취소') return false;
+    const isDrafter = doc.drafter_id === myInfo?.emp_id;
+    const canManageAll = canPerform('approval.process');
+    return isDrafter || canManageAll;
 }
 
 function switchTab(tab) {
@@ -1423,9 +1474,14 @@ function handleCategoryChange() {
         divNoticeVia.classList.remove("hidden");
         divNoticeSubject.classList.remove("hidden");
         divNoticeApprovalMemo.classList.remove("hidden");
+        btnAppDescPreview.classList.remove("hidden");
+        appDescHtmlHelp.classList.remove("hidden");
+        appDescHtmlHelp.textContent = "공문은 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.";
         divAmt.classList.add("hidden");
-        const currentDesc = getApprovalEditorContent();
-        if(!currentDesc) setApprovalEditorContent("아래와 같이 안내드립니다.");
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (currentDesc === "아래와 같이 안내드립니다." || currentDesc === "위와 같이 품의하오니 승인하여 주시기 바랍니다.") {
+            setApprovalEditorContent("");
+        }
         if (noticeApprovalMemoInput && !String(noticeApprovalMemoInput.value || '').trim()) {
             noticeApprovalMemoInput.value = "하기 내용으로 공문 발송 결재를 요청드립니다.";
         }
@@ -1434,6 +1490,7 @@ function handleCategoryChange() {
         divProposalSubject.classList.remove("hidden");
         btnAppDescPreview.classList.remove("hidden");
         appDescHtmlHelp.classList.remove("hidden");
+        appDescHtmlHelp.textContent = "일반품의서는 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.";
         const currentDesc = getApprovalEditorContent();
         if (!currentDesc.trim() || currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) {
             setApprovalEditorContent("위와 같이 품의하오니 승인하여 주시기 바랍니다.");
@@ -1457,10 +1514,10 @@ function openAppDescPreview() {
     const modalBody = document.getElementById("appDescPreviewBody");
     if (!modalTitle || !modalMeta || !modalBody) return;
 
-    const allowHtml = type === '일반품의';
+    const allowHtml = (type === '일반품의' || type === '공문');
     modalTitle.textContent = proposalTitle || `${type || '문서'} 본문 미리보기`;
     modalMeta.textContent = allowHtml
-        ? '일반품의서 HTML 렌더링 미리보기'
+        ? `${type || '문서'} HTML 렌더링 미리보기`
         : '줄바꿈 기준 본문 미리보기';
     modalBody.innerHTML = renderApprovalContent(rawContent, allowHtml);
     if (appDescPreviewModalInstance) appDescPreviewModalInstance.show();
@@ -1901,7 +1958,7 @@ async function handleDraftSubmit(e) {
 	    }
 
     const relatedDocId = document.getElementById("relDocId").value || null;
-    const allowHtmlContent = mainType === '일반품의';
+    const allowHtmlContent = (mainType === '일반품의' || mainType === '공문');
     const rawBodyContent = getApprovalEditorContent();
     const isNoticeDraft = mainType === '공문';
     const mergedBodyContent = mergeSystemAppendContent(rawBodyContent, isNoticeDraft ? '' : appendDesc, allowHtmlContent);
@@ -2038,6 +2095,48 @@ async function submitDraftCancel() {
     } finally {
         if (submitBtn) submitBtn.disabled = false;
     }
+}
+
+async function deleteCanceledDoc(docId) {
+    const numericDocId = Number(docId);
+    if (!Number.isFinite(numericDocId)) return;
+
+    const { data: doc, error: docErr } = await _supabase
+        .from('ref_approval')
+        .select('id, title, status, drafter_id')
+        .eq('id', numericDocId)
+        .single();
+    if (docErr || !doc) {
+        showAlert("문서를 찾을 수 없습니다.");
+        return;
+    }
+    if (!canDeleteCanceledDoc(doc)) {
+        showAlert("결재 취소 문서만 삭제할 수 있습니다.");
+        return;
+    }
+
+    const ok = await showConfirm("결재 취소 문서를 완전히 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.", {
+        title: '취소 문서 삭제',
+        okText: '삭제',
+        okClass: 'btn-danger'
+    });
+    if (!ok) return;
+
+    const { error: delErr } = await _supabase
+        .from('ref_approval')
+        .delete()
+        .eq('id', numericDocId);
+    if (delErr) {
+        showAlert("삭제 실패: " + delErr.message);
+        return;
+    }
+
+    await logAudit('approval.delete', numericDocId, '결재취소 문서 삭제', {
+        status: doc.status || '',
+        title: doc.title || ''
+    });
+    showAlert("삭제되었습니다.");
+    loadHistoryList();
 }
 
 // [추가] 사용자 액션 (증빙제출/상신취소)
@@ -2360,7 +2459,8 @@ function renderDocs(target, list, isTodo) {
             : '';
 
         let ageBadge = "";
-        if (doc.created_at) {
+        const isPendingDoc = mapHistoryStatusGroup(doc.status) === 'PENDING';
+        if (isPendingDoc && doc.created_at) {
             const createdAt = new Date(doc.created_at);
             if (!Number.isNaN(createdAt.getTime())) {
                 const ageDays = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
@@ -2386,6 +2486,7 @@ function renderDocs(target, list, isTodo) {
             const hasChairman = approvalLine.some(l => (l.position || '').includes('이사장'));
             const canPhysical = isSecretary && hasChairman && canPerform('approval.physical') && doc.drafter_id === myInfo.emp_id;
             const canCancelPending = canDrafterCancelPendingDoc(doc);
+            const canDeleteCanceled = canDeleteCanceledDoc(doc);
             const attachmentLinks = Array.isArray(doc.file_links)
                 ? doc.file_links.filter(link => typeof link === 'string' && link.trim())
                 : [];
@@ -2398,6 +2499,9 @@ function renderDocs(target, list, isTodo) {
                 }
             } else if (canCancelPending) {
                 actions.push(`<button class="btn btn-sm btn-outline-secondary me-1" onclick="startDraftCancel(${doc.id})">🗑️ 상신취소</button>`);
+            }
+            if (canDeleteCanceled) {
+                actions.push(`<button class="btn btn-sm btn-outline-danger me-1" onclick="deleteCanceledDoc(${doc.id})">🧹 취소문서 삭제</button>`);
             }
 
             if (canPhysical && ['진행중','가승인','증빙확인중','실물결재대기','실물결재완료'].includes(doc.status)) {
@@ -2493,9 +2597,10 @@ function buildPhysicalPrintHtml(doc) {
         : { approvalMemo: '', publicBody: String(doc.content || '') };
     const noticePublicBody = isNoticeDoc ? noticeParts.publicBody : String(doc.content || '');
     const noticeApprovalMemo = isNoticeDoc ? noticeParts.approvalMemo : '';
-    const renderedContent = isProposalDoc
-        ? renderApprovalContent(doc.content || '', true)
-        : escapeHtml(noticePublicBody || '').replace(/\n/g, '<br>');
+    const renderedBodySource = isNoticeDoc ? (noticePublicBody || '') : (doc.content || '');
+    const renderedContent = (isProposalDoc || isNoticeDoc)
+        ? renderApprovalContent(renderedBodySource, true)
+        : escapeHtml(renderedBodySource || '').replace(/\n/g, '<br>');
     const renderedNoticeMemo = isNoticeDoc && noticeApprovalMemo
         ? escapeHtml(noticeApprovalMemo).replace(/\n/g, '<br>')
         : '';
@@ -3014,8 +3119,8 @@ async function openRelView(docId) {
     contentBox.className = "p-3 bg-light rounded";
     contentBox.style.minHeight = "200px";
     const rawDocType = String(data.doc_type || '');
-    const allowHtmlContent = rawDocType.startsWith('일반품의');
     const isNoticeDoc = rawDocType.startsWith('공문');
+    const allowHtmlContent = rawDocType.startsWith('일반품의') || isNoticeDoc;
     const noticeParts = isNoticeDoc ? splitNoticeApprovalContent(data.content || '') : null;
     if (isNoticeDoc && String(noticeParts?.approvalMemo || '').trim()) {
         const memoBox = document.createElement("div");
@@ -3024,7 +3129,8 @@ async function openRelView(docId) {
         contentEl.appendChild(memoBox);
     }
     if (allowHtmlContent) {
-        contentBox.innerHTML = renderApprovalContent(data.content || '', true);
+        const contentSource = isNoticeDoc ? (noticeParts?.publicBody || '') : (data.content || '');
+        contentBox.innerHTML = renderApprovalContent(contentSource, true);
     } else {
         contentBox.style.whiteSpace = "pre-wrap";
         contentBox.textContent = isNoticeDoc ? (noticeParts?.publicBody || "") : (data.content || "");
