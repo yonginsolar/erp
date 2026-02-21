@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.3 -->
+<!-- Version: v1.0.4 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.3 | index.html');</script>
+  <script>console.log('[Version] v1.0.4 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -30,6 +30,7 @@
     .btn-kakao { background: #FEE500; border: none; border-radius: 10px; font-weight: bold; color: #3a1d1d; }
     .btn-kakao:hover { background: #f4dc00; color: #3a1d1d; }
     .notif-badge { display: inline-block; min-width: 20px; text-align: center; }
+    .guard-hint { display: none; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -51,6 +52,7 @@
       <div class="mb-3 text-start">
         <label class="form-label">이메일 주소</label>
         <input type="email" class="form-control" id="emailInput" placeholder="name@coop.com">
+        <input type="text" class="d-none" id="emailTrap" tabindex="-1" autocomplete="off" aria-hidden="true">
       </div>
 
       <button class="btn btn-primary w-100 py-2" id="btnSend" onclick="sendMagicLink()">
@@ -62,6 +64,7 @@
       </button>
       
       <div id="statusMsg" class="mt-3 text-success small" style="display:none;"></div>
+      <div id="loginGuardMsg" class="mt-2 text-muted small guard-hint"></div>
     </div>
 
     <div id="menuArea" class="hidden">
@@ -174,12 +177,20 @@ const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const REDIRECT_URL = `${window.location.origin}/index.html`; 
 const SUPABASE_PROJECT_REF = 'ifdqlwxgqgsvnawmhlfc';
 const ERP_SESSION_EXPIRED_NOTICE_KEY = 'erp_session_expired_notice_v1';
+const MAGICLINK_RATE_KEY = 'erp_magiclink_rate_v1';
+const MAGICLINK_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+const MAGICLINK_MAX_PER_WINDOW = 5;
+const MAGICLINK_COOLDOWN_MS = 60 * 1000;
+const MAGICLINK_MIN_PAGE_AGE_MS = 1200;
 
 let myInfo = null;
 let permissionSet = new Set();
 let notifModalInstance = null;
 let lastNotifList = [];
 let suppressSessionExpiredHandling = false;
+let loginFormOpenedAt = Date.now();
+let magicLinkCooldownTimer = null;
+let kakaoLoginInFlight = false;
 
 function getSupabaseAuthStorageKeys() {
     const prefix = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
@@ -199,6 +210,113 @@ function hasSupabaseAuthCache() {
 
 function clearSupabaseAuthCache() {
     getSupabaseAuthStorageKeys().forEach(([store, key]) => store.removeItem(key));
+}
+
+function readMagicLinkState() {
+    try {
+        const raw = localStorage.getItem(MAGICLINK_RATE_KEY);
+        if (!raw) return { attempts: [], cooldown_until: 0 };
+        const parsed = JSON.parse(raw);
+        const attempts = Array.isArray(parsed?.attempts) ? parsed.attempts : [];
+        const cooldownUntil = Number(parsed?.cooldown_until || 0);
+        return { attempts, cooldown_until: Number.isFinite(cooldownUntil) ? cooldownUntil : 0 };
+    } catch (_) {
+        return { attempts: [], cooldown_until: 0 };
+    }
+}
+
+function writeMagicLinkState(state) {
+    localStorage.setItem(MAGICLINK_RATE_KEY, JSON.stringify(state || { attempts: [], cooldown_until: 0 }));
+}
+
+function trimMagicLinkAttempts(attempts) {
+    const now = Date.now();
+    return (Array.isArray(attempts) ? attempts : []).filter((at) => {
+        const ts = Number(at?.ts || 0);
+        return Number.isFinite(ts) && now - ts <= MAGICLINK_REQUEST_WINDOW_MS;
+    });
+}
+
+function updateLoginGuardHint(text) {
+    const hintEl = document.getElementById('loginGuardMsg');
+    if (!hintEl) return;
+    if (!text) {
+        hintEl.textContent = '';
+        hintEl.style.display = 'none';
+        return;
+    }
+    hintEl.textContent = text;
+    hintEl.style.display = 'block';
+}
+
+function applyMagicLinkCooldown() {
+    const btn = document.getElementById('btnSend');
+    if (!btn) return;
+    if (magicLinkCooldownTimer) {
+        clearInterval(magicLinkCooldownTimer);
+        magicLinkCooldownTimer = null;
+    }
+
+    const tick = () => {
+        const state = readMagicLinkState();
+        const remainMs = Math.max(0, Number(state.cooldown_until || 0) - Date.now());
+        if (remainMs <= 0) {
+            btn.disabled = false;
+            btn.innerText = '📧 로그인 링크 받기';
+            updateLoginGuardHint('');
+            return false;
+        }
+        const sec = Math.ceil(remainMs / 1000);
+        btn.disabled = true;
+        btn.innerText = `재전송 대기 ${sec}s`;
+        updateLoginGuardHint(`보안을 위해 요청 간 최소 60초 간격을 적용합니다.\n${sec}초 후 다시 시도해주세요.`);
+        return true;
+    };
+
+    if (!tick()) return;
+    magicLinkCooldownTimer = setInterval(() => {
+        if (!tick()) {
+            clearInterval(magicLinkCooldownTimer);
+            magicLinkCooldownTimer = null;
+        }
+    }, 500);
+}
+
+function evaluateMagicLinkGuard(email) {
+    const trap = String(document.getElementById('emailTrap')?.value || '').trim();
+    if (trap) return { ok: false, reason: 'BOT_BLOCKED', message: '요청이 차단되었습니다. 잠시 후 다시 시도해주세요.' };
+    if (Date.now() - loginFormOpenedAt < MAGICLINK_MIN_PAGE_AGE_MS) {
+        return { ok: false, reason: 'TOO_FAST', message: '잠시만 기다린 뒤 다시 시도해주세요.' };
+    }
+
+    const state = readMagicLinkState();
+    const cooldownUntil = Number(state.cooldown_until || 0);
+    if (cooldownUntil > Date.now()) {
+        const sec = Math.ceil((cooldownUntil - Date.now()) / 1000);
+        return { ok: false, reason: 'COOLDOWN', message: `재전송은 ${sec}초 후 가능합니다.` };
+    }
+
+    const attempts = trimMagicLinkAttempts(state.attempts);
+    if (attempts.length >= MAGICLINK_MAX_PER_WINDOW) {
+        return { ok: false, reason: 'WINDOW_LIMIT', message: '요청이 너무 많습니다. 1시간 후 다시 시도해주세요.' };
+    }
+
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+        return { ok: false, reason: 'INVALID_EMAIL', message: '올바른 이메일을 입력해주세요.' };
+    }
+
+    return { ok: true, state, attempts, normalized_email: normalized };
+}
+
+function recordMagicLinkAttempt(email, success) {
+    const state = readMagicLinkState();
+    const attempts = trimMagicLinkAttempts(state.attempts);
+    attempts.push({ ts: Date.now(), email: String(email || '').toLowerCase(), ok: !!success });
+    state.attempts = attempts;
+    state.cooldown_until = Date.now() + MAGICLINK_COOLDOWN_MS;
+    writeMagicLinkState(state);
+    applyMagicLinkCooldown();
 }
 
 async function signOutSilently(client = _supabase) {
@@ -228,6 +346,7 @@ async function recoverFromExpiredSession() {
 }
 
 window.onload = async function() {
+    loginFormOpenedAt = Date.now();
     const hadAuthCache = hasSupabaseAuthCache();
     const { data, error } = await _supabase.auth.getUser();
 
@@ -241,6 +360,7 @@ window.onload = async function() {
         await loadUserInfo(data.user);
     } else {
         showScreen('loginForm');
+        applyMagicLinkCooldown();
     }
 
     _supabase.auth.onAuthStateChange(async (event, session) => {
@@ -377,6 +497,10 @@ function showScreen(id) {
     document.getElementById('loginForm').classList.add('hidden');
     document.getElementById('menuArea').classList.add('hidden');
     document.getElementById(id).classList.remove('hidden');
+    if (id === 'loginForm') {
+        loginFormOpenedAt = Date.now();
+        applyMagicLinkCooldown();
+    }
 }
 
 let alertModalInstance = null;
@@ -415,14 +539,20 @@ async function sendMagicLink() {
     const email = document.getElementById('emailInput').value;
     const btn = document.getElementById('btnSend');
     const msg = document.getElementById('statusMsg');
-    if (!email) return showAlert("이메일을 입력해주세요.");
+    const guard = evaluateMagicLinkGuard(email);
+    if (!guard.ok) {
+        applyMagicLinkCooldown();
+        return showAlert(guard.message || "보안 정책으로 요청이 제한되었습니다.");
+    }
+
+    updateLoginGuardHint('');
     btn.disabled = true; btn.innerText = "전송 중...";
     const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
     if (error) {
+        recordMagicLinkAttempt(email, false);
         showAlert("전송 실패: " + error.message);
-        btn.disabled = false;
-        btn.innerText = "📧 로그인 링크 받기";
     } else {
+        recordMagicLinkAttempt(email, true);
         btn.classList.add("hidden");
         msg.style.display = "block";
         msg.textContent = "";
@@ -435,6 +565,8 @@ async function sendMagicLink() {
 }
 
 async function startKakaoLogin() {
+    if (kakaoLoginInFlight) return;
+    kakaoLoginInFlight = true;
     const nextTarget = `${window.location.origin}/index.html`;
     const redirectUrl = `${window.location.origin}/auth_callback.html?next=${encodeURIComponent(nextTarget)}`;
     localStorage.setItem('auth_destination', nextTarget);
@@ -450,6 +582,7 @@ async function startKakaoLogin() {
             }
         } 
     });
+    setTimeout(() => { kakaoLoginInFlight = false; }, 3000);
 }
 
 async function logout() {
