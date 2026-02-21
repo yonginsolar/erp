@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!-- Version: v1.0.2 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.1 | auth_callback.html');</script>
+  <script>console.log('[Version] v1.0.2 | auth_callback.html');</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
     <title>인증 처리 중...</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -23,9 +24,28 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        function normalizeDest(raw) {
+            const fallback = '/index.html';
+            if (!raw) return fallback;
+            try {
+                const dest = new URL(raw, window.location.origin);
+                const allowOrigins = [
+                    window.location.origin,
+                    'https://www.yonginsolar.kr',
+                    'https://erp.yonginsolar.kr',
+                    'http://localhost:8000'
+                ];
+                if (!allowOrigins.includes(dest.origin)) return fallback;
+                return dest.href;
+            } catch (e) {
+                return fallback;
+            }
+        }
+
         function getDest() {
             const params = new URLSearchParams(window.location.search);
-            return params.get('next') || localStorage.getItem('auth_destination') || '/index.html';
+            const raw = params.get('next') || localStorage.getItem('auth_destination');
+            return normalizeDest(raw);
         }
 
         async function syncPhone(user) {
