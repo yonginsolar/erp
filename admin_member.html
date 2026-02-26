@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.21
-Change: 2026-02-21 - Completed family/org connect flow (relation chooser + immediate refresh).
+Version: v1.0.25
+Change: 2026-02-26 - Hardened member detail modal close flow to prevent retained focus aria-hidden warning.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.21';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.25';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -23,8 +23,8 @@ Change: 2026-02-21 - Completed family/org connect flow (relation chooser + immed
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-<script src="../badges.js"></script>
-<script src="../cert_generator.js"></script>
+<script src="https://www.yonginsolar.kr/badges.js"></script>
+<script src="https://www.yonginsolar.kr/cert_generator.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 
@@ -1099,7 +1099,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="modal-content">
 <div class="modal-header">
 <h5 class="modal-title fw-bold text-danger">⚠️ 삭제 확인</h5>
-<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<button type="button" class="btn-close" onclick="closeMemberDetailModal()"></button>
 </div>
 <div class="modal-body">
 <p class="mb-0">정말로 삭제하시겠습니까? <br><small class="text-muted">이 작업은 되돌릴 수 없습니다.</small></p>
@@ -1914,6 +1914,53 @@ function sanitizeOrKeyword(value) {
         .replace(/\s+/g, ' ')
         .trim();
 }
+
+function moveFocusOutsideModal(modalEl) {
+    if (!modalEl) return;
+    const activeEl = document.activeElement;
+    if (!activeEl) return;
+    if (activeEl !== modalEl && !modalEl.contains(activeEl)) return;
+
+    if (typeof activeEl.blur === 'function') activeEl.blur();
+    const fallback = document.getElementById('search-keyword') || document.getElementById('main-system') || document.body;
+    if (!fallback || typeof fallback.focus !== 'function') return;
+
+    const needsTabindex = !fallback.hasAttribute('tabindex');
+    if (needsTabindex) fallback.setAttribute('tabindex', '-1');
+    fallback.focus({ preventScroll: true });
+    if (needsTabindex) {
+        setTimeout(() => {
+            if (fallback.getAttribute('tabindex') === '-1') fallback.removeAttribute('tabindex');
+        }, 0);
+    }
+}
+
+function closeMemberDetailModal() {
+    const modalEl = document.getElementById('memberDetailModal');
+    if (!modalEl) return;
+    moveFocusOutsideModal(modalEl);
+    const inst = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+    setTimeout(() => {
+        moveFocusOutsideModal(modalEl);
+        inst.hide();
+    }, 0);
+}
+window.closeMemberDetailModal = closeMemberDetailModal;
+
+function bindMemberDetailModalFocusGuard() {
+    const modalEl = document.getElementById('memberDetailModal');
+    if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
+    modalEl.addEventListener('hide.bs.modal', () => {
+        moveFocusOutsideModal(modalEl);
+        requestAnimationFrame(() => moveFocusOutsideModal(modalEl));
+    });
+    modalEl.addEventListener('pointerdown', (e) => {
+        const trigger = e.target?.closest?.('.btn-close,[data-bs-dismiss="modal"]');
+        if (trigger) moveFocusOutsideModal(modalEl);
+    }, true);
+    modalEl.dataset.focusGuardBound = '1';
+}
+bindMemberDetailModalFocusGuard();
 
 // 전역 변수
 let g_members = [];
