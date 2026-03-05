@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.20 | Change: 2026-02-21 - Added approval delegation flow and unified audit hooks. -->
+<!-- Version: v1.1.22 | Change: 2026-02-27 - Delegation RPC fallback + userModal focus guard. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.20 | approval.html');</script>
+  <script>console.log('[Version] v1.1.22 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -115,8 +115,26 @@
 
       <div class="mb-3 hidden" id="divProxyTarget">
         <label class="small text-muted fw-bold">기안 대상자 (하급자)</label>
-        <select class="form-select" id="proxyTargetSelect" onchange="calculateLeave()">
+        <select class="form-select" id="proxyTargetSelect" onchange="calculateLeave(); updateJeongyeolUi();">
             </select>
+      </div>
+
+      <div class="mb-3 hidden" id="secretaryMonthlyReportPanel">
+        <label class="small text-muted fw-bold">전결 월간보고 (사무국장 전용)</label>
+        <div class="card p-3 border-0 bg-light">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="small text-muted fw-bold mb-1">보고월</label>
+              <input type="month" class="form-control form-control-sm" id="jeongyeolReportMonth">
+            </div>
+            <div class="col-md-7">
+              <button type="button" class="btn btn-outline-primary btn-sm w-100" id="btnBuildJeongyeolMonthlyDraft" onclick="buildJeongyeolMonthlyDraft()">
+                📘 전결 월간보고 초안 만들기
+              </button>
+            </div>
+          </div>
+          <div class="small text-muted mt-2">초안 생성 후 결재선을 확인하고 상신하세요. 동일 월 보고서는 1건만 생성됩니다.</div>
+        </div>
       </div>
 
       <div class="row mb-3">
@@ -262,12 +280,23 @@
       </div>
 
       <div class="mb-3">
+        <label class="small text-muted fw-bold">전결 설정</label>
+        <div class="card p-3 border-0 bg-light mb-2">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="chkSecretaryJeongyeol" onchange="handleJeongyeolToggleChanged()">
+            <label class="form-check-label fw-bold" for="chkSecretaryJeongyeol">사무국장 전결 사용</label>
+          </div>
+          <div class="small text-muted mt-2" id="jeongyeolHint">자동 전결 규정(30만원 이하 지출결의/근태)을 우선 적용합니다.</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
         <label class="small text-muted fw-bold">결재선 (필수)</label>
         <div class="card p-3 border-0 bg-light mb-2">
           <div id="linePreview" class="mb-2 text-muted small">결재자를 추가해주세요.</div>
           <div>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openUserModal('approver')">➕ 결재자 선택</button>
-            <button type="button" class="btn btn-sm btn-outline-danger ms-1" onclick="resetLine('approver')">↺ 초기화</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectApprover" onclick="openUserModal('approver')">➕ 결재자 선택</button>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-1" id="btnResetApprover" onclick="resetLine('approver')">↺ 초기화</button>
           </div>
         </div>
       </div>
@@ -418,6 +447,15 @@ let delegationOutgoing = null;
 let delegationIncoming = [];
 let delegationIncomingMap = new Map();
 let delegatedApproverEmpIds = [];
+let delegationRpcUnavailable = false;
+let delegationRpcWarned = false;
+let jeongyeolLineLocked = false;
+let savedApproversBeforeJeongyeol = [];
+let manualJeongyeolSelected = false;
+let jeongyeolLockReasonLabel = '';
+const JEONGYEOL_AUTO_EXPENSE_LIMIT = 300000;
+const JEONGYEOL_MONTHLY_DOC_TYPE = '전결월간보고';
+const JEONGYEOL_MONTHLY_TITLE_PREFIX = '전결 월간보고';
 function hasApprovalRoleFallback(permissionKey) {
     const role = String(myInfo?.role || '').toLowerCase();
     const match = (roles) => roles.includes(role);
@@ -459,6 +497,223 @@ const formatYearMonthLabel = (ym) => {
     return `${y}년 ${Number(m)}월`;
 };
 const formatMoney = (value) => Number(value || 0).toLocaleString();
+
+function isSecretaryGeneralUserInfo(user) {
+    return String(user?.position || '').includes('사무국장');
+}
+
+function isCurrentUserSecretaryGeneral() {
+    return isSecretaryGeneralUserInfo(myInfo);
+}
+
+function getPrimaryApproverByPosition(positionKeyword) {
+    const keyword = String(positionKeyword || '').trim();
+    if (!keyword) return null;
+    return (allUsers || []).find((u) => String(u?.position || '').includes(keyword)) || null;
+}
+
+function toApproverObject(user) {
+    if (!user) return null;
+    return {
+        emp_id: user.emp_id,
+        emp_name: user.emp_name,
+        position: user.position,
+        auth_level: Number(user.auth_level)
+    };
+}
+
+function getSecretaryApprover() {
+    if (isCurrentUserSecretaryGeneral()) {
+        return toApproverObject(myInfo);
+    }
+    const secretary = getPrimaryApproverByPosition('사무국장');
+    return toApproverObject(secretary);
+}
+
+function getChairmanApprover() {
+    const chairman = getPrimaryApproverByPosition('이사장');
+    return toApproverObject(chairman);
+}
+
+function getPreviousKstMonth() {
+    const now = new Date();
+    const firstDayThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+    firstDayThisMonth.setUTCMonth(firstDayThisMonth.getUTCMonth() - 1);
+    return formatApprovalKstMonth(firstDayThisMonth);
+}
+
+function getKstMonthRangeIso(ym) {
+    const safeYm = String(ym || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(safeYm)) return null;
+    const [yearStr, monthStr] = safeYm.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+function getCurrentDraftMainType() {
+    return String(document.getElementById('appCategory')?.value || '').trim();
+}
+
+function getCurrentDraftAmount() {
+    const raw = Number(document.getElementById('appAmount')?.value || 0);
+    if (!Number.isFinite(raw)) return 0;
+    return raw;
+}
+
+function getUserByEmpId(empId) {
+    const key = String(empId || '').trim();
+    if (!key) return null;
+    if (String(myInfo?.emp_id || '').trim() === key) return myInfo;
+    return (allUsers || []).find((u) => String(u?.emp_id || '').trim() === key) || null;
+}
+
+function getCurrentDraftDrafterEmpId() {
+    const isProxy = !!document.getElementById('chkProxy')?.checked;
+    if (isProxy) {
+        const targetId = String(document.getElementById('proxyTargetSelect')?.value || '').trim();
+        if (targetId) return targetId;
+    }
+    return String(myInfo?.emp_id || '').trim();
+}
+
+function isSecretaryGeneralByEmpId(empId) {
+    const user = getUserByEmpId(empId);
+    return isSecretaryGeneralUserInfo(user);
+}
+
+function getJeongyeolDecision(mainType, amountValue, options = {}) {
+    const type = String(mainType || '').trim();
+    const amount = Number(amountValue || 0);
+    const manualToggle = !!manualJeongyeolSelected;
+    const drafterEmpId = String(options?.drafterEmpId || '').trim() || String(myInfo?.emp_id || '').trim();
+    const drafterIsSecretary = isSecretaryGeneralByEmpId(drafterEmpId);
+
+    if (type === '휴가') {
+        if (drafterIsSecretary) {
+            return {
+                mode: 'AUTO',
+                applied: true,
+                ruleCode: 'AUTO_SECRETARY_LEAVE_TO_CHAIRMAN',
+                ruleLabel: '사무국장 휴가는 이사장 결재',
+                targetApprover: 'CHAIRMAN'
+            };
+        }
+        return {
+            mode: 'AUTO',
+            applied: true,
+            ruleCode: 'AUTO_ATTENDANCE',
+            ruleLabel: '근태(휴가) 자동 전결',
+            targetApprover: 'SECRETARY'
+        };
+    }
+    if (type === '지출결의' && amount > 0 && amount <= JEONGYEOL_AUTO_EXPENSE_LIMIT) {
+        return {
+            mode: 'AUTO',
+            applied: true,
+            ruleCode: 'AUTO_EXPENSE_UNDER_300K',
+            ruleLabel: `30만원 이하 지출결의 자동 전결 (${formatMoney(amount)}원)`,
+            targetApprover: 'SECRETARY'
+        };
+    }
+    if (manualToggle) {
+        return {
+            mode: 'MANUAL',
+            applied: true,
+            ruleCode: 'MANUAL_SECRETARY',
+            ruleLabel: '사무국장 수동 전결',
+            targetApprover: 'SECRETARY'
+        };
+    }
+    return { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' };
+}
+
+function setApproverSelectionLock(lock) {
+    const selectBtn = document.getElementById('btnSelectApprover');
+    const resetBtn = document.getElementById('btnResetApprover');
+    if (selectBtn) selectBtn.disabled = !!lock;
+    if (resetBtn) resetBtn.disabled = !!lock;
+}
+
+function applyJeongyeolLineDecision(decision, options = {}) {
+    const safeDecision = decision && typeof decision === 'object'
+        ? decision
+        : { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' };
+    const shouldLock = safeDecision.mode === 'AUTO' || safeDecision.mode === 'MANUAL';
+    if (shouldLock) {
+        const targetCode = String(safeDecision.targetApprover || 'SECRETARY').trim().toUpperCase();
+        const useChairman = targetCode === 'CHAIRMAN';
+        const fixedApprover = useChairman ? getChairmanApprover() : getSecretaryApprover();
+        const fixedLabel = useChairman ? '이사장' : '사무국장';
+        if (!fixedApprover || !fixedApprover.emp_id) {
+            if (options.showAlertOnMissing !== false) showAlert(`${fixedLabel} 사용자를 찾지 못해 전결을 적용할 수 없습니다.`);
+            return { ok: false, reason: 'missing_secretary' };
+        }
+        if (!jeongyeolLineLocked) savedApproversBeforeJeongyeol = [...finalApprovers];
+        finalApprovers = [fixedApprover];
+        jeongyeolLineLocked = true;
+        jeongyeolLockReasonLabel = fixedLabel;
+        setApproverSelectionLock(true);
+        renderLinePreview();
+        return { ok: true };
+    }
+
+    if (jeongyeolLineLocked) {
+        finalApprovers = savedApproversBeforeJeongyeol.length > 0
+            ? [...savedApproversBeforeJeongyeol]
+            : [];
+        savedApproversBeforeJeongyeol = [];
+    }
+    jeongyeolLineLocked = false;
+    jeongyeolLockReasonLabel = '';
+    setApproverSelectionLock(false);
+    renderLinePreview();
+    return { ok: true };
+}
+
+function updateJeongyeolUi() {
+    const hintEl = document.getElementById('jeongyeolHint');
+    const toggleEl = document.getElementById('chkSecretaryJeongyeol');
+    const mainType = getCurrentDraftMainType();
+    const amount = getCurrentDraftAmount();
+    const decision = getJeongyeolDecision(mainType, amount, { drafterEmpId: getCurrentDraftDrafterEmpId() });
+    const isAuto = decision.mode === 'AUTO';
+
+    if (toggleEl) {
+        if (isAuto) {
+            toggleEl.checked = true;
+            toggleEl.disabled = true;
+        } else {
+            toggleEl.disabled = false;
+            toggleEl.checked = manualJeongyeolSelected;
+        }
+    }
+    if (hintEl) {
+        if (decision.applied) {
+            hintEl.textContent = `적용중: ${decision.ruleLabel}`;
+        } else {
+            hintEl.textContent = '자동 전결 규정(30만원 이하 지출결의/근태)을 우선 적용합니다.';
+        }
+    }
+    applyJeongyeolLineDecision(decision, { showAlertOnMissing: false });
+}
+
+function handleJeongyeolToggleChanged() {
+    const toggleEl = document.getElementById('chkSecretaryJeongyeol');
+    if (toggleEl && !toggleEl.disabled) {
+        manualJeongyeolSelected = !!toggleEl.checked;
+    }
+    updateJeongyeolUi();
+}
+
+function isJeongyeolDoc(doc) {
+    const line = Array.isArray(doc?.approval_line) ? doc.approval_line : [];
+    if (line.length === 0) return false;
+    return line.some((step) => step?.jeongyeol_applied === true);
+}
 
 const formatApprovalDotDate = (value, fallback = '') => {
     const raw = String(value || '').trim();
@@ -1243,11 +1498,59 @@ function renderDelegationBanner() {
     }
 }
 
+function isDelegationRpcMissingError(error) {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '').trim();
+    const message = String(error?.message || '').toLowerCase();
+    if (status === 404) return true;
+    if (code === 'PGRST202') return true;
+    return message.includes('erp_get_approval_delegation_context')
+        && (message.includes('not found') || message.includes('could not find'));
+}
+
+function syncDelegationAvailabilityUi() {
+    const openBtn = document.querySelector('button[onclick="openDelegationModal()"]');
+    if (!openBtn) return;
+    if (!delegationRpcUnavailable) {
+        openBtn.disabled = false;
+        openBtn.removeAttribute('title');
+        return;
+    }
+    openBtn.disabled = true;
+    openBtn.title = '위임 기능 미설치';
+}
+
+function bindModalFocusGuard(modalEl, fallbackEl) {
+    if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
+    modalEl.dataset.focusGuardBound = '1';
+    modalEl.addEventListener('hide.bs.modal', () => {
+        const active = document.activeElement;
+        if (!active || !modalEl.contains(active)) return;
+        if (typeof active.blur === 'function') active.blur();
+        const fallback = fallbackEl || document.getElementById('tab1');
+        if (fallback && typeof fallback.focus === 'function') {
+            try { fallback.focus({ preventScroll: true }); }
+            catch (_) { fallback.focus(); }
+        }
+    });
+}
+
 async function loadDelegationContext(options = {}) {
     const refreshTodo = !!options.refreshTodo;
+    if (delegationRpcUnavailable) {
+        delegationOutgoing = null;
+        delegationIncoming = [];
+        delegationIncomingMap = new Map();
+        delegatedApproverEmpIds = [];
+        renderDelegationBanner();
+        populateDelegationTargets();
+        syncDelegationAvailabilityUi();
+        return;
+    }
     try {
         const { data, error } = await _supabase.rpc('erp_get_approval_delegation_context');
         if (error) throw error;
+        delegationRpcUnavailable = false;
         const payload = data || {};
         delegationOutgoing = payload?.outgoing || null;
         delegationIncoming = Array.isArray(payload?.incoming) ? payload.incoming : [];
@@ -1266,10 +1569,18 @@ async function loadDelegationContext(options = {}) {
         delegationIncoming = [];
         delegationIncomingMap = new Map();
         delegatedApproverEmpIds = [];
+        if (isDelegationRpcMissingError(e)) {
+            delegationRpcUnavailable = true;
+            if (!delegationRpcWarned) {
+                console.info('[approval] Delegation RPC unavailable. Delegation features are disabled in this environment.');
+                delegationRpcWarned = true;
+            }
+        }
     }
 
     renderDelegationBanner();
     populateDelegationTargets();
+    syncDelegationAvailabilityUi();
 
     if (refreshTodo && document.getElementById('tab2')?.classList.contains('active')) {
         await loadTodoList();
@@ -1282,8 +1593,16 @@ function canProcessApprovals() {
 
 async function openDelegationModal() {
     if (!delegationModalInstance) return;
+    if (delegationRpcUnavailable) {
+        showAlert('현재 환경에는 결재 위임 기능(DB RPC)이 설치되어 있지 않습니다.');
+        return;
+    }
     populateDelegationTargets();
     await loadDelegationContext({ refreshTodo: false });
+    if (delegationRpcUnavailable) {
+        showAlert('현재 환경에는 결재 위임 기능(DB RPC)이 설치되어 있지 않습니다.');
+        return;
+    }
 
     const enabledEl = document.getElementById('delegationEnabled');
     const targetEl = document.getElementById('delegationTarget');
@@ -1391,14 +1710,21 @@ function validateAttachments(fileList) {
 }
 
 window.onload = async function() {
-    modalInstance = new bootstrap.Modal(document.getElementById('userModal'));
-    alertModalInstance = new bootstrap.Modal(document.getElementById('alertModal'));
-    confirmModalInstance = new bootstrap.Modal(document.getElementById('confirmModal'));
+    const userModalEl = document.getElementById('userModal');
+    const alertModalEl = document.getElementById('alertModal');
+    const confirmModalEl = document.getElementById('confirmModal');
+    modalInstance = new bootstrap.Modal(userModalEl);
+    alertModalInstance = new bootstrap.Modal(alertModalEl);
+    confirmModalInstance = new bootstrap.Modal(confirmModalEl);
     physicalRejectModalInstance = new bootstrap.Modal(document.getElementById('physicalRejectModal'));
     cancelDraftModalInstance = new bootstrap.Modal(document.getElementById('cancelDraftModal'));
     appDescPreviewModalInstance = new bootstrap.Modal(document.getElementById('appDescPreviewModal'));
     approvalTemplateModalInstance = new bootstrap.Modal(document.getElementById('approvalTemplateModal'));
     delegationModalInstance = new bootstrap.Modal(document.getElementById('delegationModal'));
+    bindModalFocusGuard(userModalEl, document.getElementById('tab1'));
+    bindModalFocusGuard(alertModalEl, document.getElementById('tab1'));
+    bindModalFocusGuard(confirmModalEl, document.getElementById('tab1'));
+    syncDelegationAvailabilityUi();
     
     const stored = localStorage.getItem('erp_user');
     if (!stored) { location.href = 'index.html'; return; }
@@ -1419,7 +1745,9 @@ window.onload = async function() {
     if(data) allUsers = data;
     populateDelegationTargets();
     setDelegationDefaultPeriod();
-    await loadDelegationContext({ refreshTodo: false });
+    if (!canPerform('approval.process')) {
+        await loadDelegationContext({ refreshTodo: false });
+    }
 
     const payrollMonthInput = document.getElementById("payrollMonth");
     if (payrollMonthInput) payrollMonthInput.value = formatApprovalKstMonth();
@@ -1456,6 +1784,23 @@ window.onload = async function() {
 
     initializeApprovalEditor();
     calculateLeave(); // 연차 계산 (대리상신 고려하여 함수 분리됨)
+    const monthlyPanel = document.getElementById('secretaryMonthlyReportPanel');
+    if (monthlyPanel) {
+        monthlyPanel.classList.toggle('hidden', !isCurrentUserSecretaryGeneral());
+    }
+    const reportMonthEl = document.getElementById('jeongyeolReportMonth');
+    if (reportMonthEl && !reportMonthEl.value) {
+        reportMonthEl.value = getPreviousKstMonth();
+    }
+    const amountInputEl = document.getElementById('appAmount');
+    if (amountInputEl) {
+        amountInputEl.addEventListener('input', () => updateJeongyeolUi());
+    }
+    const jeongyeolToggleEl = document.getElementById('chkSecretaryJeongyeol');
+    if (jeongyeolToggleEl) {
+        manualJeongyeolSelected = false;
+        jeongyeolToggleEl.checked = false;
+    }
     handleCategoryChange(); // UI 초기화
 };
 
@@ -1520,6 +1865,7 @@ function resetSalaryExpenseUi() {
     }
     if (amountLabel) amountLabel.innerText = "금액 (원)";
     if (amountInput) amountInput.placeholder = "0";
+    updateJeongyeolUi();
 }
 
 function handlePayrollMonthChange() {
@@ -1551,6 +1897,7 @@ function handleExpenseSubTypeChange() {
         }
         if (amountLabel) amountLabel.innerText = "금액 (원)";
         if (amountInput) amountInput.placeholder = "0";
+        updateJeongyeolUi();
         return;
     }
 
@@ -1558,6 +1905,7 @@ function handleExpenseSubTypeChange() {
         if (select) select.value = '일반';
         if (divMonth) divMonth.classList.add("hidden");
         if (divLoad) divLoad.classList.add("hidden");
+        updateJeongyeolUi();
         return showAlert("급여 연동은 관리자/회계 권한에서만 사용할 수 있습니다.");
     }
 
@@ -1575,6 +1923,7 @@ function handleExpenseSubTypeChange() {
         const ymLabel = formatYearMonthLabel(monthInput?.value || '');
         setApprovalEditorContent(`${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.`);
     }
+    updateJeongyeolUi();
 }
 
 async function loadSalaryLedgerForExpense() {
@@ -1604,6 +1953,7 @@ async function loadSalaryLedgerForExpense() {
 
     salaryExpenseState = { loaded: true, yearMonth: ym, empCount, payTotal, dedTotal, netTotal, rows: normalizedRows };
     document.getElementById("appAmount").value = netTotal;
+    updateJeongyeolUi();
 
     const ymLabel = formatYearMonthLabel(ym);
     const summary = document.getElementById("payrollSummary");
@@ -1643,6 +1993,7 @@ function toggleProxyMode() {
     if (subordinates.length === 0) {
         showAlert("대리 상신 가능한 하급자가 없습니다.");
         document.getElementById("chkProxy").checked = false;
+        updateJeongyeolUi();
         return;
     }
         subordinates.forEach(u => {
@@ -1656,6 +2007,7 @@ function toggleProxyMode() {
         targetDiv.classList.add("hidden");
     }
     calculateLeave(); // 대상자가 바뀌었으니 연차 다시 조회
+    updateJeongyeolUi();
 }
 
 function applyLeaveRemainToUi(snapshot) {
@@ -1898,6 +2250,7 @@ function handleCategoryChange() {
         if(currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) setApprovalEditorContent("");
     }
     setApprovalEditorForCategory(type);
+    updateJeongyeolUi();
 }
 
 function openAppDescPreview() {
@@ -1975,6 +2328,11 @@ function calcLeaveDays() {
 
 // [기능] 직원 선택 모달 (필터 적용)
 function openUserModal(type) {
+    if (type === 'approver' && jeongyeolLineLocked) {
+        const fixedLabel = jeongyeolLockReasonLabel || '결재자';
+        showAlert(`전결 적용 중에는 결재선이 ${fixedLabel}으로 고정됩니다.`);
+        return;
+    }
     modalType = type;
     document.getElementById("modalTitle").innerText = (type === 'approver') ? "결재자 선택" : "참조자 선택";
     tempSelection = (type === 'approver') ? [...finalApprovers] : [...finalRefs];
@@ -2065,7 +2423,10 @@ function confirmSelection() {
 function renderLinePreview() {
     const el = document.getElementById("linePreview");
     if(finalApprovers.length === 0) { el.innerText = "결재자를 추가해주세요."; return; }
-    el.innerHTML = finalApprovers.map((u, i) => `<span class="line-step">${escapeHtml(u.emp_name)} ${escapeHtml(u.position)}</span>` + (i < finalApprovers.length-1 ? '<span class="line-arrow">➡</span>' : '')).join("");
+    const lineHtml = finalApprovers.map((u, i) => `<span class="line-step">${escapeHtml(u.emp_name)} ${escapeHtml(u.position)}</span>` + (i < finalApprovers.length-1 ? '<span class="line-arrow">➡</span>' : '')).join("");
+    const fixedLabel = escapeHtml(jeongyeolLockReasonLabel || '결재자');
+    const lockHint = jeongyeolLineLocked ? `<div class="small text-primary mt-2">전결 적용으로 결재선이 ${fixedLabel}로 고정되었습니다.</div>` : '';
+    el.innerHTML = `${lineHtml}${lockHint}`;
 }
 
 function renderRefPreview() {
@@ -2073,7 +2434,153 @@ function renderRefPreview() {
     if(finalRefs.length === 0) { el.innerText = "참조자가 없습니다."; return; }
     el.innerHTML = finalRefs.map(u => `<span class="ref-step">📢 ${escapeHtml(u.emp_name)}</span>`).join("");
 }
-function resetLine(type) { if(type==='approver') { finalApprovers=[]; renderLinePreview(); } else { finalRefs=[]; renderRefPreview(); } }
+function resetLine(type) {
+    if (type === 'approver') {
+        if (jeongyeolLineLocked) {
+            showAlert('전결 적용 중에는 결재선을 초기화할 수 없습니다.');
+            return;
+        }
+        finalApprovers = [];
+        renderLinePreview();
+        return;
+    }
+    finalRefs = [];
+    renderRefPreview();
+}
+
+function getJeongyeolMetaFromDoc(doc) {
+    const line = Array.isArray(doc?.approval_line) ? doc.approval_line : [];
+    const hit = line.find((step) => step?.jeongyeol_applied === true);
+    if (!hit) return null;
+    return {
+        mode: String(hit.jeongyeol_mode || '').trim(),
+        ruleCode: String(hit.jeongyeol_rule_code || '').trim(),
+        ruleLabel: String(hit.jeongyeol_rule_label || '').trim()
+    };
+}
+
+function formatJeongyeolModeLabel(mode) {
+    const safe = String(mode || '').trim().toUpperCase();
+    if (safe === 'AUTO') return '자동';
+    if (safe === 'MANUAL') return '수동';
+    return '-';
+}
+
+function formatJeongyeolAmountLabel(doc) {
+    const docType = String(doc?.doc_type || '').trim();
+    if (docType.startsWith('지출결의')) {
+        return `${formatMoney(Number(doc?.amount || 0))}원`;
+    }
+    if (docType.startsWith('휴가')) {
+        const leaveLabel = buildLeaveAmountLabel(doc);
+        return leaveLabel || `${Number(doc?.amount || 0)}일`;
+    }
+    return '-';
+}
+
+async function buildJeongyeolMonthlyDraft() {
+    if (!isCurrentUserSecretaryGeneral()) {
+        return showAlert('사무국장만 전결 월간보고를 만들 수 있습니다.');
+    }
+    const monthInput = document.getElementById('jeongyeolReportMonth');
+    const reportYm = String(monthInput?.value || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(reportYm)) return showAlert('보고월을 선택하세요.');
+
+    const range = getKstMonthRangeIso(reportYm);
+    if (!range) return showAlert('보고월 형식이 올바르지 않습니다.');
+
+    const reportTitle = `${JEONGYEOL_MONTHLY_TITLE_PREFIX} (${reportYm})`;
+    const { data: existingRows, error: existingError } = await _supabase
+        .from('ref_approval')
+        .select('id, doc_no, status')
+        .eq('drafter_id', myInfo.emp_id)
+        .eq('doc_type', JEONGYEOL_MONTHLY_DOC_TYPE)
+        .eq('title', reportTitle)
+        .limit(1);
+    if (existingError) return showAlert('기존 보고서 확인 실패: ' + existingError.message);
+    if (Array.isArray(existingRows) && existingRows.length > 0) {
+        const row = existingRows[0];
+        return showAlert(`이미 ${reportYm} 월간보고가 있습니다.\n문서번호: ${row.doc_no || '-'}\n상태: ${row.status || '-'}`);
+    }
+
+    const { data, error } = await _supabase
+        .from('ref_approval')
+        .select('id, doc_no, doc_type, title, amount, status, created_at, drafter_name, approval_line, content')
+        .gte('created_at', range.startIso)
+        .lt('created_at', range.endIso)
+        .order('created_at', { ascending: true });
+    if (error) return showAlert('전결 내역 조회 실패: ' + error.message);
+
+    const docs = (Array.isArray(data) ? data : []).filter((doc) => {
+        if (String(doc?.doc_type || '').trim() === JEONGYEOL_MONTHLY_DOC_TYPE) return false;
+        return isJeongyeolDoc(doc);
+    });
+    if (docs.length === 0) {
+        return showAlert(`${reportYm} 기간에 전결 적용 문서가 없습니다.`);
+    }
+
+    const autoCount = docs.filter((doc) => String(getJeongyeolMetaFromDoc(doc)?.mode || '').toUpperCase() === 'AUTO').length;
+    const manualCount = docs.filter((doc) => String(getJeongyeolMetaFromDoc(doc)?.mode || '').toUpperCase() === 'MANUAL').length;
+    const expenseTotal = docs
+        .filter((doc) => String(doc?.doc_type || '').startsWith('지출결의'))
+        .reduce((acc, doc) => acc + Number(doc?.amount || 0), 0);
+    const lines = docs.map((doc, idx) => {
+        const meta = getJeongyeolMetaFromDoc(doc) || {};
+        const modeLabel = formatJeongyeolModeLabel(meta.mode);
+        const docNo = String(doc?.doc_no || '-');
+        const createdAt = formatApprovalKstDateISO(doc?.created_at, '-');
+        const docType = String(doc?.doc_type || '-');
+        const title = String(doc?.title || '-');
+        const amount = formatJeongyeolAmountLabel(doc);
+        const status = String(doc?.status || '-');
+        return `${idx + 1}. ${createdAt} | ${docNo} | ${docType} | ${title} | ${amount} | ${modeLabel}전결 | ${status}`;
+    });
+
+    const content = [
+        '[전결 월간보고]',
+        `보고월: ${reportYm}`,
+        `작성일: ${formatApprovalKstDateISO(new Date(), '-')}`,
+        '',
+        '1) 요약',
+        `- 전결 총 건수: ${docs.length}건`,
+        `- 자동 전결: ${autoCount}건`,
+        `- 수동 전결: ${manualCount}건`,
+        `- 지출결의 합계: ${formatMoney(expenseTotal)}원`,
+        '',
+        '2) 상세 내역',
+        ...lines
+    ].join('\n');
+
+    const categoryEl = document.getElementById('appCategory');
+    if (categoryEl) categoryEl.value = '일반품의';
+    handleCategoryChange();
+
+    const proposalSubjectEl = document.getElementById('proposalSubject');
+    if (proposalSubjectEl) proposalSubjectEl.value = reportTitle;
+    const amountEl = document.getElementById('appAmount');
+    if (amountEl) amountEl.value = String(Math.round(expenseTotal));
+    setApprovalEditorContent(content);
+
+    const jeongyeolToggleEl = document.getElementById('chkSecretaryJeongyeol');
+    manualJeongyeolSelected = false;
+    if (jeongyeolToggleEl) jeongyeolToggleEl.checked = false;
+    updateJeongyeolUi();
+
+    const preferredApprover = getChairmanApprover() || getSecretaryApprover();
+    if (!preferredApprover || !preferredApprover.emp_id) {
+        return showAlert('보고서 결재선을 자동 설정할 수 없습니다. 결재자를 직접 지정해주세요.');
+    }
+    finalApprovers = [preferredApprover];
+    savedApproversBeforeJeongyeol = [];
+    jeongyeolLineLocked = false;
+    setApproverSelectionLock(false);
+    renderLinePreview();
+
+    finalRefs = [];
+    renderRefPreview();
+    switchTab('draft');
+    showAlert(`전결 월간보고 초안을 만들었습니다.\n제목/내용/결재선을 확인한 뒤 상신하세요.`);
+}
 
 
 // [신규] 문서번호 자동 생성 (제YYYY-NNN호)
@@ -2172,7 +2679,6 @@ async function createNoticeDraftFromApproval(doc) {
 // [수정] 상신 (대리상신, 자동정렬, 상태값 처리 포함)
 async function handleDraftSubmit(e) {
     e.preventDefault();
-    if (finalApprovers.length === 0) return showAlert("결재선을 지정해주세요.");
     if (!canPerform('approval.submit')) return showAlert("상신 권한이 없습니다.");
 
     const mainType = document.getElementById("appCategory").value;
@@ -2191,6 +2697,7 @@ async function handleDraftSubmit(e) {
     let drafterName = myInfo.emp_name;
     let initialStatus = '진행중';
     let appendDesc = "";
+    let jeongyeolDecision = { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '' };
     
     if (isProxy) {
         const targetSel = document.getElementById("proxyTargetSelect");
@@ -2268,10 +2775,22 @@ async function handleDraftSubmit(e) {
         if (!proposalTitle) return showAlert("일반품의 제목을 입력하세요.");
         title = proposalTitle;
         subType = '일반품의';
+        if (proposalTitle.startsWith(`${JEONGYEOL_MONTHLY_TITLE_PREFIX} (`)) {
+            subType = JEONGYEOL_MONTHLY_DOC_TYPE;
+        }
     }
     else {
         title = `${mainType}`;
     }
+
+    jeongyeolDecision = getJeongyeolDecision(mainType, finalAmt, { drafterEmpId: drafterId });
+    const jeongyeolApplyResult = applyJeongyeolLineDecision(jeongyeolDecision, { showAlertOnMissing: true });
+    if (!jeongyeolApplyResult.ok) return;
+    if (finalApprovers.length === 0) return showAlert("결재선을 지정해주세요.");
+    if (jeongyeolDecision.applied) {
+        appendDesc += `\n\n[전결 적용] ${jeongyeolDecision.ruleLabel}`;
+    }
+
     const draftBodyForValidation = getApprovalEditorContent();
     if (!String(draftBodyForValidation || '').trim()) return showAlert("내용을 입력하세요.");
     
@@ -2383,7 +2902,23 @@ async function handleDraftSubmit(e) {
     }
 
     // 4. DB 저장
-    const approvalLineData = finalApprovers.map(u => ({ emp_id: u.emp_id, name: u.emp_name, position: u.position, status: '대기', comment: '', processed_at: null }));
+    const jeongyeolMeta = jeongyeolDecision.applied
+        ? {
+            jeongyeol_applied: true,
+            jeongyeol_mode: jeongyeolDecision.mode,
+            jeongyeol_rule_code: jeongyeolDecision.ruleCode || null,
+            jeongyeol_rule_label: jeongyeolDecision.ruleLabel || null
+        }
+        : null;
+    const approvalLineData = finalApprovers.map((u, idx) => ({
+        emp_id: u.emp_id,
+        name: u.emp_name,
+        position: u.position,
+        status: '대기',
+        comment: '',
+        processed_at: null,
+        ...(idx === 0 && jeongyeolMeta ? jeongyeolMeta : {})
+    }));
     const refData = finalRefs.map(u => ({ emp_id: u.emp_id, name: u.emp_name }));
 
     const approvalInsertPayload = {
@@ -2416,7 +2951,11 @@ async function handleDraftSubmit(e) {
 
     const docId = insertedDoc?.id;
     if (docId) {
-        await logAudit('approval.submit', docId, `${title} 상신`, { status: initialStatus });
+        await logAudit('approval.submit', docId, `${title} 상신`, {
+            status: initialStatus,
+            jeongyeol_mode: jeongyeolDecision.applied ? jeongyeolDecision.mode : null,
+            jeongyeol_rule_code: jeongyeolDecision.applied ? jeongyeolDecision.ruleCode : null
+        });
         await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
     }
     const firstApprover = finalApprovers[0];
@@ -2434,7 +2973,9 @@ async function procDoc(docId, action) {
     if (reason === null) return;
 
     if (!canProcessApprovals()) return showAlert("처리 권한이 없습니다.");
-    await loadDelegationContext({ refreshTodo: false });
+    if (!canPerform('approval.process')) {
+        await loadDelegationContext({ refreshTodo: false });
+    }
 
     const { data: doc, error: docError } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
     if (docError || !doc) return showAlert("문서를 불러오지 못했습니다.");
@@ -2678,7 +3219,9 @@ async function procUserAction(docId, action, explicitReason = null) {
 async function loadTodoList() {
     const el = document.getElementById("todoList");
     el.innerHTML = 'loading...';
-    await loadDelegationContext({ refreshTodo: false });
+    if (!canPerform('approval.process')) {
+        await loadDelegationContext({ refreshTodo: false });
+    }
     const approverIds = Array.from(new Set(
         [String(myInfo?.emp_id || ''), ...delegatedApproverEmpIds]
             .map((v) => String(v || '').trim())
@@ -2767,6 +3310,7 @@ function mapHistoryStatusGroup(status) {
 function mapHistoryDocTypeGroup(docType) {
     const raw = String(docType || '').trim();
     if (!raw) return 'OTHER';
+    if (raw.startsWith(JEONGYEOL_MONTHLY_DOC_TYPE)) return 'GENERAL_PROPOSAL';
     if (raw.startsWith('일반품의')) return 'GENERAL_PROPOSAL';
     if (raw.startsWith('지출결의')) return 'EXPENSE';
     if (raw.startsWith('휴가')) return 'LEAVE';
@@ -2923,6 +3467,10 @@ function renderDocs(target, list, isTodo) {
     list.forEach(doc => {
         const approvalLine = Array.isArray(doc.approval_line) ? doc.approval_line : [];
         const safeDocType = escapeHtml(doc.doc_type);
+        const jeongyeolMeta = getJeongyeolMetaFromDoc(doc);
+        const jeongyeolBadge = jeongyeolMeta
+            ? `<span class="badge bg-secondary me-1">전결-${escapeHtml(formatJeongyeolModeLabel(jeongyeolMeta.mode))}</span>`
+            : '';
         const safeTitle = escapeHtml(doc.title);
         const safeDate = escapeHtml(formatApprovalKstDateISO(doc.created_at, '-'));
         const lineHtml = approvalLine.map(s => {
@@ -3039,7 +3587,7 @@ function renderDocs(target, list, isTodo) {
             }
         }
         
-        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${safeDocType}</span>${relBtn}</div><small class="text-muted">${safeDate}${ageBadge}</small></div><h6 class="fw-bold">${safeTitle}</h6><div class="small mb-2">${lineHtml}</div>${reasonHtml}${btnHtml}</div>`;
+        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${safeDocType}</span>${jeongyeolBadge}${relBtn}</div><small class="text-muted">${safeDate}${ageBadge}</small></div><h6 class="fw-bold">${safeTitle}</h6><div class="small mb-2">${lineHtml}</div>${reasonHtml}${btnHtml}</div>`;
     });
 }
 function updateFileList() {

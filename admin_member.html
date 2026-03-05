@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.25
-Change: 2026-02-26 - Hardened member detail modal close flow to prevent retained focus aria-hidden warning.
+Version: v1.0.26
+Change: 2026-03-05 - Added document visibility policy labels for 정관/규약(전체) and 규정(조합원).
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.25';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.26';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -24,7 +24,8 @@ Change: 2026-02-26 - Hardened member detail modal close flow to prevent retained
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://www.yonginsolar.kr/badges.js"></script>
-<script src="https://www.yonginsolar.kr/cert_generator.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="../cert_generator.js?v=20260303_06"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 
@@ -674,7 +675,7 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </li>
 <li class="nav-item">
 <a class="nav-link" data-bs-toggle="tab" href="#sub-docs" onclick="setTimeout(fetchDocs,100)">
-문서 관리 (정관/규약)
+문서 관리 (정관/규약/규정)
 </a>
 </li>
 
@@ -864,12 +865,17 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="d-flex justify-content-end mb-2">
 <button class="btn btn-sm btn-outline-primary" onclick="openDocModal()">+ 새 문서 등록</button>
 </div>
+<div class="alert alert-light border small py-2 px-3">
+<i class="bi bi-info-circle me-1"></i>
+공개 규칙: <strong>정관/규약</strong>은 전체 공개, <strong>규정</strong>은 조합원 공개로 표시됩니다.
+</div>
 
 <table class="table table-bordered bg-white text-center">
 <thead class="table-light">
 <tr>
 <th>날짜/버전</th>
 <th>제목</th>
+<th>공개대상</th>
 <th>개정 요약</th>
 <th>파일</th>
 <th>관리</th>
@@ -1141,13 +1147,14 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="row g-3 mb-3">
 <div class="col-md-7">
 <label class="form-label small fw-bold text-muted">문서 제목</label>
-<input type="text" id="doc-title" class="form-control" placeholder="예: 정관">
+<input type="text" id="doc-title" class="form-control" placeholder="예: 정관 / 규약 / 인사규정">
 </div>
 <div class="col-md-5">
 <label class="form-label small fw-bold text-muted">버전명</label>
 <input type="text" id="doc-version" class="form-control" placeholder="예: 2026.01 개정">
 </div>
 </div>
+<div class="form-text mb-2">제목에 <strong>정관/규약</strong>이 포함되면 전체 공개, <strong>규정</strong>이 포함되면 조합원 공개로 표시됩니다.</div>
 
 <div class="mb-3">
 <label class="form-label small fw-bold text-muted">시행일</label>
@@ -1515,7 +1522,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
             </div>
         </div>
     </div> <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-dark btn-sm" onclick="myAlert('준비중')">🖨️ 증명서</button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark btn-sm" onclick="openIssueDocModal('capital')">🖨️ 출자증명서</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="openIssueDocModal('donation')">🧾 기부금 수령 확인서</button>
+        </div>
         <button id="btn-edit-mode" class="btn btn-primary px-4" onclick="toggleEditMode(true)">✏️ 정보 수정</button>
         <div id="btn-save-group" style="display:none;">
             <button class="btn btn-secondary me-2" onclick="toggleEditMode(false)">취소</button>
@@ -1596,6 +1606,53 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 </div>
 </div>
+</div>
+
+<div class="modal fade" id="issueDocModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h6 class="modal-title fw-bold" id="issueDocTitle">발급 기준 설정</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="issue-doc-type">
+        <div class="small text-muted mb-2" id="issue-doc-member">-</div>
+        <div class="mb-2">
+          <label class="form-label small fw-bold">출력 기준</label>
+          <select id="issue-amount-mode" class="form-select form-select-sm" onchange="syncIssueDocAmountMode()">
+            <option value="cutoff">기준일 누적 합계</option>
+            <option value="manual">직접 금액 입력</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-bold">기준일</label>
+          <input type="date" id="issue-cutoff-date" class="form-control form-control-sm">
+          <div class="form-text">기준일(포함)까지의 누적 금액으로 발급합니다.</div>
+        </div>
+        <div class="mb-2 d-none" id="issue-range-group">
+          <label class="form-label small fw-bold">조회 기간</label>
+          <div class="row g-2">
+            <div class="col-6">
+              <input type="date" id="issue-range-from" class="form-control form-control-sm">
+            </div>
+            <div class="col-6">
+              <input type="date" id="issue-range-to" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div class="form-text">기부금 수령 확인서 상세 내역(2페이지)은 이 기간 기준으로 조회됩니다.</div>
+        </div>
+        <div class="mb-0">
+          <label class="form-label small fw-bold">직접 지정 금액(원)</label>
+          <input type="number" id="issue-manual-amount" class="form-control form-control-sm" min="0" step="1" placeholder="예: 300000">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-primary btn-sm" onclick="submitIssueDoc()">발급</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="fundEditorModal" tabindex="-1" data-bs-backdrop="static">
@@ -1961,6 +2018,81 @@ function bindMemberDetailModalFocusGuard() {
     modalEl.dataset.focusGuardBound = '1';
 }
 bindMemberDetailModalFocusGuard();
+
+function bindCustomAlertModalFocusGuard() {
+    const modalEl = document.getElementById('customAlertModal');
+    if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
+    modalEl.addEventListener('hide.bs.modal', () => {
+        moveFocusOutsideModal(modalEl);
+        requestAnimationFrame(() => moveFocusOutsideModal(modalEl));
+    });
+    modalEl.addEventListener('pointerdown', (e) => {
+        const trigger = e.target?.closest?.('.btn-close,[data-bs-dismiss="modal"]');
+        if (trigger) moveFocusOutsideModal(modalEl);
+    }, true);
+    modalEl.dataset.focusGuardBound = '1';
+}
+bindCustomAlertModalFocusGuard();
+
+function bindIssueDocModalFocusGuard() {
+    const modalEl = document.getElementById('issueDocModal');
+    if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
+    modalEl.addEventListener('hide.bs.modal', () => {
+        moveFocusOutsideModal(modalEl);
+        requestAnimationFrame(() => moveFocusOutsideModal(modalEl));
+    });
+    modalEl.addEventListener('pointerdown', (e) => {
+        const trigger = e.target?.closest?.('.btn-close,[data-bs-dismiss="modal"]');
+        if (trigger) moveFocusOutsideModal(modalEl);
+    }, true);
+    modalEl.dataset.focusGuardBound = '1';
+}
+bindIssueDocModalFocusGuard();
+
+let g_certGeneratorEnsurePromise = null;
+
+function appendScriptAndWait(src) {
+    return new Promise((resolve, reject) => {
+        const abs = new URL(src, window.location.href).href;
+        const existing = Array.from(document.scripts).find(s => s.src === abs);
+        if (existing) {
+            if (existing.dataset.loaded === '1') return resolve();
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('script load failed: ' + src)), { once: true });
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => {
+            s.dataset.loaded = '1';
+            resolve();
+        };
+        s.onerror = () => reject(new Error('script load failed: ' + src));
+        document.head.appendChild(s);
+    });
+}
+
+async function ensureCertGeneratorReady() {
+    if (typeof generateContributionCert === 'function' && typeof generateDonationReceipt === 'function') return;
+    if (!g_certGeneratorEnsurePromise) {
+        g_certGeneratorEnsurePromise = (async () => {
+            const candidates = [
+                '../cert_generator.js?v=20260303_06',
+                '/cert_generator.js?v=20260303_06',
+                'https://www.yonginsolar.kr/cert_generator.js?v=20260303_06'
+            ];
+            for (const src of candidates) {
+                try {
+                    await appendScriptAndWait(src);
+                } catch (_) { void 0; }
+                if (typeof generateContributionCert === 'function' && typeof generateDonationReceipt === 'function') return;
+            }
+            throw new Error('cert_generator.js 최신본이 로드되지 않았습니다. 배포/캐시/경로를 확인해주세요.');
+        })();
+    }
+    return g_certGeneratorEnsurePromise;
+}
 
 // 전역 변수
 let g_members = [];
@@ -3453,6 +3585,29 @@ fetchPlants();
 // [기능 8] 문서 관리 (정관/규약)
 // ================================================================
 
+function getDocVisibilityMetaByTitle(title) {
+const text = String(title || '').trim();
+if (text.includes('정관') || text.includes('규약')) {
+return {
+scope: 'PUBLIC',
+label: '전체 공개',
+badgeClass: 'bg-success-subtle text-success border border-success-subtle'
+};
+}
+if (text.includes('규정')) {
+return {
+scope: 'MEMBERS',
+label: '조합원 공개',
+badgeClass: 'bg-primary-subtle text-primary border border-primary-subtle'
+};
+}
+return {
+scope: 'MEMBERS',
+label: '조합원 공개',
+badgeClass: 'bg-primary-subtle text-primary border border-primary-subtle'
+};
+}
+
 // 1. 문서 목록 불러오기
 async function fetchDocs() {
 // category가 'doc'인 것만 가져옴
@@ -3461,11 +3616,13 @@ const tbody = document.getElementById('docListBody');
 tbody.innerHTML = '';
 
 if(!data || data.length === 0) {
-tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-muted">등록된 문서가 없습니다.</td></tr>';
+tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-muted">등록된 문서가 없습니다.</td></tr>';
 return;
 }
 
 data.forEach(d => {
+const visibilityMeta = getDocVisibilityMetaByTitle(d.title);
+const visibilityBadge = `<span class="badge ${visibilityMeta.badgeClass}">${visibilityMeta.label}</span>`;
 const fileBtn = d.file_url
 ? `<a href="${d.file_url}" target="_blank" class="btn btn-xs btn-outline-success"><i class="bi bi-file-pdf"></i> 보기</a>`
 : '<span class="text-muted text-xs">없음</span>';
@@ -3473,6 +3630,7 @@ const fileBtn = d.file_url
 tbody.innerHTML += `<tr>
                    <td><div class="fw-bold">${d.version || '-'}</div><small class="text-muted">${d.event_date}</small></td>
                    <td>${d.title}</td>
+                   <td>${visibilityBadge}</td>
                    <td class="text-start small text-truncate" style="max-width:200px;">${d.content || '-'}</td>
                    <td>${fileBtn}</td>
                    <td>
@@ -4571,6 +4729,7 @@ function renderEmptyState() {
 // ================================================================
 
 let g_current_member_id = null; // 현재 보고 있는 조합원 UUID
+let g_current_member_row = null; // 현재 상세 모달의 조합원 원본 데이터
 
 
 async function openMemberDetail(id) {
@@ -4584,6 +4743,7 @@ async function openMemberDetail(id) {
     if (!memberUid) return myAlert("조합원 UUID를 찾을 수 없습니다.", 'error');
 
     g_current_member_id = memberUid;
+    g_current_member_row = m;
 
     // 2. UI 초기화 & 데이터 바인딩
     document.getElementById('md-uid').value = memberUid;
@@ -4700,6 +4860,257 @@ async function openMemberDetail(id) {
     loadMemberFamily(memberUid);
 
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
+}
+
+function todayYmdKst() {
+    const now = new Date();
+    const kst = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    return kst.toISOString().slice(0, 10);
+}
+
+function monthStartYmdKst() {
+    const today = todayYmdKst();
+    return today.slice(0, 8) + '01';
+}
+
+function syncIssueDocAmountMode() {
+    const typeEl = document.getElementById('issue-doc-type');
+    const modeEl = document.getElementById('issue-amount-mode');
+    const amountEl = document.getElementById('issue-manual-amount');
+    const dateEl = document.getElementById('issue-cutoff-date');
+    const rangeGroupEl = document.getElementById('issue-range-group');
+    const rangeFromEl = document.getElementById('issue-range-from');
+    const rangeToEl = document.getElementById('issue-range-to');
+    if (!modeEl || !amountEl || !dateEl || !typeEl) return;
+
+    const isDonation = typeEl.value === 'donation';
+    const manual = modeEl.value === 'manual';
+    amountEl.disabled = !manual;
+    dateEl.disabled = manual || isDonation;
+
+    const showRange = isDonation && !manual;
+    if (rangeGroupEl) rangeGroupEl.classList.toggle('d-none', !showRange);
+    if (rangeFromEl) rangeFromEl.disabled = !showRange;
+    if (rangeToEl) rangeToEl.disabled = !showRange;
+    if (showRange && dateEl && rangeToEl) {
+        dateEl.value = rangeToEl.value || todayYmdKst();
+    }
+}
+
+function openIssueDocModal(docType) {
+    if (!g_current_member_row || !g_current_member_id) {
+        return myAlert('먼저 조합원 상세를 열어주세요.', 'warning');
+    }
+
+    const typeEl = document.getElementById('issue-doc-type');
+    const titleEl = document.getElementById('issueDocTitle');
+    const memberEl = document.getElementById('issue-doc-member');
+    const modeEl = document.getElementById('issue-amount-mode');
+    const dateEl = document.getElementById('issue-cutoff-date');
+    const amountEl = document.getElementById('issue-manual-amount');
+    const rangeFromEl = document.getElementById('issue-range-from');
+    const rangeToEl = document.getElementById('issue-range-to');
+
+    if (!typeEl || !titleEl || !memberEl || !modeEl || !dateEl || !amountEl || !rangeFromEl || !rangeToEl) return;
+
+    const name = g_current_member_row.name || '-';
+    const memberId = g_current_member_row.member_id || 'ID없음';
+    typeEl.value = docType;
+    titleEl.textContent = docType === 'donation' ? '기부금 수령 확인서 발급 기준 설정' : '출자증명서 발급 기준 설정';
+    memberEl.textContent = `${name} (${memberId})`;
+    modeEl.value = 'cutoff';
+    dateEl.value = todayYmdKst();
+    rangeFromEl.value = monthStartYmdKst();
+    rangeToEl.value = todayYmdKst();
+    amountEl.value = '';
+    syncIssueDocAmountMode();
+
+    new bootstrap.Modal(document.getElementById('issueDocModal')).show();
+}
+
+async function calcIssueAmountByCriteria(docType, mode, cutoffDate, manualAmount, memberRow, periodFrom, periodTo) {
+    if (mode === 'manual') {
+        const amount = Number(manualAmount || 0);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error('직접 지정 금액을 1원 이상 입력해주세요.');
+        }
+        return amount;
+    }
+
+    if (!cutoffDate) throw new Error('기준일을 선택해주세요.');
+    const memberId = memberRow.member_id || '';
+    const memberUid = memberRow.id || memberRow.member_uid || memberRow.uid || g_current_member_id;
+
+    if (docType === 'donation') {
+        if (!periodFrom || !periodTo) throw new Error('기부금 조회 기간(시작일/종료일)을 입력해주세요.');
+        if (periodFrom > periodTo) throw new Error('조회 시작일은 종료일보다 늦을 수 없습니다.');
+        let q = _supabase.from('coop_donations').select('amount');
+        if (memberId && memberId !== 'ID없음' && memberId !== '-') q = q.eq('member_id', memberId);
+        else q = q.eq('member_uid', memberUid);
+        q = q.gte('donation_date', periodFrom).lte('donation_date', periodTo);
+
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data || []).reduce((acc, row) => acc + Number(row.amount || 0), 0);
+    }
+
+    if (!memberId || memberId === 'ID없음' || memberId === '-') {
+        throw new Error('출자증명서 발급에는 조합원 번호(member_id)가 필요합니다.');
+    }
+
+    const { data, error } = await _supabase
+        .from('ref_members')
+        .select('amount')
+        .eq('member_id', memberId)
+        .lte('deposit_date', cutoffDate);
+    if (error) throw error;
+    return (data || []).reduce((acc, row) => acc + Number(row.amount || 0), 0);
+}
+
+async function fetchDonationRowsForReceipt(memberRow, periodFrom, periodTo) {
+    const memberId = memberRow.member_id || '';
+    const memberUid = memberRow.id || memberRow.member_uid || memberRow.uid || g_current_member_id;
+    let q = _supabase
+        .from('coop_donations')
+        .select('donation_date, amount')
+        .order('donation_date', { ascending: true });
+    if (memberId && memberId !== 'ID없음' && memberId !== '-') q = q.eq('member_id', memberId);
+    else q = q.eq('member_uid', memberUid);
+    q = q.gte('donation_date', periodFrom).lte('donation_date', periodTo);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+}
+
+async function fetchChairmanName() {
+    const { data, error } = await _supabase
+        .from('ref_company_info')
+        .select('value')
+        .eq('key', 'chairman_name')
+        .single();
+    if (error || !data?.value) return '이사장';
+    return data.value;
+}
+
+function buildDonationReceiptNumber(memberRow) {
+    const now = new Date();
+    const y = String(now.getFullYear()).slice(-2);
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const keyRaw = (memberRow.member_id || memberRow.id || '').toString().replace(/[^0-9]/g, '');
+    const key = (keyRaw.slice(-4) || '0000').padStart(4, '0');
+    return `DON-${y}${m}${d}-${key}`;
+}
+
+async function submitIssueDoc() {
+    const typeEl = document.getElementById('issue-doc-type');
+    const modeEl = document.getElementById('issue-amount-mode');
+    const dateEl = document.getElementById('issue-cutoff-date');
+    const amountEl = document.getElementById('issue-manual-amount');
+    const rangeFromEl = document.getElementById('issue-range-from');
+    const rangeToEl = document.getElementById('issue-range-to');
+
+    if (!typeEl || !modeEl || !dateEl || !amountEl || !rangeFromEl || !rangeToEl) return;
+    if (!g_current_member_row || !g_current_member_id) {
+        return myAlert('조합원 정보가 없습니다. 다시 열어주세요.', 'warning');
+    }
+
+    const docType = typeEl.value;
+    const mode = modeEl.value;
+    const cutoffDate = dateEl.value;
+    const manualAmount = amountEl.value;
+    const periodFrom = rangeFromEl.value;
+    const periodTo = rangeToEl.value;
+
+    showLoading(true, '발급 자료 준비 중...');
+
+    try {
+        if (typeof window.jspdf === 'undefined') {
+            throw new Error('PDF 라이브러리(jsPDF) 로드에 실패했습니다. 네트워크/차단 설정을 확인해주세요.');
+        }
+        await ensureCertGeneratorReady();
+        const amount = await calcIssueAmountByCriteria(
+            docType,
+            mode,
+            cutoffDate,
+            manualAmount,
+            g_current_member_row,
+            periodFrom,
+            periodTo
+        );
+        if (!amount || amount <= 0) {
+            throw new Error(docType === 'donation'
+                ? '기준 조건에 해당하는 기부금이 없어 발급할 수 없습니다.'
+                : '기준 조건에 해당하는 출자금이 없어 발급할 수 없습니다.');
+        }
+
+        const memberData = {
+            ...g_current_member_row,
+            id: g_current_member_id
+        };
+        const chairmanName = await fetchChairmanName();
+
+        if (docType === 'donation') {
+            if (typeof generateDonationReceipt !== 'function') {
+                throw new Error('cert_generator.js 최신본이 로드되지 않았습니다. 배포/캐시를 확인해주세요.');
+            }
+            const receiptNo = buildDonationReceiptNumber(memberData);
+            const detailRows = mode === 'cutoff'
+                ? await fetchDonationRowsForReceipt(memberData, periodFrom, periodTo)
+                : [];
+            await generateDonationReceipt(
+                memberData,
+                amount,
+                {
+                    mode,
+                    cutoff_date: cutoffDate || null,
+                    period_from: periodFrom || null,
+                    period_to: periodTo || null,
+                    details: detailRows
+                },
+                receiptNo,
+                chairmanName,
+                _supabase
+            );
+        } else {
+            if (!memberData.member_id || memberData.member_id === 'ID없음' || memberData.member_id === '-') {
+                throw new Error('출자증명서 발급에는 조합원 번호(member_id)가 필요합니다.');
+            }
+            if (String(memberData.member_type || '').includes('단체') && !String(memberData.corp_number || '').trim()) {
+                throw new Error("단체의 '법인등록번호'가 확인되지 않습니다. 회원 정보를 수정해주세요.");
+            }
+            if (typeof generateContributionCert !== 'function') {
+                throw new Error('cert_generator.js 최신본이 로드되지 않았습니다. 배포/캐시를 확인해주세요.');
+            }
+
+            const { data: cert, error } = await _supabase.rpc('issue_contribution_certificate', {
+                p_member_id: memberData.member_id,
+                p_amount: amount
+            });
+            if (error) throw error;
+
+            await generateContributionCert(memberData, amount, cert.cert_number, chairmanName, _supabase, {
+                issueDate: mode === 'cutoff' ? cutoffDate : null
+            });
+        }
+
+        showLoading(false);
+        const issueModalEl = document.getElementById('issueDocModal');
+        const issueModal = bootstrap.Modal.getInstance(issueModalEl);
+        if (issueModal) {
+            moveFocusOutsideModal(issueModalEl);
+            issueModal.hide();
+        }
+        myAlert('문서 발급이 완료되었습니다.', 'success');
+    } catch (e) {
+        showLoading(false);
+        console.error(e);
+        const issueModalEl = document.getElementById('issueDocModal');
+        moveFocusOutsideModal(issueModalEl);
+        const issueModal = bootstrap.Modal.getInstance(issueModalEl);
+        if (issueModal) issueModal.hide();
+        myAlert('문서 발급 실패: ' + (e?.message || e), 'error');
+    }
 }
 
 
