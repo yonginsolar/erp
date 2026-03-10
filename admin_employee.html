@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.6
-Change: 2026-02-11 - Leave remain now subtracts approved future leave reservations in admin view.
+Version: v1.0.8
+Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추가.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.6 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.8 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>임직원 관리 v2.7 (최종)</title>
@@ -16,6 +16,7 @@ Change: 2026-02-11 - Leave remain now subtracts approved future leave reservatio
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="print_service.js"></script>
+  <script src="payroll_durunuri_module.js"></script>
   <script src="salary_ledger_module.js"></script>
   <script src="leave_ledger.js"></script>
   
@@ -219,6 +220,19 @@ Change: 2026-02-11 - Leave remain now subtracts approved future leave reservatio
       <input type="number" id="payBonus" class="form-control" value="0" oninput="recalcSalaryComponents()">
     </div>
   </div>
+  <div class="row g-2 mt-1">
+    <div class="col-6">
+      <label class="small text-muted">두루누리 근로자 지원분 (익월 자동반영)</label>
+      <input type="number" id="durunuriEmpSupport" class="form-control bg-light text-primary fw-bold" value="0" readonly>
+    </div>
+    <div class="col-6">
+      <label class="small text-muted">두루누리 사업주 지원분 (익월 자동반영)</label>
+      <input type="number" id="durunuriBizSupport" class="form-control bg-light text-primary fw-bold" value="0" readonly>
+    </div>
+    <div class="col-12">
+      <div class="form-text">회계관리 > 자동연동 > 두루누리 직원별 입력에서 저장한 값이 해당 귀속월 급여 계산/출력에 자동 반영됩니다.</div>
+    </div>
+  </div>
 <div class="d-flex gap-2 mt-3">
   <button id="btnDeleteSalary" class="btn btn-danger w-25 btn-rounded d-none" onclick="deleteSalary()">🗑️ 삭제</button>
   <button id="btnSaveSalary" class="btn btn-success flex-grow-1 btn-rounded" onclick="saveSalary()">💾 급여 확정 및 저장</button>
@@ -391,10 +405,15 @@ let settings = {}; let companyInfo = {}; let advancedSettingsRaw = [];
 let currentEmpId = null, currentEmpName = null, currentAnnualSalary = 0; 
 let currentEmpHireDate = null, currentEmpResignDate = null; 
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
+let currentDurunuriSupport = { emp_support: 0, biz_support: 0, apply_month: '', source_month: '' };
 let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal, resignModal;
 let hasCheckedExpired = false;
 let myInfo = null;
 let permissionSet = new Set();
+function hasHrAdminRoleFallback() {
+    const role = String(myInfo?.role || '').toLowerCase();
+    return role === 'admin' || role === 'admin_all';
+}
 
 window.onload = async function() {
     alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
@@ -427,7 +446,8 @@ window.onload = async function() {
     myInfo = JSON.parse(stored);
     permissionSet = await loadPermissions(myInfo);
     localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
-    if (permissionSet.size > 0 && !permissionSet.has('hr.admin')) {
+    const hasHrAdmin = permissionSet.size > 0 ? permissionSet.has('hr.admin') : hasHrAdminRoleFallback();
+    if (!hasHrAdmin) {
         showAlert("접근 권한이 없습니다.");
         setTimeout(() => location.href = 'index.html', 1200);
         return;
@@ -462,6 +482,70 @@ function showConfirm(arg1, arg2, arg3) {
     document.getElementById("confirmBody").textContent = msg || "";
     confirmCallback = cb;
     confirmModal.show();
+}
+
+function getDurunuriModuleAdmin() {
+    if (window.PayrollDurunuriModule) return window.PayrollDurunuriModule;
+    return null;
+}
+
+function resetDurunuriSupportState() {
+    currentDurunuriSupport = { emp_support: 0, biz_support: 0, apply_month: '', source_month: '' };
+    const empEl = document.getElementById('durunuriEmpSupport');
+    const bizEl = document.getElementById('durunuriBizSupport');
+    if (empEl) empEl.value = 0;
+    if (bizEl) bizEl.value = 0;
+}
+
+async function loadDurunuriSupportState(month, empId) {
+    resetDurunuriSupportState();
+    const ym = String(month || '').trim();
+    const eid = String(empId || '').trim();
+    if (!ym || !eid) return;
+    const module = getDurunuriModuleAdmin();
+    if (!module) return;
+    try {
+        const supportMap = await module.getSupportMap(_supabase, ym);
+        const support = supportMap?.[eid] || null;
+        currentDurunuriSupport = {
+            emp_support: Math.max(0, Number(support?.emp_support || 0)),
+            biz_support: Math.max(0, Number(support?.biz_support || 0)),
+            apply_month: String(support?.apply_month || ym),
+            source_month: String(support?.source_month || '')
+        };
+        const empEl = document.getElementById('durunuriEmpSupport');
+        const bizEl = document.getElementById('durunuriBizSupport');
+        if (empEl) empEl.value = Math.round(currentDurunuriSupport.emp_support);
+        if (bizEl) bizEl.value = Math.round(currentDurunuriSupport.biz_support);
+    } catch (e) {
+        console.warn('Durunuri support load failed:', e?.message || e);
+    }
+}
+
+async function getAdjustedSalaryRowWithDurunuri(row, ym) {
+    const module = getDurunuriModuleAdmin();
+    if (!module) return row;
+    try {
+        const supportMap = await module.getSupportMap(_supabase, ym);
+        return module.adjustSalaryRow(row, supportMap);
+    } catch (e) {
+        console.warn('Durunuri adjustment failed:', e?.message || e);
+        return row;
+    }
+}
+
+async function logHrAudit(action, summary, detail = null) {
+    try {
+        await _supabase.from('erp_audit_logs').insert({
+            actor_emp_id: myInfo?.emp_id || null,
+            actor_name: myInfo?.emp_name || null,
+            action,
+            entity_type: 'ref_employees',
+            entity_id: currentEmpId ? String(currentEmpId) : null,
+            summary: summary || '',
+            detail
+        });
+    } catch (_) { /* noop */ }
 }
   
 function showLoading() { loadingModal.show(); }
@@ -807,7 +891,12 @@ async function openDetail(u) {
     const { data: emList } = await _supabase.from('ref_emergency_contacts').select('*').eq('emp_id', u.emp_id);
     const emDiv = document.getElementById("viewEmergency");
     if(emList && emList.length > 0) {
-        emDiv.innerHTML = emList.map(e => `<div><span class="fw-bold">${e.relation}:</span> ${e.contact_name} (${e.phone})</div>`).join("");
+        emDiv.innerHTML = emList.map(e => {
+            const safeRelation = escapeHtml(e.relation || '-');
+            const safeName = escapeHtml(e.contact_name || '-');
+            const safePhone = escapeHtml(e.phone || '-');
+            return `<div><span class="fw-bold">${safeRelation}:</span> ${safeName} (${safePhone})</div>`;
+        }).join("");
     } else {
         emDiv.innerHTML = '<span class="text-muted small">- 등록된 연락망 없음 -</span>';
     }
@@ -886,10 +975,58 @@ async function saveBasicInfo() {
 async function saveRRN() { const f = document.getElementById("rrnFront").value; const b = document.getElementById("rrnBack").value; if((f+b).length !== 13) return showAlert("13자리를 입력하세요."); const { error } = await _supabase.rpc('update_employee_rrn', { p_emp_id: currentEmpId, p_rrn: f+"-"+b }); if(error) showAlert("실패: "+error.message); else { showAlert("암호화되어 저장되었습니다."); const { data: bd } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId }); document.getElementById("viewBirth").innerText = bd || f; document.getElementById("rrnFront").value=""; document.getElementById("rrnBack").value=""; toggleEditMode(false); } }
 async function uploadContract() { const fileInput = document.getElementById("contractFile"); if (fileInput.files.length === 0) return showAlert("파일을 선택해주세요."); const file = fileInput.files[0]; const fileName = `${currentEmpId}_contract_${Date.now()}.${file.name.split('.').pop()}`; showLoading(); try { const { data: emp } = await _supabase.from('ref_employees').select('contract_url').eq('emp_id', currentEmpId).single(); if (emp?.contract_url && !emp.contract_url.startsWith('http')) await _supabase.storage.from('contracts').remove([emp.contract_url]); const { data, error } = await _supabase.storage.from('contracts').upload(fileName, file, { upsert: true }); if (error) throw error; await _supabase.from('ref_employees').update({ contract_url: data.path }).eq('emp_id', currentEmpId); hideLoading(); setTimeout(async () => { showAlert("계약서가 등록되었습니다."); const { data: signed } = await _supabase.storage.from('contracts').createSignedUrl(data.path, 3600); document.getElementById("contractView").innerHTML = `<a href="${signed.signedUrl}" target="_blank" class="btn btn-sm btn-info w-100 text-white fw-bold">📄 계약서 보기</a>`; document.getElementById("hiddenContractUrl").value = data.path; fileInput.value = ""; }, 500); } catch (err) { hideLoading(); setTimeout(() => showAlert("오류 발생: " + err.message), 500); } }
 
-async function reqDeletePermanent() { showConfirm("⚠️ 영구 삭제 경고", `${currentEmpName} 데이터를 모두 삭제하시겠습니까?`, async function() { detailModal.hide(); const filePath = document.getElementById("hiddenContractUrl").value; if (filePath && !filePath.startsWith('http')) await _supabase.storage.from('contracts').remove([filePath]); await _supabase.from('hr_salary').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_leave_adj').delete().eq('emp_id', currentEmpId); await _supabase.from('hr_salary_contracts').delete().eq('emp_id', currentEmpId); await _supabase.from('log_cert').delete().eq('emp_id', currentEmpId); await _supabase.from('ref_employees').delete().eq('emp_id', currentEmpId); showAlert("삭제되었습니다."); loadList(); }); }
+async function reqDeletePermanent() {
+    showConfirm("⚠️ 영구 삭제 경고", `${currentEmpName} 데이터를 모두 삭제하시겠습니까?`, async function() {
+        if (reqDeletePermanent._inFlight) return;
+        reqDeletePermanent._inFlight = true;
+        try {
+            detailModal.hide();
+            const filePath = document.getElementById("hiddenContractUrl").value;
+            if (filePath && !filePath.startsWith('http')) {
+                const { error: fileRemoveError } = await _supabase.storage.from('contracts').remove([filePath]);
+                if (fileRemoveError) console.warn('계약서 파일 삭제 실패:', fileRemoveError.message);
+            }
+
+            const deletions = ['hr_salary', 'hr_leave_adj', 'hr_salary_contracts', 'log_cert', 'ref_employees'];
+            for (const tableName of deletions) {
+                const { error } = await _supabase.from(tableName).delete().eq('emp_id', currentEmpId);
+                if (error) throw new Error(`${tableName} 삭제 실패: ${error.message}`);
+            }
+
+            await logHrAudit('hr.employee.delete_permanent', `${currentEmpName} 영구 삭제`, {
+                emp_id: currentEmpId,
+                contract_removed: !!filePath
+            });
+            showAlert("삭제되었습니다.");
+            loadList();
+        } catch (e) {
+            showAlert("삭제 실패: " + e.message);
+        } finally {
+            reqDeletePermanent._inFlight = false;
+        }
+    });
+}
 function doResign() { document.getElementById("inputResignDate").value = formatAdminEmployeeKstDate(new Date()); resignModal.show(); }
-async function confirmResign() { const rDate = document.getElementById("inputResignDate").value; if(!rDate) return showAlert("퇴사일을 입력해주세요."); resignModal.hide(); await _supabase.from('ref_employees').update({ resign_date: rDate }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); showAlert("퇴사 처리되었습니다."); }
-async function cancelResign() { showConfirm("퇴사 취소하시겠습니까?", async () => { await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId); detailModal.hide(); loadList(); }); }
+async function confirmResign() {
+    const rDate = document.getElementById("inputResignDate").value;
+    if(!rDate) return showAlert("퇴사일을 입력해주세요.");
+    resignModal.hide();
+    const { error } = await _supabase.from('ref_employees').update({ resign_date: rDate }).eq('emp_id', currentEmpId);
+    if (error) return showAlert("퇴사 처리 실패: " + error.message);
+    await logHrAudit('hr.employee.resign', `${currentEmpName} 퇴사 처리`, { resign_date: rDate });
+    detailModal.hide();
+    loadList();
+    showAlert("퇴사 처리되었습니다.");
+}
+async function cancelResign() {
+    showConfirm("퇴사 취소하시겠습니까?", async () => {
+        const { error } = await _supabase.from('ref_employees').update({ resign_date: null }).eq('emp_id', currentEmpId);
+        if (error) return showAlert("퇴사 취소 실패: " + error.message);
+        await logHrAudit('hr.employee.resign_cancel', `${currentEmpName} 퇴사 취소`, { resign_date: null });
+        detailModal.hide();
+        loadList();
+    });
+}
 
 // [수정] 급여 데이터 로드 (삭제 버튼 제어 로직 추가)
 async function loadSalaryData() {
@@ -913,7 +1050,10 @@ async function loadSalaryData() {
     btnSave.classList.remove("btn-warning");
     btnSave.classList.add("btn-success");
     
-    if (!month || !currentEmpId) return;
+    if (!month || !currentEmpId) {
+        resetDurunuriSupportState();
+        return;
+    }
 
     // --- (기존 로직: 무급휴가 감지 부분은 그대로 유지) ---
     const startDate = `${month}-01`;
@@ -967,8 +1107,10 @@ async function loadSalaryData() {
         btnSave.classList.remove("btn-success");
         btnSave.classList.add("btn-warning"); // 색상 변경 (수정 느낌)
         
-        currentSalaryDataForPrint = saved;
-        currentSalaryDataForPrint.year_month = month;
+        currentSalaryDataForPrint = await getAdjustedSalaryRowWithDurunuri({
+            ...saved,
+            year_month: month
+        }, month);
     } else {
         // [데이터 없음] -> 신규 등록 모드
         const monthlyTotal = Math.floor(currentAnnualSalary / 12); 
@@ -983,6 +1125,8 @@ async function loadSalaryData() {
         
         currentSalaryDataForPrint = null;
     }
+
+    await loadDurunuriSupportState(month, currentEmpId);
 
     // 계산식 적용
     recalcSalaryComponents();
@@ -1209,9 +1353,9 @@ async function reqIssueCert() {
     PrintService.printCert(certData);
 }
 
-function printSalaryAdmin() {
+async function printSalaryAdmin() {
     if(!currentSalaryDataForPrint) return showAlert("저장된 급여 내역이 없습니다.");
-    const d = currentSalaryDataForPrint;
+    const d = await getAdjustedSalaryRowWithDurunuri(currentSalaryDataForPrint, currentSalaryDataForPrint.year_month);
     const [y, m] = d.year_month.split('-');
     
     // 스마트 기간 산정
@@ -1277,11 +1421,21 @@ async function printLedger() {
     if(error || !list || list.length === 0) return showAlert("해당 월의 급여 데이터가 없습니다.");
     
     if (!window.SalaryLedgerModule) return showAlert("급여대장 모듈을 불러오지 못했습니다.");
+    const module = getDurunuriModuleAdmin();
+    let adjustedList = list;
+    if (module) {
+        try {
+            const supportMap = await module.getSupportMap(_supabase, ym);
+            adjustedList = module.adjustSalaryRows(list, supportMap);
+        } catch (durErr) {
+            console.warn('Durunuri support load failed:', durErr?.message || durErr);
+        }
+    }
 
     // 2. 공통 모듈로 급여대장 출력
     const [y, m] = ym.split('-');
     const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
-    const state = window.SalaryLedgerModule.createStateFromRows(list, ym);
+    const state = window.SalaryLedgerModule.createStateFromRows(adjustedList, ym);
     try {
         window.SalaryLedgerModule.openPrintWindow(state, {
             title: `${y}년 ${Number(m)}월 급여대장`,

@@ -109,6 +109,10 @@ const PERMISSION_KEYS = [
 let alertModal;
 let myInfo = null;
 let permissionSet = new Set();
+function hasPermissionManagerRoleFallback() {
+  const role = String(myInfo?.role || '').toLowerCase();
+  return role === 'admin' || role === 'admin_all';
+}
 
 window.onload = async function() {
   alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
@@ -117,7 +121,10 @@ window.onload = async function() {
   myInfo = JSON.parse(stored);
   permissionSet = await loadPermissions(myInfo);
   localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
-  if (permissionSet.size > 0 && !permissionSet.has('permission.manage')) {
+  const canManagePermission = permissionSet.size > 0
+    ? permissionSet.has('permission.manage')
+    : hasPermissionManagerRoleFallback();
+  if (!canManagePermission) {
     showAlert("접근 권한이 없습니다.");
     setTimeout(() => location.href = 'index.html', 1200);
     return;

@@ -124,11 +124,11 @@
 
   function buildApprovalBoxHtml(options) {
     if (!options || !options.showApprovalBox) return '';
-    const chairmanName = escapeHtml(options.chairmanName || '이사장');
+    const chairmanLabel = '이사장';
     return '' +
       '<table class="approval-box">' +
       '<thead>' +
-      '<tr><th>담당</th><th>사무국장</th><th>' + chairmanName + '</th></tr>' +
+      '<tr><th>담당</th><th>사무국장</th><th>' + chairmanLabel + '</th></tr>' +
       '</thead>' +
       '<tbody><tr><td></td><td></td><td></td></tr></tbody>' +
       '</table>';

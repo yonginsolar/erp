@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.9 | Change: 2026-02-11 - Improve modal focus handoff to avoid aria-hidden focus warning on leave detail modal close. -->
+<!-- Version: v1.0.11 | Change: 2026-03-09 - 두루누리 익월 지원금 급여 표시/출력 반영. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.9 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.11 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>마이페이지</title>
@@ -12,6 +12,7 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="print_service.js"></script>
+<script src="payroll_durunuri_module.js"></script>
 <script src="leave_ledger.js"></script>
   
 <style>
@@ -179,11 +180,16 @@ const formatMypageKstMonth=(value=new Date())=>{const d=value instanceof Date?va
 const toUtcIsoFromKstInput=(value)=>{if(!value) return null; return new Date(`${value}:00+09:00`).toISOString()};
 const getMypageKstDateParts=(value)=>{if(!value) return {date:'',time:'',hasTime:false}; if(typeof value==='string' && !value.includes('T')) return {date:value,time:'',hasTime:false}; const d=new Date(value); if(Number.isNaN(d.getTime())) return {date:'',time:'',hasTime:false}; const date=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d); const time=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,hour:'2-digit',minute:'2-digit',hour12:false}).format(d); return {date,time,hasTime:true}};
 function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
-let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[],leaveSnapshotState=null;
+async function getAdjustedSalaryRowForMypage(row, ym){if(!row) return row; if(!window.PayrollDurunuriModule) return row; try{const supportMap=await window.PayrollDurunuriModule.getSupportMap(_supabase,ym); return window.PayrollDurunuriModule.adjustSalaryRow(row,supportMap);}catch(e){console.warn('Durunuri support load failed:',e?.message||e); return row;}}
+let myInfo={},companyInfo={},currentSalaryData=null,tempEmergencyList=[],noticesData=[],leaveSnapshotState=null,contractSignedUrl='';
 let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
+function hasMypageRoleFallback(){
+const role=String(myInfo?.role||'').toLowerCase();
+return ['admin','admin_all','admin_home','admin_accounting','staff'].includes(role);
+}
 function focusLeaveBadgeFallback(){
 const badge=document.querySelector('.leave-badge');
 if(!badge) return null;
@@ -221,7 +227,8 @@ if(!stored){showAlert("로그인이 필요합니다.");location.href='index.html
 myInfo=JSON.parse(stored);
 permissionSet = await loadPermissions(myInfo);
 localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
-if (permissionSet.size > 0 && !permissionSet.has('mypage.view')) {
+const hasMypageView = permissionSet.size > 0 ? permissionSet.has('mypage.view') : hasMypageRoleFallback();
+if (!hasMypageView) {
     showAlert("접근 권한이 없습니다.");
     setTimeout(() => location.href = 'index.html', 1200);
     return;
@@ -232,6 +239,10 @@ await loadCompanyInfo();
 await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave()]);
 };
 function showAlert(m){document.getElementById("alertBody").textContent=m||"";alertModal.show()}
+window.viewContract=function(){
+if(!contractSignedUrl){showAlert("등록된 계약서가 없습니다.");return}
+window.open(contractSignedUrl,'_blank','noopener');
+}
 function autoHyphen(t){t.value=t.value.replace(/[^0-9]/g,'').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g,"$1-$2-$3").replace(/(\-{1,2})$/g,"")}
 function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.userSelectedType==='R'?d.roadAddress:d.jibunAddress;if(d.buildingName)a+=' ('+d.buildingName+')';document.getElementById("myAddress").value=a}}).open()}
 async function loadPermissions(user) {
@@ -283,6 +294,11 @@ async function loadProfile() {
 
     // 계약서 버튼 처리
     const btn = document.getElementById("btnContract");
+    contractSignedUrl='';
+    btn.disabled = true;
+    btn.className = "btn btn-secondary";
+    btn.innerText = "등록된 계약서 없음";
+    btn.onclick = () => window.viewContract();
     if (myInfo.contract_url) {
         let u = myInfo.contract_url.startsWith('http') ? myInfo.contract_url : null;
         if (!u) {
@@ -290,10 +306,11 @@ async function loadProfile() {
             if (d) u = d.signedUrl;
         }
         if (u) {
+            contractSignedUrl = u;
             btn.disabled = false;
             btn.className = "btn btn-outline-primary fw-bold";
             btn.innerText = "📄 계약서 보기";
-            btn.onclick = () => window.open(u);
+            btn.onclick = () => window.viewContract();
         }
     }
 }
@@ -475,14 +492,37 @@ async function deleteEvent(){const i=document.getElementById("evtId").value;if(!
 showAlert("삭제되었습니다.");
 });
 }
-  async function searchSalary(){const ym=document.getElementById("salaryMonth").value;const{data}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).single();if(!data){showAlert("내역 없음");return}currentSalaryData=data;currentSalaryData.year_month=ym;document.getElementById("salaryResult").classList.remove("hidden");document.getElementById("btnPrintSalary").classList.remove("hidden");const[y,m]=ym.split('-');document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;const f=n=>Number(n).toLocaleString(),p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']],d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','가불금'],['ded_capital','출자금']];let ph="";p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(data.pay_total)}</span></td></tr>`;document.getElementById("tbl_pay_body").innerHTML=ph;let dh="";d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(data[i[0]]||0)}</span></td></tr>`);dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(data.ded_total)}</span></td></tr>`;document.getElementById("tbl_ded_body").innerHTML=dh;document.getElementById("v_net").innerText=f(data.net_pay)}
+async function searchSalary(){
+const ym=document.getElementById("salaryMonth").value;
+const{data,error}=await _supabase.from('hr_salary').select('*').eq('emp_id',myInfo.emp_id).eq('year_month',ym).maybeSingle();
+if(error) return showAlert("조회 실패: "+error.message);
+if(!data){showAlert("내역 없음");return}
+const adjusted=await getAdjustedSalaryRowForMypage({...data,year_month:ym},ym);
+currentSalaryData=adjusted;
+document.getElementById("salaryResult").classList.remove("hidden");
+document.getElementById("btnPrintSalary").classList.remove("hidden");
+const[y,m]=ym.split('-');
+document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;
+const f=n=>Number(n).toLocaleString();
+const p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']];
+const d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','기타조정'],['ded_capital','출자금']];
+let ph="";
+p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(adjusted[i[0]]||0)}</span></td></tr>`);
+ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(adjusted.pay_total)}</span></td></tr>`;
+document.getElementById("tbl_pay_body").innerHTML=ph;
+let dh="";
+d.forEach(i=>dh+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(adjusted[i[0]]||0)}</span></td></tr>`);
+dh+=`<tr><td class="bg-light fw-bold">공제계</td><td class="amount-text text-danger fw-bold"><span class="salary-blur">${f(adjusted.ded_total)}</span></td></tr>`;
+document.getElementById("tbl_ded_body").innerHTML=dh;
+document.getElementById("v_net").innerText=f(adjusted.net_pay)
+}
 // [수정됨] 급여명세서 인쇄 (PrintService 호출)
-function printSalaryPopup() {
+async function printSalaryPopup() {
     if (!currentSalaryData) return showAlert("조회된 급여 내역이 없습니다.");
 
     // 숫자 쉼표 포맷팅 헬퍼
     const fmt = (n) => Number(n || 0).toLocaleString();
-    const d = currentSalaryData;
+    const d = await getAdjustedSalaryRowForMypage(currentSalaryData, currentSalaryData.year_month);
     const [y, m] = d.year_month.split('-'); // 2025-05
 
     // 날짜 포맷팅

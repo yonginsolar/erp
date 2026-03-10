@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.26
-Change: 2026-03-05 - Added document visibility policy labels for 정관/규약(전체) and 규정(조합원).
+Version: v1.0.28
+Change: 2026-03-09 - customConfirmModal focus guard added to prevent aria-hidden warning when confirm button retains focus.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.26';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.28';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -1964,6 +1964,24 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+function decodeHtmlEntities(value) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = String(value ?? '');
+    return textarea.value;
+}
+function toPlainSummaryPreview(value, maxLen = 140) {
+    const raw = String(value ?? '');
+    if (!raw.trim()) return '-';
+    const decoded = decodeHtmlEntities(raw);
+    const stripped = decoded
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\r?\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!stripped) return '-';
+    if (stripped.length <= maxLen) return stripped;
+    return `${stripped.slice(0, Math.max(0, maxLen - 3))}...`;
+}
 function sanitizeOrKeyword(value) {
     return String(value ?? '')
         .replace(/[,%()]/g, ' ')
@@ -2033,6 +2051,20 @@ function bindCustomAlertModalFocusGuard() {
     modalEl.dataset.focusGuardBound = '1';
 }
 bindCustomAlertModalFocusGuard();
+
+function bindCustomConfirmModalFocusGuard() {
+    const modalEl = document.getElementById('customConfirmModal');
+    if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
+    modalEl.addEventListener('hide.bs.modal', () => {
+        moveFocusOutsideModal(modalEl);
+        requestAnimationFrame(() => moveFocusOutsideModal(modalEl));
+    });
+    modalEl.addEventListener('pointerdown', () => {
+        moveFocusOutsideModal(modalEl);
+    }, true);
+    modalEl.dataset.focusGuardBound = '1';
+}
+bindCustomConfirmModalFocusGuard();
 
 function bindIssueDocModalFocusGuard() {
     const modalEl = document.getElementById('issueDocModal');
@@ -3623,15 +3655,19 @@ return;
 data.forEach(d => {
 const visibilityMeta = getDocVisibilityMetaByTitle(d.title);
 const visibilityBadge = `<span class="badge ${visibilityMeta.badgeClass}">${visibilityMeta.label}</span>`;
+const summaryPreview = escapeHtml(toPlainSummaryPreview(d.content, 120));
+const versionText = escapeHtml(d.version || '-');
+const dateText = escapeHtml(d.event_date || '-');
+const titleText = escapeHtml(d.title || '-');
 const fileBtn = d.file_url
 ? `<a href="${d.file_url}" target="_blank" class="btn btn-xs btn-outline-success"><i class="bi bi-file-pdf"></i> 보기</a>`
 : '<span class="text-muted text-xs">없음</span>';
 
 tbody.innerHTML += `<tr>
-                   <td><div class="fw-bold">${d.version || '-'}</div><small class="text-muted">${d.event_date}</small></td>
-                   <td>${d.title}</td>
+                   <td><div class="fw-bold">${versionText}</div><small class="text-muted">${dateText}</small></td>
+                   <td>${titleText}</td>
                    <td>${visibilityBadge}</td>
-                   <td class="text-start small text-truncate" style="max-width:200px;">${d.content || '-'}</td>
+                   <td class="text-start small text-truncate" style="max-width:200px;">${summaryPreview}</td>
                    <td>${fileBtn}</td>
                    <td>
                        <button class="btn btn-sm btn-light" onclick="openDocModal('${d.id}')">수정</button>
@@ -5745,16 +5781,20 @@ new bootstrap.Modal(document.getElementById('customAlertModal')).show();
 function myConfirm(msg, callback) {
 document.getElementById('confirmText').textContent = msg || '';
 const btn = document.getElementById('btnConfirmYes');
+const modalEl = document.getElementById('customConfirmModal');
 
 // 이벤트 리스너 중복 방지를 위한 노드 복제 교체
 const newBtn = btn.cloneNode(true);
 btn.parentNode.replaceChild(newBtn, btn);
 
 newBtn.onclick = () => {
-bootstrap.Modal.getInstance(document.getElementById('customConfirmModal')).hide();
+const inst = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+moveFocusOutsideModal(modalEl);
+requestAnimationFrame(() => moveFocusOutsideModal(modalEl));
+inst.hide();
 callback();
 };
-new bootstrap.Modal(document.getElementById('customConfirmModal')).show();
+bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
 // 2. [유틸] 자동 하이픈 (HTML oninput="autoHyphen(this)" 연결 필요)

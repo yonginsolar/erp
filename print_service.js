@@ -93,7 +93,7 @@ const PrintService = {
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">고용보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_emp}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_inc}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">지방소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_loc}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">가불금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">기타조정</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">출자금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_cap}</td></tr>
                     </table>
                 </div>

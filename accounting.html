@@ -1,14 +1,15 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.39 | Change: 2026-02-11 - VAT forecast excludes settlement-direction entries (refund/payment clears). -->
+<!-- Version: v1.0.50 | Change: 2026-03-09 - 4대보험 정산대기 일괄정산 버튼을 추가. -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.39 | accounting.html');</script>
+  <script>console.log('[Version] v1.0.50 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계 관리</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="payroll_durunuri_module.js"></script>
   
   <style>
     body { background-color: #f8f9fa; padding: 20px; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; }
@@ -94,7 +95,7 @@
   <ul class="nav nav-tabs mb-4 no-print" id="accTab" role="tablist">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabForm">📝 전표입력</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPrepay">💳 선급·미수 관리</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSync">🔄 자동연동</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSync" onclick="loadApprovalUnclassifiedQueue()">🔄 자동연동</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabHistory" onclick="loadHistory()">🕒 최근전표</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGuide">ℹ️ 설명</button></li>
   </ul>
@@ -456,13 +457,32 @@
                </div>
              </div>
           </div>
-          <div class="card p-3 border-start border-5 border-warning bg-light">
+          <div class="card p-3 border-start border-5 border-primary-subtle bg-white">
              <div class="d-flex justify-content-between align-items-center">
-               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료/실물결재완료 지출결의서 불러오기</small></div>
-               <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
+               <div>
+                 <h6 class="fw-bold mb-1">🧾 두루누리 직원별 입력</h6>
+                 <small class="text-muted">근로자/사업주 지원분을 입력하면 익월 급여·회계 연동에 자동 반영됩니다.</small>
+               </div>
+               <button class="btn btn-outline-primary btn-sm" onclick="openDurunuriSupportModal()">입력</button>
              </div>
           </div>
-          <div class="card p-3 border-start border-5 border-success bg-light">
+	          <div class="card p-3 border-start border-5 border-warning bg-light">
+	             <div class="d-flex justify-content-between align-items-center">
+	               <div><h6 class="fw-bold mb-1">📝 전자결재 연동</h6><small class="text-muted">완료/실물결재완료 지출결의서 불러오기</small></div>
+	               <button class="btn btn-warning btn-sm text-white" onclick="confirmSync('approval')">실행</button>
+	             </div>
+	          </div>
+          <div class="card p-3 border-start border-5 border-warning-subtle bg-white">
+             <div class="d-flex justify-content-between align-items-center mb-2">
+               <div>
+                 <h6 class="fw-bold mb-1">🧩 전자결재 미분류 재분류</h6>
+                 <small class="text-muted">자동연동으로 생성된 `(차)미분류비용` 건을 비용 계정으로 대체분개합니다.</small>
+               </div>
+               <button class="btn btn-outline-secondary btn-sm" onclick="loadApprovalUnclassifiedQueue()">새로고침</button>
+             </div>
+             <div id="approvalUnclassifiedList" class="small text-muted">목록 로딩 전입니다. 새로고침을 눌러주세요.</div>
+          </div>
+	          <div class="card p-3 border-start border-5 border-success bg-light">
              <div class="d-flex justify-content-between align-items-center">
                <div><h6 class="fw-bold mb-1">💰 출자금 연동</h6><small class="text-muted">신규 입금 내역 전표 처리</small></div>
                <button class="btn btn-success btn-sm text-white" onclick="confirmSync('capital')">실행</button>
@@ -521,7 +541,7 @@
         이 탭은 회계 화면에서 자동으로 처리되는 특수 로직을 요약합니다. 시간이 지나도 기준을 쉽게 되찾을 수 있게 간단히 정리해두었습니다.
       </div>
       <div class="list-group list-group-flush small">
-        <div class="list-group-item">4대보험 통합납부: 급여연동으로 잡힌 부채(예수금/미지급비용)를 상환하며 차액은 잡이익/잡손실로 자동 처리됩니다.</div>
+        <div class="list-group-item">4대보험 통합납부: 급여연동으로 잡힌 부채(예수금/미지급비용)를 상환하며 차액은 선급금/미지급금 정산대기로 누적합니다. 확정 전에는 즉시 잡이익/잡손실로 보내지 않습니다.</div>
         <div class="list-group-item">인적용역: 3.3% 또는 8.8% 원천징수를 자동 분개합니다.</div>
         <div class="list-group-item">이자수익: 15.4% 원천징수액을 선납세금으로 자동 처리합니다.</div>
         <div class="list-group-item">대출상환: 입력 금액 중 이자를 분리해 이자비용/부채상환으로 나눕니다.</div>
@@ -598,6 +618,55 @@
 
 <div class="modal fade" id="selectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header p-3 bg-light"><h6 class="m-0 fw-bold">계정과목 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="p-2 border-bottom bg-white sticky-top"><input type="text" class="form-control" id="accountSearchInput" placeholder="검색어 입력..." onkeyup="filterAccounts()"></div><div id="accountList" style="height: 350px; overflow-y: auto;"></div></div></div></div></div>
 
+<div class="modal fade" id="durunuriModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title fw-bold">🧾 두루누리 직원별 지원금 입력</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <label class="small text-muted">지원 귀속월(보험료 납부월)</label>
+            <input type="month" class="form-control form-control-sm" id="durunuriSourceMonth">
+          </div>
+          <div class="col-md-4">
+            <label class="small text-muted">급여 반영월(익월)</label>
+            <input type="month" class="form-control form-control-sm bg-light" id="durunuriApplyMonth" readonly>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button class="btn btn-outline-secondary btn-sm w-100" type="button" onclick="refreshDurunuriSupportRows()">목록 불러오기</button>
+          </div>
+        </div>
+        <div class="small text-muted mb-2">
+          근로자 지원분은 익월 급여 공제에서 차감(실지급 가산)되고, 사업주 지원분은 익월 4대보험 회사부담분에서 차감됩니다.
+        </div>
+        <div id="durunuriSupportSummary" class="small text-muted mb-2">목록 로딩 전입니다.</div>
+        <div class="table-responsive border rounded" style="max-height: 420px;">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width: 120px;">사번</th>
+                <th>이름</th>
+                <th style="width: 170px;">근로자 지원분</th>
+                <th style="width: 170px;">사업주 지원분</th>
+              </tr>
+            </thead>
+            <tbody id="durunuriSupportBody">
+              <tr><td colspan="4" class="text-center text-muted py-3">직원을 불러오는 중입니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-primary" onclick="saveDurunuriSupportRows()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="addModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -662,6 +731,7 @@ function toggleLabor(target) {
       <div class="modal-body bg-white" id="reportContent"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-outline-success" onclick="downloadClosingCsv()">⬇ CSV</button>
         <button class="btn btn-outline-primary" onclick="printAllReports()">🖨️ 전체 인쇄</button>
         <button class="btn btn-primary" onclick="realPrint()">🖨️ 인쇄</button>
       </div>
@@ -714,7 +784,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let mData=[], cardData=[]; 
-let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal, closingModal, yearModal;
+let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal, closingModal, yearModal, durunuriModal;
 let myInfo = null, confirmCallback = null;
 let closingContext = null;
 let yearModalCallback = null;
@@ -727,7 +797,98 @@ let selectContext = null;
 let addContext = null;
 let permissionSet = new Set();
 let historyViewMode = 'single';
+let approvalUnclassifiedIndex = new Map();
+let durunuriSupportRowsCache = [];
 const AUTO_SYNC_UNDO_KEY = 'erp_auto_sync_last_undo_v1';
+const INSURANCE_PENDING_TAG = '[4대보험정산대기]';
+const KST_TZ_ACCOUNTING = 'Asia/Seoul';
+
+function hasAccountingRoleFallback(permissionKey) {
+    const role = String(myInfo?.role || '').toLowerCase();
+    if (permissionKey === 'accounting.view' || permissionKey === 'accounting.edit') {
+        return role === 'admin' || role === 'admin_all' || role === 'admin_accounting';
+    }
+    return role === 'admin' || role === 'admin_all';
+}
+
+function formatAccountingKstDate(value = new Date(), fallback = '') {
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: KST_TZ_ACCOUNTING,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(d);
+}
+
+function formatAccountingKstMonth(value = new Date(), fallback = '') {
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: KST_TZ_ACCOUNTING,
+        year: 'numeric',
+        month: '2-digit'
+    }).format(d);
+}
+
+function addAccountingMonths(ym, diff) {
+    const raw = String(ym || '');
+    if (!/^\d{4}-\d{2}$/.test(raw)) return '';
+    const year = Number(raw.slice(0, 4));
+    const month = Number(raw.slice(5, 7));
+    if (!Number.isFinite(year) || !Number.isFinite(month)) return '';
+    const dt = new Date(Date.UTC(year, month - 1, 1));
+    dt.setUTCMonth(dt.getUTCMonth() + Number(diff || 0));
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function normalizeAccountingYm(value) {
+    const raw = String(value || '').trim();
+    return /^\d{4}-\d{2}$/.test(raw) ? raw : '';
+}
+
+function listAccountingMonthRange(startYm, endYm) {
+    const start = normalizeAccountingYm(startYm);
+    const end = normalizeAccountingYm(endYm) || start;
+    if (!start) return [];
+
+    const startYear = Number(start.slice(0, 4));
+    const startMonth = Number(start.slice(5, 7));
+    const endYear = Number(end.slice(0, 4));
+    const endMonth = Number(end.slice(5, 7));
+    if (![startYear, startMonth, endYear, endMonth].every(Number.isFinite)) return [];
+
+    let cursor = new Date(Date.UTC(startYear, startMonth - 1, 1));
+    let last = new Date(Date.UTC(endYear, endMonth - 1, 1));
+    if (cursor > last) [cursor, last] = [last, cursor];
+
+    const months = [];
+    while (cursor <= last) {
+        months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`);
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        if (months.length > 120) break;
+    }
+    return months;
+}
+
+function getDurunuriModuleOrNull() {
+    if (window.PayrollDurunuriModule) return window.PayrollDurunuriModule;
+    return null;
+}
+
+async function applyDurunuriAdjustmentsByMonth(rows, ym) {
+    const baseRows = Array.isArray(rows) ? rows : [];
+    const module = getDurunuriModuleOrNull();
+    if (!module || !ym) return baseRows;
+    try {
+        const supportMap = await module.getSupportMap(_supabase, ym);
+        return module.adjustSalaryRows(baseRows, supportMap);
+    } catch (e) {
+        console.warn('Durunuri support load failed:', e?.message || e);
+        return baseRows;
+    }
+}
 
 // 1. 초기화
 window.onload = async function() {
@@ -739,6 +900,7 @@ window.onload = async function() {
     confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
     closingModal = new bootstrap.Modal(document.getElementById('closingModal'));
     yearModal = new bootstrap.Modal(document.getElementById('yearModal'));
+    durunuriModal = new bootstrap.Modal(document.getElementById('durunuriModal'));
 
     const blurActiveIfInside = (modalEl) => {
         const activeEl = document.activeElement;
@@ -746,7 +908,7 @@ window.onload = async function() {
             activeEl.blur();
         }
     };
-    ['alertModal', 'confirmModal', 'yearModal', 'closingModal', 'selectModal', 'reportModal', 'addModal', 'infoModal']
+    ['alertModal', 'confirmModal', 'yearModal', 'closingModal', 'selectModal', 'reportModal', 'addModal', 'infoModal', 'durunuriModal']
         .forEach((id) => {
             const modalEl = document.getElementById(id);
             if (!modalEl) return;
@@ -780,7 +942,10 @@ window.onload = async function() {
     myInfo = JSON.parse(stored);
     permissionSet = await loadPermissions(myInfo);
     localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
-    if (permissionSet.size > 0 && !permissionSet.has('accounting.view')) {
+    const hasAccountingView = permissionSet.size > 0
+        ? permissionSet.has('accounting.view')
+        : hasAccountingRoleFallback('accounting.view');
+    if (!hasAccountingView) {
         showAlert("접근 권한이 없습니다.");
         setTimeout(() => location.href = 'index.html', 1200);
         return;
@@ -788,15 +953,28 @@ window.onload = async function() {
 
     const today = new Date();
     document.getElementById('dateField').valueAsDate = today;
-    document.getElementById('salaryMonth').value = today.toISOString().slice(0, 7);
+    document.getElementById('salaryMonth').value = formatAccountingKstMonth(today);
+    const durunuriSourceMonthEl = document.getElementById('durunuriSourceMonth');
+    const durunuriApplyMonthEl = document.getElementById('durunuriApplyMonth');
+    if (durunuriSourceMonthEl) {
+        const sourceDefault = addAccountingMonths(formatAccountingKstMonth(today), -1);
+        durunuriSourceMonthEl.value = sourceDefault || '';
+        durunuriSourceMonthEl.addEventListener('change', () => {
+            const sourceYm = String(durunuriSourceMonthEl.value || '');
+            if (durunuriApplyMonthEl) durunuriApplyMonthEl.value = addAccountingMonths(sourceYm, 1);
+        });
+    }
+    if (durunuriApplyMonthEl && durunuriSourceMonthEl) {
+        durunuriApplyMonthEl.value = addAccountingMonths(durunuriSourceMonthEl.value, 1);
+    }
     document.getElementById('prepayDate').valueAsDate = today;
     document.getElementById('prepayInDate').valueAsDate = today;
     const prepayInAcc = document.getElementById('prepayInAccount');
     if (prepayInAcc) prepayInAcc.value = '보통예금';
-    document.getElementById('prepayUseMonth').value = today.toISOString().slice(0, 7);
+    document.getElementById('prepayUseMonth').value = formatAccountingKstMonth(today);
     document.getElementById('receivableInDate').valueAsDate = today;
     document.getElementById('receivableOutDate').valueAsDate = today;
-    document.getElementById('receivableUseMonth').value = today.toISOString().slice(0, 7);
+    document.getElementById('receivableUseMonth').value = formatAccountingKstMonth(today);
 
     // 보고서 연도 옵션 생성
     const yearSel = document.getElementById("reportYearSelect");
@@ -819,6 +997,7 @@ window.onload = async function() {
     onReceivableIncomeTypeChange();
     toggleAdvancedMode();
     renderAutoSyncUndoInfo();
+    loadApprovalUnclassifiedQueue();
 };
 
 // Helper
@@ -868,8 +1047,8 @@ async function loadPermissions(user) {
 
 function canPerform(permissionKey) {
     if (!permissionKey) return true;
-    if (!permissionSet || permissionSet.size === 0) return true;
-    return permissionSet.has(permissionKey);
+    if (permissionSet && permissionSet.size > 0) return permissionSet.has(permissionKey);
+    return hasAccountingRoleFallback(permissionKey);
 }
 function showAlert(t,m) {
     let title = "알림";
@@ -988,6 +1167,489 @@ function buildCashNetMap(rows, prefix) {
         map.set(sourceId, (map.get(sourceId) || 0) + delta);
     });
     return map;
+}
+
+function parseApprovalSourceIdFromTransId(transId) {
+    const raw = String(transId || '').trim();
+    if (!raw.startsWith('APR-')) return null;
+    const rest = raw.slice(4);
+    if (!rest || rest.startsWith('RCLS-')) return null;
+    let cut = rest.length;
+    const tags = ['-REV-', '-POST-'];
+    tags.forEach((tag) => {
+        const idx = rest.indexOf(tag);
+        if (idx >= 0 && idx < cut) cut = idx;
+    });
+    return rest.slice(0, cut) || null;
+}
+
+function parseApprovalReclassSourceIdFromTransId(transId) {
+    const raw = String(transId || '').trim();
+    const prefix = 'APR-RCLS-';
+    if (!raw.startsWith(prefix)) return null;
+    const source = raw.slice(prefix.length).trim();
+    return source || null;
+}
+
+function getApprovalReclassExpenseAccounts() {
+    const seen = new Set();
+    return (mData || [])
+        .filter((row) => String(row?.Type || '').trim() === '비용')
+        .map((row) => String(row?.Item || '').trim())
+        .filter((name) => {
+            if (!name || name === '미분류비용') return false;
+            if (seen.has(name)) return false;
+            seen.add(name);
+            return true;
+        })
+        .sort((a, b) => a.localeCompare(b, 'ko'));
+}
+
+function isTaxFreeMasterValue(value) {
+    return value === true || value === 'TRUE' || value === '면세';
+}
+
+function findApprovalReclassExpenseMasterRow(accountName) {
+    const name = String(accountName || '').trim();
+    if (!name) return null;
+    return (mData || []).find((row) => {
+        if (String(row?.Type || '').trim() !== '비용') return false;
+        return String(row?.Item || '').trim() === name;
+    }) || null;
+}
+
+function refreshApprovalReclassVatToggle(domKey) {
+    const key = String(domKey || '').trim();
+    if (!key) return;
+    const accountInput = document.getElementById(`approvalReclassAccount-${key}`);
+    const vatToggle = document.getElementById(`approvalReclassVat-${key}`);
+    if (!accountInput || !vatToggle) return;
+
+    const accountRow = findApprovalReclassExpenseMasterRow(accountInput.value);
+    if (!accountRow) {
+        vatToggle.disabled = false;
+        return;
+    }
+
+    if (isTaxFreeMasterValue(accountRow.tax_free)) {
+        vatToggle.checked = false;
+        vatToggle.disabled = true;
+        return;
+    }
+
+    const wasDisabled = vatToggle.disabled;
+    vatToggle.disabled = false;
+    if (wasDisabled) vatToggle.checked = true;
+}
+
+function applyApprovalReclassAccountSelection(domKey, accountName) {
+    const key = String(domKey || '').trim();
+    if (!key) return;
+    const inputEl = document.getElementById(`approvalReclassAccount-${key}`);
+    if (!inputEl) return;
+    inputEl.value = String(accountName || '').trim();
+    refreshApprovalReclassVatToggle(key);
+}
+
+function openApprovalReclassAccountPicker(domKey) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    const key = String(domKey || '').trim();
+    if (!key) return;
+
+    const item = approvalUnclassifiedIndex.get(key);
+    if (!item) return showAlert("알림", "대상을 다시 선택해주세요. 목록을 새로고침합니다.");
+
+    const accounts = getApprovalReclassExpenseAccounts();
+    if (accounts.length === 0) return showAlert("오류", "비용 계정 마스터가 없어 선택할 수 없습니다. ac_master를 먼저 확인하세요.");
+
+    const currentInput = document.getElementById(`approvalReclassAccount-${key}`);
+    const searchInput = document.getElementById("accountSearchInput");
+    selectContext = {
+        mode: 'approvalReclass',
+        forcedType: '비용',
+        domKey: key,
+        projectOverride: item.project || ''
+    };
+    if (searchInput) searchInput.value = String(currentInput?.value || '').trim();
+    filterAccounts();
+    selectModal.show();
+    setTimeout(() => searchInput?.focus(), 300);
+}
+
+async function loadApprovalUnclassifiedQueue() {
+    const listEl = document.getElementById('approvalUnclassifiedList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="text-muted">조회 중...</div>';
+
+    const { data: rawRows, error: fetchError } = await _supabase
+        .from('ac_journal')
+        .select('Date,Trans_ID,Description,Debit,Credit,Project,Operator')
+        .eq('Account', '미분류비용')
+        .gt('Debit', 0)
+        .like('Trans_ID', 'APR-%')
+        .order('Date', { ascending: false })
+        .limit(200);
+    if (fetchError) {
+        listEl.innerHTML = `<div class="text-danger">조회 실패: ${escapeHtml(fetchError.message)}</div>`;
+        return;
+    }
+
+    const { data: doneRows, error: doneError } = await _supabase
+        .from('ac_journal')
+        .select('Trans_ID')
+        .eq('Account', '미분류비용')
+        .gt('Credit', 0)
+        .like('Trans_ID', 'APR-RCLS-%')
+        .limit(500);
+    if (doneError) {
+        listEl.innerHTML = `<div class="text-danger">재분류 이력 조회 실패: ${escapeHtml(doneError.message)}</div>`;
+        return;
+    }
+
+    const doneSourceIds = new Set(
+        (doneRows || [])
+            .map((row) => parseApprovalReclassSourceIdFromTransId(row?.Trans_ID))
+            .filter(Boolean)
+    );
+
+    const seenSourceIds = new Set();
+    const pending = (rawRows || [])
+        .map((row) => {
+            const sourceId = parseApprovalSourceIdFromTransId(row?.Trans_ID);
+            if (!sourceId || doneSourceIds.has(sourceId)) return null;
+            if (seenSourceIds.has(sourceId)) return null;
+            seenSourceIds.add(sourceId);
+            const amount = Math.max(0, Number(row?.Debit || 0));
+            if (!(amount > 0)) return null;
+            const rowKey = String(sourceId);
+            const domKey = `apr_reclass_${rowKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+            return {
+                rowKey,
+                domKey,
+                sourceId,
+                transId: String(row?.Trans_ID || '').trim(),
+                date: String(row?.Date || '').trim(),
+                description: String(row?.Description || '').trim(),
+                project: String(row?.Project || '본사').trim() || '본사',
+                operator: String(row?.Operator || myInfo?.emp_name || 'System').trim() || 'System',
+                amount
+            };
+        })
+        .filter(Boolean);
+
+    approvalUnclassifiedIndex = new Map(pending.map((item) => [item.domKey, item]));
+    renderApprovalUnclassifiedQueue(pending);
+}
+
+function renderApprovalUnclassifiedQueue(items) {
+    const listEl = document.getElementById('approvalUnclassifiedList');
+    if (!listEl) return;
+    const safeItems = Array.isArray(items) ? items : [];
+    const editable = canPerform('accounting.edit');
+    const accounts = getApprovalReclassExpenseAccounts();
+    const accountCount = accounts.length;
+    const hasSelectableAccount = accountCount > 0;
+
+    if (safeItems.length === 0) {
+        listEl.innerHTML = '<div class="text-muted">재분류할 미분류비용(APR) 건이 없습니다.</div>';
+        return;
+    }
+
+    const summary = `<div class="small text-muted mb-2">대상 ${safeItems.length}건 · 미분류 합계 ${safeItems.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString()}원</div>`;
+    const warnNoAccount = hasSelectableAccount
+        ? ''
+        : '<div class="small text-danger mb-2">비용 계정 마스터가 없어 재분류할 수 없습니다. ac_master를 먼저 확인하세요.</div>';
+
+    const rowsHtml = safeItems.map((item) => {
+        const safeDate = escapeHtml(item.date || '-');
+        const safeTransId = escapeHtml(item.transId || '-');
+        const safeDesc = escapeHtml((item.description || '').replace(/^\[전자결재-발생\]\s*/i, '') || item.description || '-');
+        const safeProject = escapeHtml(item.project || '본사');
+        const safeOperator = escapeHtml(item.operator || 'System');
+        const amountLabel = Number(item.amount || 0).toLocaleString();
+        const inputId = `approvalReclassAccount-${item.domKey}`;
+        const vatId = `approvalReclassVat-${item.domKey}`;
+        const pickBtnId = `approvalReclassPickBtn-${item.domKey}`;
+        const btnId = `approvalReclassBtn-${item.domKey}`;
+        const disabledAttr = (!editable || !hasSelectableAccount) ? ' disabled' : '';
+        return `
+            <div class="border rounded p-2 mb-2 bg-light-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="fw-bold">${safeDesc}</div>
+                    <span class="badge text-bg-secondary">${amountLabel}원</span>
+                </div>
+                <div class="small text-muted mb-2">${safeDate} · ${safeTransId} · ${safeProject} · ${safeOperator}</div>
+                <div class="d-flex gap-2 align-items-center">
+                    <input id="${inputId}" class="form-control form-control-sm" type="text" placeholder="계정 선택 필요" readonly${disabledAttr}>
+                    <button id="${pickBtnId}" class="btn btn-sm btn-outline-secondary"${disabledAttr} onclick="openApprovalReclassAccountPicker('${item.domKey}')">계정 선택</button>
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input" type="checkbox" id="${vatId}" checked${disabledAttr}>
+                        <label class="form-check-label small" for="${vatId}">부가세 포함</label>
+                    </div>
+                    <button id="${btnId}" class="btn btn-sm btn-outline-primary"${disabledAttr} onclick="submitApprovalUnclassifiedReclass('${item.domKey}')">재분류</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const readOnlyMsg = editable ? '' : '<div class="small text-muted mb-2">조회 전용 권한입니다. 재분류는 회계 수정 권한에서 가능합니다.</div>';
+    listEl.innerHTML = `${summary}${warnNoAccount}${readOnlyMsg}${rowsHtml}`;
+    safeItems.forEach((item) => refreshApprovalReclassVatToggle(item.domKey));
+}
+
+async function submitApprovalUnclassifiedReclass(rowKey) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    const key = String(rowKey || '').trim();
+    const item = approvalUnclassifiedIndex.get(key);
+    if (!item) {
+        await loadApprovalUnclassifiedQueue();
+        return showAlert("알림", "대상을 다시 선택해주세요. 목록을 새로고침했습니다.");
+    }
+
+    const inputEl = document.getElementById(`approvalReclassAccount-${item.domKey}`);
+    const vatToggleEl = document.getElementById(`approvalReclassVat-${item.domKey}`);
+    const actionBtn = document.getElementById(`approvalReclassBtn-${item.domKey}`);
+    const targetAccount = String(inputEl?.value || '').trim();
+    if (!targetAccount) return showAlert("오류", "재분류할 비용 계정을 선택하세요.");
+    if (targetAccount === '미분류비용') return showAlert("오류", "미분류비용 외 계정을 선택하세요.");
+
+    const accountRow = findApprovalReclassExpenseMasterRow(targetAccount);
+    if (!accountRow) return showAlert("오류", "선택한 계정을 마스터에서 찾지 못했습니다. 목록을 새로고침 후 다시 시도하세요.");
+
+    const amount = Math.max(0, Number(item.amount || 0));
+    if (!(amount > 0)) return showAlert("오류", "재분류 금액이 유효하지 않습니다.");
+    const useVat = Boolean(vatToggleEl?.checked) && !isTaxFreeMasterValue(accountRow.tax_free);
+    const netAmount = useVat ? Math.round(amount / 1.1) : amount;
+    const vatAmount = useVat ? (amount - netAmount) : 0;
+
+    const txDate = String(item.date || '').trim() || formatAccountingKstDate(new Date());
+    const writer = myInfo ? myInfo.emp_name : "System";
+    const reclassTransId = `APR-RCLS-${item.sourceId}`;
+    const descBase = String(item.description || '').trim() || String(item.transId || '전자결재');
+    const taggedDesc = `[전자결재-재분류:${item.transId}] ${descBase}`;
+
+    if (actionBtn) actionBtn.disabled = true;
+    try {
+        const { data: existingRows, error: existingError } = await _supabase
+            .from('ac_journal')
+            .select('Trans_ID')
+            .eq('Trans_ID', reclassTransId)
+            .limit(1);
+        if (existingError) return showAlert("오류", "기존 재분류 확인 실패: " + existingError.message);
+        if (existingRows && existingRows.length > 0) {
+            await loadApprovalUnclassifiedQueue();
+            return showAlert("알림", "이미 재분류 처리된 건입니다.");
+        }
+
+        const entries = [
+            {
+                Date: txDate,
+                Type: '비용',
+                Account: targetAccount,
+                Description: taggedDesc,
+                Debit: netAmount,
+                Credit: 0,
+                Project: item.project || '본사',
+                Operator: writer,
+                Evidence_Type: '내부기표',
+                Trans_ID: reclassTransId
+            }
+        ];
+        if (vatAmount > 0) {
+            entries.push({
+                Date: txDate,
+                Type: '자산',
+                Account: '부가세대급금',
+                Description: `${taggedDesc} [부가세]`,
+                Debit: vatAmount,
+                Credit: 0,
+                Project: item.project || '본사',
+                Operator: writer,
+                Evidence_Type: '내부기표',
+                Trans_ID: reclassTransId
+            });
+        }
+        entries.push({
+            Date: txDate,
+            Type: '비용',
+            Account: '미분류비용',
+            Description: taggedDesc,
+            Debit: 0,
+            Credit: amount,
+            Project: item.project || '본사',
+            Operator: writer,
+            Evidence_Type: '내부기표',
+            Trans_ID: reclassTransId
+        });
+
+        const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+        if (insertError) return showAlert("오류", "재분류 저장 실패: " + insertError.message);
+
+        setLastAutoSyncUndo({
+            type: 'approval_reclass',
+            label: `전자결재 미분류 재분류 (${item.transId})`,
+            created_at: new Date().toISOString(),
+            trans_ids: [reclassTransId],
+            restores: []
+        });
+
+        const vatInfo = vatAmount > 0
+            ? ` (공급가 ${netAmount.toLocaleString()}원 / 부가세 ${vatAmount.toLocaleString()}원)`
+            : '';
+        showAlert("완료", `${item.transId} 건을 ${targetAccount}(으)로 재분류했습니다.${vatInfo}`);
+        await loadApprovalUnclassifiedQueue();
+        refreshDashboard();
+        loadHistory();
+    } finally {
+        if (actionBtn) actionBtn.disabled = false;
+    }
+}
+
+async function openDurunuriSupportModal() {
+    const sourceEl = document.getElementById('durunuriSourceMonth');
+    const applyEl = document.getElementById('durunuriApplyMonth');
+    if (sourceEl && !sourceEl.value) {
+        sourceEl.value = addAccountingMonths(formatAccountingKstMonth(new Date()), -1);
+    }
+    if (applyEl && sourceEl) {
+        applyEl.value = addAccountingMonths(sourceEl.value, 1);
+    }
+    if (!durunuriModal) return;
+    durunuriModal.show();
+    await refreshDurunuriSupportRows();
+}
+
+function renderDurunuriSupportRows(items) {
+    const tbody = document.getElementById('durunuriSupportBody');
+    const summary = document.getElementById('durunuriSupportSummary');
+    if (!tbody || !summary) return;
+    const safeItems = Array.isArray(items) ? items : [];
+    if (safeItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">표시할 직원이 없습니다.</td></tr>';
+        summary.textContent = '대상 직원이 없습니다.';
+        return;
+    }
+    const rowsHtml = safeItems.map((item, index) => {
+        const empId = escapeHtml(item.emp_id || '-');
+        const empName = escapeHtml(item.emp_name || '-');
+        const empSupport = Math.max(0, Number(item.emp_support || 0));
+        const bizSupport = Math.max(0, Number(item.biz_support || 0));
+        return `
+            <tr>
+                <td>${empId}</td>
+                <td>${empName}</td>
+                <td>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="form-control form-control-sm text-end durunuri-emp-input"
+                        data-index="${index}"
+                        value="${empSupport}"
+                    >
+                </td>
+                <td>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="form-control form-control-sm text-end durunuri-biz-input"
+                        data-index="${index}"
+                        value="${bizSupport}"
+                    >
+                </td>
+            </tr>
+        `;
+    }).join('');
+    tbody.innerHTML = rowsHtml;
+    const empTotal = safeItems.reduce((sum, row) => sum + Math.max(0, Number(row.emp_support || 0)), 0);
+    const bizTotal = safeItems.reduce((sum, row) => sum + Math.max(0, Number(row.biz_support || 0)), 0);
+    summary.textContent = `대상 ${safeItems.length}명 · 근로자 지원합계 ${empTotal.toLocaleString()}원 · 사업주 지원합계 ${bizTotal.toLocaleString()}원`;
+}
+
+async function refreshDurunuriSupportRows() {
+    const module = getDurunuriModuleOrNull();
+    if (!module) return showAlert('오류', '두루누리 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.');
+    const sourceEl = document.getElementById('durunuriSourceMonth');
+    const applyEl = document.getElementById('durunuriApplyMonth');
+    const bodyEl = document.getElementById('durunuriSupportBody');
+    const summaryEl = document.getElementById('durunuriSupportSummary');
+    const sourceMonth = String(sourceEl?.value || '').trim();
+    if (!sourceMonth) return showAlert('알림', '지원 귀속월을 선택하세요.');
+    const applyMonth = addAccountingMonths(sourceMonth, 1);
+    if (!applyMonth) return showAlert('오류', '급여 반영월 계산에 실패했습니다.');
+    if (applyEl) applyEl.value = applyMonth;
+    if (bodyEl) bodyEl.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">목록을 불러오는 중입니다.</td></tr>';
+    if (summaryEl) summaryEl.textContent = '로딩 중...';
+
+    const [{ data: employees, error: empError }, supportMap] = await Promise.all([
+        _supabase
+            .from('ref_employees')
+            .select('emp_id,emp_name,resign_date')
+            .order('emp_id', { ascending: true }),
+        module.getSupportMap(_supabase, applyMonth)
+    ]);
+    if (empError) return showAlert('오류', '직원 목록 조회 실패: ' + empError.message);
+
+    const rows = (Array.isArray(employees) ? employees : [])
+        .filter((row) => String(row?.emp_id || '').trim())
+        .map((row) => {
+            const empId = String(row.emp_id || '').trim();
+            const support = supportMap?.[empId] || null;
+            return {
+                emp_id: empId,
+                emp_name: String(row.emp_name || '').trim(),
+                emp_support: Math.max(0, Number(support?.emp_support || 0)),
+                biz_support: Math.max(0, Number(support?.biz_support || 0))
+            };
+        });
+
+    durunuriSupportRowsCache = rows;
+    renderDurunuriSupportRows(rows);
+}
+
+function collectDurunuriSupportRowsFromInputs() {
+    const empInputs = Array.from(document.querySelectorAll('.durunuri-emp-input'));
+    const bizInputs = Array.from(document.querySelectorAll('.durunuri-biz-input'));
+    const bizByIndex = new Map(bizInputs.map((el) => [Number(el.dataset.index), el]));
+
+    return empInputs.map((empEl) => {
+        const index = Number(empEl.dataset.index);
+        const base = durunuriSupportRowsCache[index] || {};
+        const bizEl = bizByIndex.get(index);
+        return {
+            emp_id: String(base.emp_id || '').trim(),
+            emp_name: String(base.emp_name || '').trim(),
+            emp_support: Math.max(0, Math.round(Number(empEl.value || 0))),
+            biz_support: Math.max(0, Math.round(Number(bizEl?.value || 0)))
+        };
+    }).filter((row) => row.emp_id);
+}
+
+async function saveDurunuriSupportRows() {
+    if (!canPerform('accounting.edit')) return showAlert('수정 권한이 없습니다.');
+    const module = getDurunuriModuleOrNull();
+    if (!module) return showAlert('오류', '두루누리 모듈을 불러오지 못했습니다.');
+    const sourceMonth = String(document.getElementById('durunuriSourceMonth')?.value || '').trim();
+    const applyMonth = String(document.getElementById('durunuriApplyMonth')?.value || '').trim();
+    if (!sourceMonth || !applyMonth) return showAlert('알림', '귀속월/반영월을 확인하세요.');
+
+    const rows = collectDurunuriSupportRowsFromInputs();
+    if (rows.length === 0) return showAlert('알림', '저장할 직원 데이터가 없습니다.');
+
+    try {
+        const result = await module.saveSupportBatch(_supabase, {
+            source_month: sourceMonth,
+            apply_month: applyMonth,
+            actor_emp_id: myInfo?.emp_id || null,
+            actor_name: myInfo?.emp_name || null,
+            rows
+        });
+        await refreshDurunuriSupportRows();
+        showAlert('완료', `${applyMonth} 급여 반영 기준으로 ${result.changed || 0}건을 저장했습니다.`);
+    } catch (e) {
+        showAlert('오류', '두루누리 지원금 저장 실패: ' + (e?.message || e));
+    }
 }
 
 function appendDonationCashDeltaEntries(entries, payload) {
@@ -1458,7 +2120,9 @@ function filterAccounts() {
     const type = forcedType || document.querySelector('input[name="inputType"]:checked').value;
     
     // [추가] 현재 선택된 프로젝트 값을 가져옵니다. (본사 vs 발전소 구분용)
-    const currentProject = document.getElementById("projectSelect").value; 
+    const currentProject = (selectContext && selectContext.projectOverride)
+        ? selectContext.projectOverride
+        : document.getElementById("projectSelect").value;
     const list = document.getElementById("accountList");
     
     list.innerHTML = "";
@@ -1514,6 +2178,13 @@ function filterAccounts() {
             }
             if (selectContext && selectContext.mode === 'receivableIncome') {
                 setReceivableIncomeAccount(acc.Item);
+                selectContext = null;
+                selectModal.hide();
+                return;
+            }
+            if (selectContext && selectContext.mode === 'approvalReclass') {
+                const targetKey = String(selectContext.domKey || '').trim();
+                if (targetKey) applyApprovalReclassAccountSelection(targetKey, acc.Item);
                 selectContext = null;
                 selectModal.hide();
                 return;
@@ -1586,7 +2257,7 @@ function updateDynamicUI(accName, accType, specialCode, isTaxFree, specialRaw) {
         // 기본값: 지난달 (보통 10일에 납부하므로 지난달 귀속분)
         const now = new Date();
         now.setMonth(now.getMonth() - 1);
-        const lastMonthYM = now.toISOString().slice(0, 7);
+        const lastMonthYM = formatAccountingKstMonth(now);
 
         // 원본 HTML 구조 유지
         area.innerHTML += `
@@ -1596,9 +2267,12 @@ function updateDynamicUI(accName, accType, specialCode, isTaxFree, specialRaw) {
                 
                 <div class="input-group input-group-sm mb-2">
                     <span class="input-group-text">귀속월</span>
-                    <input type="month" class="form-control" id="payTargetMonth" value="${lastMonthYM}">
+                    <input type="month" class="form-control" id="payTargetMonthStart" value="${lastMonthYM}">
+                    <span class="input-group-text">~</span>
+                    <input type="month" class="form-control" id="payTargetMonthEnd" value="${lastMonthYM}">
                     <button class="btn btn-dark" type="button" onclick="fetchLiabilitySum()">장부 조회</button>
                 </div>
+                <div class="x-small text-muted mb-2">한 달만 조회할 때는 시작/종료를 같게 두면 됩니다.</div>
 
                 <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-1">
                     <span class="small">장부상 납부액</span>
@@ -1606,15 +2280,25 @@ function updateDynamicUI(accName, accType, specialCode, isTaxFree, specialRaw) {
                 </div>
                 <div id="txtDetailVal" class="x-small text-end text-muted mb-2">-</div>
 
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-1">
+                    <span class="small">정산대기 순액</span>
+                    <span id="txtPendingVal" class="fw-bold fs-6 text-secondary">조회 중...</span>
+                </div>
+                <div id="txtPendingDetail" class="x-small text-end text-muted mb-2">-</div>
+                <div class="d-grid mb-2">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="runInsurancePendingSettlement()">정산대기 일괄정산</button>
+                </div>
+
                 <input type="hidden" id="hiddenBookVal" value="0">
                 <input type="hidden" id="hiddenYesu" value="0">
                 <input type="hidden" id="hiddenMigigeub" value="0">
 
-                <div class="form-text x-small text-danger fw-bold">* 아래 '금액' 란에 실제 통장 출금액을 입력하세요.<br>* 차액은 잡이익/잡손실로 자동 처리됩니다.</div>
+                <div class="form-text x-small text-danger fw-bold">* 아래 '금액' 란에 실제 통장 출금액을 입력하세요.<br>* 차액은 선급금/미지급금 정산대기로 누적하고, 확정 후 합산 정산하세요.</div>
             </div>`;
         
         // 부가세 체크 해제 및 비활성, 카드입력 숨김
         vatCheck.checked = false; vatCheck.disabled = true; cardDiv.style.display = "none";
+        setTimeout(() => refreshInsurancePendingSummary(), 0);
     }
     else if (specialCode === "loan_pay") { // 대출상환
         area.innerHTML += `<div class="special-box alert alert-warning p-2 mb-2"><small class="fw-bold">ℹ️ 대출 원리금 상환</small><div class="input-group input-group-sm mt-1"><span class="input-group-text">이자 포함분</span><input type="number" class="form-control" id="loanInterest" placeholder="이 중 이자는 얼마?" min="0" oninput="validNum(this)"></div></div>`;
@@ -1720,6 +2404,7 @@ function buildPrepayCache(data) {
         const db = Number(r.Debit || 0);
         const cr = Number(r.Credit || 0);
         const desc = r.Description || "";
+        if (desc.includes(INSURANCE_PENDING_TAG)) return;
 
         if (r.Account === '선급금' && r.Type === '자산') {
             const vendor = extractVendorName(desc);
@@ -2412,9 +3097,9 @@ async function submitAccounting(ctx) {
 
             if (bookYesu > 0) entries.push({ Date: fDate, Type: '부채', Account: '예수금', Description: `${finalDesc} (직원분 상환)`, Debit: bookYesu, Credit: 0, Project: project, Operator: writer, Evidence_Type: '금융거래' });
             if (bookMigigeub > 0) entries.push({ Date: fDate, Type: '부채', Account: '미지급비용', Description: `${finalDesc} (회사분 상환)`, Debit: bookMigigeub, Credit: 0, Project: project, Operator: writer, Evidence_Type: '금융거래' });
-            
-            if (diff > 0) entries.push({ Date: fDate, Type: '비용', Account: '잡손실', Description: `[4대보험] 납부차액(절사)`, Debit: diff, Credit: 0, Project: project, Operator: writer, Evidence_Type: '내부기표' });
-            else if (diff < 0) entries.push({ Date: fDate, Type: '매출', Account: '잡이익', Description: `[4대보험] 납부차액(절사)`, Debit: 0, Credit: Math.abs(diff), Project: project, Operator: writer, Evidence_Type: '내부기표' });
+
+            if (diff > 0) entries.push({ Date: fDate, Type: '자산', Account: '선급금', Description: `${INSURANCE_PENDING_TAG} ${finalDesc} (선급)`, Debit: diff, Credit: 0, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+            else if (diff < 0) entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: `${INSURANCE_PENDING_TAG} ${finalDesc} (미지급)`, Debit: 0, Credit: Math.abs(diff), Project: project, Operator: writer, Evidence_Type: '내부기표' });
 
             entries.push({ Date: fDate, Type: '자산', Account: '보통예금', Description: finalDesc, Debit: 0, Credit: totalAmt, Project: project, Operator: writer, Evidence_Type: '금융거래' });
         }
@@ -2727,7 +3412,7 @@ async function executeClosing(ctx, legal, vol) {
 // 6. 자동 연동 기능
 function confirmSync(type) {
     if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
-    const today = new Date().toISOString().slice(0,10);
+    const today = formatAccountingKstDate(new Date());
     const writer = myInfo ? myInfo.emp_name : "System";
 
 // (1) 급여 연동 (말일 발생주의 + 정정 시 취소 후 재기표)
@@ -2736,18 +3421,20 @@ function confirmSync(type) {
         if(!ym) return showAlert("알림", "년-월을 선택하세요.");
 
         const [year, month] = ym.split('-').map(Number);
-        const lastDateObj = new Date(year, month, 0);
-        const fDate = lastDateObj.toISOString().slice(0, 10);
+        const lastDay = new Date(year, month, 0).getDate();
+        const fDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
         (async () => {
             const { data: previewSalaries, error: previewSalaryError } = await _supabase
                 .from('hr_salary')
-                .select('id,pay_total,ded_total,net_pay,co_total,is_accounted')
+                .select('*')
                 .eq('year_month', ym);
             if (previewSalaryError) return showAlert("오류", "미리보기 조회 실패: " + previewSalaryError.message);
             if (!previewSalaries || previewSalaries.length === 0) return showAlert("알림", "급여 데이터가 없습니다.");
 
-            const previewDesired = previewSalaries.reduce((acc, row) => {
+            const previewAdjustedRows = await applyDurunuriAdjustmentsByMonth(previewSalaries, ym);
+
+            const previewDesired = previewAdjustedRows.reduce((acc, row) => {
                 acc.pay += Math.max(0, Number(row.pay_total || 0));
                 acc.ded += Math.max(0, Number(row.ded_total || 0));
                 acc.net += Math.max(0, Number(row.net_pay || 0));
@@ -2782,6 +3469,7 @@ function confirmSync(type) {
                 .eq('year_month', ym);
             if(fetchError) return showAlert("오류", "급여 데이터 조회 실패: " + fetchError.message);
             if(!salaries || salaries.length === 0) return showAlert("알림", "급여 데이터가 없습니다.");
+            const adjustedSalaries = await applyDurunuriAdjustmentsByMonth(salaries, ym);
 
             const desired = {
                 pay: 0,
@@ -2791,11 +3479,13 @@ function confirmSync(type) {
             };
             const salaryStateBefore = new Map();
             salaries.forEach((row) => {
+                salaryStateBefore.set(String(row.id), row.is_accounted === true);
+            });
+            adjustedSalaries.forEach((row) => {
                 desired.pay += Math.max(0, Number(row.pay_total || 0));
                 desired.ded += Math.max(0, Number(row.ded_total || 0));
                 desired.net += Math.max(0, Number(row.net_pay || 0));
                 desired.co += Math.max(0, Number(row.co_total || 0));
-                salaryStateBefore.set(String(row.id), row.is_accounted === true);
             });
 
             const { data: salRows, error: salError } = await _supabase
@@ -2890,14 +3580,28 @@ function confirmSync(type) {
                 return showAlert("알림", "생성할 전표가 없습니다.");
             }
 
-            const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+            const { data: insertedRows, error: insertError } = await _supabase
+                .from('ac_journal')
+                .insert(entries)
+                .select('id');
             if(insertError) return showAlert("오류", "전표 저장 실패: " + insertError.message);
 
             const { error: stateError } = await _supabase
                 .from('hr_salary')
                 .update({ is_accounted: true })
                 .eq('year_month', ym);
-            if (stateError) return showAlert("부분 완료", "전표는 저장되었으나 처리상태 갱신에 실패했습니다: " + stateError.message);
+            if (stateError) {
+                const insertedIds = Array.isArray(insertedRows)
+                    ? insertedRows.map(row => row?.id).filter(v => v !== null && v !== undefined)
+                    : [];
+                if (insertedIds.length > 0) {
+                    const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('id', insertedIds);
+                    if (rollbackError) {
+                        return showAlert("부분 완료", "처리상태 갱신과 전표 롤백이 모두 실패했습니다: " + rollbackError.message);
+                    }
+                }
+                return showAlert("오류", "처리상태 갱신 실패로 신규 전표를 자동 되돌렸습니다: " + stateError.message);
+            }
 
             const restores = Array.from(salaryStateBefore.entries()).map(([id, wasAccounted]) => ({
                 table: 'hr_salary',
@@ -3019,6 +3723,7 @@ function confirmSync(type) {
                 showAlert("완료", `${runTargetDocs.length}건 연동 성공\n- 급여/인건비 집행전표 ${runSalaryLikeCount}건\n- 일반 발생전표 ${runAccrualCount}건`);
                 refreshDashboard();
                 loadHistory();
+                loadApprovalUnclassifiedQueue();
             });
         })();
     }
@@ -3143,21 +3848,43 @@ function confirmSync(type) {
             });
 
             if (entries.length > 0) {
-                const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+                const { data: insertedRows, error: insertError } = await _supabase
+                    .from('ac_journal')
+                    .insert(entries)
+                    .select('id');
                 if (insertError) {
                     console.error("전표 저장 실패:", insertError);
                     return showAlert("오류", "전표 저장 실패: " + insertError.message);
                 }
+                const uniqueMarkIds = Array.from(new Set(markIds));
+                if (uniqueMarkIds.length > 0) {
+                    const { error: updateError } = await _supabase
+                        .from('ref_members')
+                        .update({ status: '전표완료' })
+                        .in('id', uniqueMarkIds);
+                    if (updateError) {
+                        const insertedIds = Array.isArray(insertedRows)
+                            ? insertedRows.map(row => row?.id).filter(v => v !== null && v !== undefined)
+                            : [];
+                        if (insertedIds.length > 0) {
+                            const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('id', insertedIds);
+                            if (rollbackError) {
+                                return showAlert("부분 오류", "상태 변경과 전표 롤백이 모두 실패했습니다: " + rollbackError.message);
+                            }
+                        }
+                        return showAlert("오류", "상태 변경 실패로 신규 전표를 자동 되돌렸습니다: " + updateError.message);
+                    }
+                }
             }
 
             const uniqueMarkIds = Array.from(new Set(markIds));
-            if (uniqueMarkIds.length > 0) {
-                const { error: updateError } = await _supabase
+            if (entries.length === 0 && uniqueMarkIds.length > 0) {
+                const { error: updateOnlyError } = await _supabase
                     .from('ref_members')
                     .update({ status: '전표완료' })
                     .in('id', uniqueMarkIds);
-                if (updateError) {
-                    return showAlert("부분 오류", "전표는 생성되었으나 상태 변경에 실패했습니다. (새로고침 후 확인 필요)");
+                if (updateOnlyError) {
+                    return showAlert("오류", "상태 변경 실패: " + updateOnlyError.message);
                 }
             }
 
@@ -3919,8 +4646,9 @@ function buildSingleEntryHistory(rows) {
             }
         });
 
-        // 용돈기입장형 단식 보기: 현금성 계정 변동이 없는 전표는 제외
-        if (cashDelta === 0) return;
+        // 단식 기본은 현금흐름 중심이지만, 자동연동 재분류(APR-RCLS)는 대체분개로 노출
+        const isApprovalReclass = String(group.transId || '').startsWith('APR-RCLS-');
+        if (cashDelta === 0 && !isApprovalReclass) return;
 
         let flow = '대체';
         if (cashDelta > 0) flow = '입금';
@@ -3929,6 +4657,7 @@ function buildSingleEntryHistory(rows) {
         const amount = Math.abs(cashDelta) > 0 ? Math.abs(cashDelta) : Math.max(debitTotal, creditTotal);
         const inAmount = cashDelta > 0 ? cashDelta : 0;
         const outAmount = cashDelta < 0 ? Math.abs(cashDelta) : 0;
+        const transferAmount = flow === '대체' ? amount : 0;
         const label = inferCashbookLabel(desc, flow);
         list.push({
             id: group.id,
@@ -3941,6 +4670,7 @@ function buildSingleEntryHistory(rows) {
             amount,
             inAmount,
             outAmount,
+            transferAmount,
             sortIndex: group.sortIndex
         });
     });
@@ -3980,6 +4710,7 @@ function renderHistorySingle(rows) {
         const transText = item.transId ? ` · ${escapeHtml(item.transId)}` : '';
         const inAmountText = item.inAmount > 0 ? `${Number(item.inAmount).toLocaleString()}원` : '-';
         const outAmountText = item.outAmount > 0 ? `${Number(item.outAmount).toLocaleString()}원` : '-';
+        const transferAmountText = item.transferAmount > 0 ? `${Number(item.transferAmount).toLocaleString()}원` : '-';
         const idAttr = escapeHtml(item.id || '');
         const transAttr = escapeHtml(item.transId || '');
 
@@ -3994,6 +4725,7 @@ function renderHistorySingle(rows) {
                     <div class="text-end">
                         <div class="small text-primary">들어옴: <b>${inAmountText}</b></div>
                         <div class="small text-danger">나감: <b>${outAmountText}</b></div>
+                        <div class="small text-secondary">대체: <b>${transferAmountText}</b></div>
                         <button class="btn btn-sm btn-outline-danger mt-1" data-id="${idAttr}" data-trans-id="${transAttr}" onclick="deleteTxByButton(this)">삭제</button>
                     </div>
                 </div>
@@ -4002,7 +4734,8 @@ function renderHistorySingle(rows) {
     });
     const totalIn = items.reduce((sum, item) => sum + Number(item.inAmount || 0), 0);
     const totalOut = items.reduce((sum, item) => sum + Number(item.outAmount || 0), 0);
-    if (metaEl) metaEl.textContent = `단식 ${items.length}건 · 들어옴 ${totalIn.toLocaleString()}원 · 나감 ${totalOut.toLocaleString()}원`;
+    const totalTransfer = items.reduce((sum, item) => sum + Number(item.transferAmount || 0), 0);
+    if (metaEl) metaEl.textContent = `단식 ${items.length}건 · 들어옴 ${totalIn.toLocaleString()}원 · 나감 ${totalOut.toLocaleString()}원 · 대체 ${totalTransfer.toLocaleString()}원`;
 }
 
 function renderHistoryDouble(rows) {
@@ -4148,32 +4881,245 @@ async function openInfoModal() {
     infoModal.show();
 }
 
+
+function toAmount(value) {
+    const num = Number(value || 0);
+    return Number.isFinite(num) ? Math.round(num) : 0;
+}
+
+function allocateNamedAmounts(totalAmount, namedWeights) {
+    const target = toAmount(totalAmount);
+    const targetAbs = Math.abs(target);
+    const entries = Object.entries(namedWeights || {})
+        .map(([name, value]) => ({ name, weight: Math.abs(toAmount(value)) }))
+        .filter((entry) => entry.weight > 0);
+
+    if (!(targetAbs > 0) || entries.length === 0) return {};
+
+    const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
+    if (!(totalWeight > 0)) return {};
+
+    const sign = target < 0 ? -1 : 1;
+    let allocated = 0;
+
+    entries.forEach((entry) => {
+        const rawShare = (targetAbs * entry.weight) / totalWeight;
+        entry.base = Math.floor(rawShare);
+        entry.frac = rawShare - entry.base;
+        allocated += entry.base;
+    });
+
+    let remainder = targetAbs - allocated;
+    entries.sort((a, b) => {
+        if (b.frac !== a.frac) return b.frac - a.frac;
+        return b.weight - a.weight;
+    });
+
+    for (let i = 0; i < entries.length && remainder > 0; i += 1, remainder -= 1) {
+        entries[i].base += 1;
+    }
+
+    const result = {};
+    entries.forEach((entry) => {
+        if (!entry.base) return;
+        result[entry.name] = sign * entry.base;
+    });
+    return result;
+}
+
+function buildSalaryDeductionMonthMap(rows) {
+    const map = new Map();
+    (rows || []).forEach((row) => {
+        const ym = String(row.year_month || '').trim();
+        if (!/^\d{4}-\d{2}$/.test(ym)) return;
+
+        const insurance = toAmount(row.ded_pension) + toAmount(row.ded_health) + toAmount(row.ded_care) + toAmount(row.ded_employ);
+        const tax = toAmount(row.ded_income) + toAmount(row.ded_local);
+        const baseOther = toAmount(row.ded_advance) + toAmount(row.ded_capital);
+        const total = toAmount(row.ded_total);
+        const remainder = total - insurance - tax - baseOther;
+        const other = baseOther + (remainder > 0 ? remainder : 0);
+
+        const acc = map.get(ym) || { insurance: 0, tax: 0, other: 0, total: 0 };
+        acc.insurance += insurance;
+        acc.tax += tax;
+        acc.other += other;
+        acc.total += total;
+        map.set(ym, acc);
+    });
+    return map;
+}
+
+function classifyYesuDelta(row, salaryMonthMap) {
+    const debit = toAmount(row.Debit);
+    const credit = toAmount(row.Credit);
+    const delta = credit - debit;
+    if (!delta) return {};
+
+    const desc = String(row.Description || '').trim();
+    const salaryYmMatch = desc.match(/(\d{4}-\d{2})월분/);
+    if (salaryYmMatch) {
+        const monthInfo = salaryMonthMap.get(salaryYmMatch[1]);
+        if (monthInfo && monthInfo.total > 0) {
+            return allocateNamedAmounts(delta, {
+                '4대보험예수금': monthInfo.insurance,
+                '제세예수금': monthInfo.tax,
+                '기타예수금': monthInfo.other
+            });
+        }
+    }
+
+    if (desc.includes('원천징수')) return { '제세예수금': delta };
+    if (
+        desc.includes('4대보험') ||
+        desc.includes('직원분 상환') ||
+        desc.includes(DURUNURI_EMPLOYEE_SOURCE_TAG) ||
+        desc.includes(DURUNURI_EMPLOYEE_SALARY_TAG)
+    ) {
+        return { '4대보험예수금': delta };
+    }
+    return { '기타예수금': delta };
+}
+
+function buildYesuBreakdownMap(closingRows, salaryMonthMap) {
+    const result = {};
+    let totalYesu = 0;
+
+    (closingRows || []).forEach((row) => {
+        const accountCompact = String(row.Account || '').replace(/\s+/g, '');
+        if (accountCompact !== '예수금') return;
+
+        const delta = toAmount(row.Credit) - toAmount(row.Debit);
+        if (!delta) return;
+
+        totalYesu += delta;
+        const classified = classifyYesuDelta(row, salaryMonthMap);
+        Object.entries(classified).forEach(([name, amount]) => {
+            if (!amount) return;
+            result[name] = (result[name] || 0) + amount;
+        });
+    });
+
+    const allocated = Object.values(result).reduce((sum, amount) => sum + toAmount(amount), 0);
+    const remainder = totalYesu - allocated;
+    if (remainder) result['기타예수금'] = (result['기타예수금'] || 0) + remainder;
+    return result;
+}
+
+function resolveClosingBaseAccountName(name) {
+    if (name === '4대보험예수금' || name === '제세예수금' || name === '기타예수금') return '예수금';
+    return name;
+}
+
+function buildClosingCsvRows(payload) {
+    const rows = [];
+    const pushRows = (statement, section, type, list, amounts) => {
+        (list || []).forEach((row) => {
+            const amount = toAmount(amounts[row.name]);
+            if (!amount) return;
+
+            const baseAccount = resolveClosingBaseAccountName(row.name);
+            const compactName = String(row.name || '').replace(/\s+/g, '');
+            const compactBase = String(baseAccount || '').replace(/\s+/g, '');
+            const code = payload.codeMap[row.name]
+                || payload.codeMap[compactName]
+                || row.code
+                || payload.codeMap[baseAccount]
+                || payload.codeMap[compactBase]
+                || '-';
+
+            rows.push([
+                payload.selYear,
+                payload.rangeText,
+                statement,
+                section,
+                type,
+                row.standard || '',
+                row.name,
+                baseAccount,
+                code,
+                amount,
+                payload.startDate,
+                payload.endDate
+            ]);
+        });
+    };
+
+    pushRows('재무상태표', '자산', '자산', payload.assetList, payload.asset);
+    pushRows('재무상태표', '부채', '부채', payload.liabList, payload.liab);
+    pushRows('재무상태표', '자본', '자본', payload.equityList, payload.equity);
+    pushRows('손익계산서', '매출', '매출', payload.revList, payload.rev);
+    pushRows('손익계산서', '비용', '비용', payload.expList, payload.exp);
+    pushRows('손익계산서', '영업외수익', '영업외수익', payload.otherRevList, payload.otherRev);
+
+    rows.push([payload.selYear, payload.rangeText, '요약', '합계', '자산총계', '', '자산총계', '자산총계', '', toAmount(payload.tAsset), payload.startDate, payload.endDate]);
+    rows.push([payload.selYear, payload.rangeText, '요약', '합계', '부채총계', '', '부채총계', '부채총계', '', toAmount(payload.tLiab), payload.startDate, payload.endDate]);
+    rows.push([payload.selYear, payload.rangeText, '요약', '합계', '자본총계', '', '자본총계', '자본총계', '', toAmount(payload.tEquity), payload.startDate, payload.endDate]);
+    rows.push([payload.selYear, payload.rangeText, '요약', '합계', '당기순이익', '', '당기순이익', '당기순이익', '', toAmount(payload.netIncome), payload.startDate, payload.endDate]);
+    rows.push([payload.selYear, payload.rangeText, '요약', '합계', '부채자본합계', '', '부채/자본 총계', '부채/자본 총계', '', toAmount(payload.totalLiabEquity), payload.startDate, payload.endDate]);
+
+    return rows;
+}
+
+function downloadClosingCsv() {
+    if (!lastReportParts || !Array.isArray(lastReportParts.csvRows) || lastReportParts.csvRows.length === 0) {
+        return showAlert("알림", "먼저 결산 보고서를 생성하세요.");
+    }
+
+    const headers = lastReportParts.csvHeaders || [];
+    const rows = lastReportParts.csvRows || [];
+    const csvEscape = (val) => {
+        const str = String(val ?? '');
+        if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+        return str;
+    };
+    const csv = '\ufeff' + [headers.join(',')].concat(rows.map((row) => row.map(csvEscape).join(','))).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lastReportParts.csvFileName || 'closing_report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 async function printReport() {
     const selYear = Number(document.getElementById("reportYearSelect").value);
     const currYear = new Date().getFullYear();
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = formatAccountingKstDate(new Date());
     const startDate = `${selYear}-01-01`;
     const endDate = (selYear === currYear) ? todayStr : `${selYear}-12-31`;
+    const endYm = endDate.slice(0, 7);
     let rangeText = (selYear === currYear) ? `${startDate} ~ ${endDate} (가결산)` : `${startDate} ~ ${endDate} (확정)`;
 
-    const { data: periodData } = await _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate);
-    const { data: closingData } = await _supabase.from('ac_journal').select('*').lte('Date', endDate);
-    const { data: infoData } = await _supabase.from('ref_company_info').select('*');
-    const { data: masterData } = await _supabase.from('ac_master').select('Type, Standard, Item, Code');
-    const info = {}; if(infoData) infoData.forEach(i=>info[i.key]=i.value);
-    const { count } = await _supabase.from('ref_members').select('*', { count: 'exact', head: true });
-    const memberCount = count || 0;
+    const [
+        { data: periodData, error: periodError },
+        { data: closingData, error: closingError },
+        { data: infoData, error: infoError },
+        { data: masterData, error: masterError },
+        { data: salaryData, error: salaryError },
+        { count: memberCountRaw, error: memberError }
+    ] = await Promise.all([
+        _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate),
+        _supabase.from('ac_journal').select('*').lte('Date', endDate),
+        _supabase.from('ref_company_info').select('*'),
+        _supabase.from('ac_master').select('Type, Standard, Item, Code'),
+        _supabase.from('hr_salary').select('year_month,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total').lte('year_month', endYm),
+        _supabase.from('ref_members').select('*', { count: 'exact', head: true })
+    ]);
 
-    // 집계 변수
+    const fetchError = periodError || closingError || infoError || masterError || salaryError || memberError;
+    if (fetchError) return showAlert("오류", "결산 데이터를 불러오지 못했습니다: " + fetchError.message);
+
+    const info = {}; if(infoData) infoData.forEach(i=>info[i.key]=i.value);
+    const memberCount = memberCountRaw || 0;
+    const salaryMonthMap = buildSalaryDeductionMonthMap(salaryData || []);
+
     let asset={}, liab={}, equity={}, rev={}, exp={}, otherRev={};
     let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0, tOtherRev=0;
-    let capital = 0; 
-    
-    // 법인세 조정용
+    let capital = 0;
     let taxAdjust = { fines: 0, noProof: 0, donations: 0, entertain: 0 };
-    
-    // [신규] 잉여금 처분 집계용
-    let surplus = { legal: 0, voluntary: 0, dividend: 0 }; 
+    let surplus = { legal: 0, voluntary: 0, dividend: 0 };
     const accountAliasByCompact = {
         '부가세대급금': '부가세대급금',
         '부가세예수금': '부가세예수금',
@@ -4191,7 +5137,7 @@ async function printReport() {
     function normalizeTypeByAccount(type, account) {
         if (account === '부가세대급금' || account === '보통예금' || account === '현금' || account === '선급금' || account === '미수금') return '자산';
         if (account === '부가세예수금') return '부채';
-        if (account === '잡이익') return '매출';
+        if (account === '잡이익') return '영업외수익';
         if (account === '잡손실') return '비용';
         return type || '';
     }
@@ -4211,6 +5157,19 @@ async function printReport() {
             if(account === '출자금') capital += valCr;
         }
     });
+
+    const yesuBreakdown = buildYesuBreakdownMap(closingData || [], salaryMonthMap);
+    const rawYesuBalance = liab['예수금'] || 0;
+    if (Object.keys(yesuBreakdown).length > 0) {
+        delete liab['예수금'];
+        Object.entries(yesuBreakdown).forEach(([name, amount]) => {
+            if (!amount) return;
+            liab[name] = (liab[name] || 0) + amount;
+        });
+        const rebuiltYesuBalance = Object.values(yesuBreakdown).reduce((sum, amount) => sum + toAmount(amount), 0);
+        const remainder = rawYesuBalance - rebuiltYesuBalance;
+        if (remainder) liab['기타예수금'] = (liab['기타예수금'] || 0) + remainder;
+    }
 
     if (periodData) periodData.forEach(r => {
         const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
@@ -4236,16 +5195,11 @@ async function printReport() {
     });
 
     const operatingIncome = tRev - tExp;
-    const netIncome = operatingIncome + tOtherRev; 
+    const netIncome = operatingIncome + tOtherRev;
     const totalLiabEquity = tLiab + tEquity + netIncome;
-    
-    // 법인세 예상액
     const taxBase = netIncome + taxAdjust.fines;
     const estTax = Math.floor(taxBase * 0.09);
-
-    // 잉여금 처분 계산
-    // (처분 전 잉여금 = 당기순이익 + 전기이월) *지금은 전기이월 0 가정
-    const totalSurplus = netIncome; 
+    const totalSurplus = netIncome;
     const totalAppropriation = surplus.legal + surplus.voluntary;
     const carriedForward = totalSurplus - totalAppropriation;
     const vatReceivable = asset['부가세대급금'] || 0;
@@ -4278,6 +5232,9 @@ async function printReport() {
     if (!codeMap['잡손실']) codeMap['잡손실'] = codeMap['기타비용'] || '960';
     if (!codeMap['부가세대급금']) codeMap['부가세대급금'] = codeMap['매입세액'] || '136';
     if (!codeMap['부가세예수금']) codeMap['부가세예수금'] = codeMap['매출세액'] || '255';
+    if (!codeMap['4대보험예수금']) codeMap['4대보험예수금'] = codeMap['4대보험예수'] || codeMap['예수금'] || '254';
+    if (!codeMap['제세예수금']) codeMap['제세예수금'] = codeMap['예수금'] || '254';
+    if (!codeMap['기타예수금']) codeMap['기타예수금'] = codeMap['예수금'] || '254';
 
     const toStandard = (m) => (m.Standard || m.standard || "");
     const toCode = (m) => (m.Code || m.code || m.Standard || "");
@@ -4321,6 +5278,9 @@ async function printReport() {
     const revList = buildOrdered('매출', rev);
     const expList = buildOrdered('비용', exp);
     const otherRevList = buildOrdered('영업외수익', otherRev);
+    const yesuNoteHtml = (liab['4대보험예수금'] || liab['제세예수금'] || liab['기타예수금'])
+        ? `<div class="small text-muted mt-2">* 예수금은 4대보험/제세/기타 항목으로 분리 표시했습니다.</div>`
+        : '';
 
     const e = escapeHtml;
     const renderLines = (list, amounts) => list.map(row => {
@@ -4340,7 +5300,7 @@ async function printReport() {
     const bsHtml = `
         <div class="rpt-sec">1. 재무상태표 (Balance Sheet)</div>
         <div style="text-align:right; font-size:11px;">(단위: 원)</div>
-        <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${renderLines(assetList, asset)}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${renderLines(liabList, liab)}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${renderLines(equityList, equity)}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
+        <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${renderLines(assetList, asset)}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${renderLines(liabList, liab)}${yesuNoteHtml}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${renderLines(equityList, equity)}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
     `;
 
     const plHtml = `
@@ -4422,7 +5382,42 @@ async function printReport() {
         </div>
     `;
 
-    lastReportParts = { headerHtml, bsHtml, plHtml, surplusHtml, taxHtml };
+    const csvHeaders = ['year','range_text','statement','section','type','standard','display_account','base_account','code','amount','period_start','period_end'];
+    const csvRows = buildClosingCsvRows({
+        selYear,
+        rangeText,
+        startDate,
+        endDate,
+        codeMap,
+        assetList,
+        liabList,
+        equityList,
+        revList,
+        expList,
+        otherRevList,
+        asset,
+        liab,
+        equity,
+        rev,
+        exp,
+        otherRev,
+        tAsset,
+        tLiab,
+        tEquity,
+        netIncome,
+        totalLiabEquity
+    });
+
+    lastReportParts = {
+        headerHtml,
+        bsHtml,
+        plHtml,
+        surplusHtml,
+        taxHtml,
+        csvHeaders,
+        csvRows,
+        csvFileName: `closing_report_${selYear}.csv`
+    };
     document.getElementById("reportContent").innerHTML = reportHtml;
     reportModal.show();
 }
@@ -4456,23 +5451,192 @@ function realPrint() {
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); w.close(); }, 500);
 }
+
+function renderInsurancePendingSummary(prepaid, payable) {
+    const valueEl = document.getElementById("txtPendingVal");
+    const detailEl = document.getElementById("txtPendingDetail");
+    if (!valueEl || !detailEl) return;
+
+    const safePrepaid = Number(prepaid || 0);
+    const safePayable = Number(payable || 0);
+    const net = safePrepaid - safePayable;
+
+    valueEl.className = 'fw-bold fs-6';
+    if (net > 0) {
+        valueEl.classList.add('text-warning');
+        valueEl.innerText = `선급 ${net.toLocaleString()}원`;
+    } else if (net < 0) {
+        valueEl.classList.add('text-danger');
+        valueEl.innerText = `미지급 ${Math.abs(net).toLocaleString()}원`;
+    } else {
+        valueEl.classList.add('text-secondary');
+        valueEl.innerText = '0원';
+    }
+
+    detailEl.innerText = `(선급금: ${safePrepaid.toLocaleString()} / 미지급금: ${safePayable.toLocaleString()})`;
+}
+
+async function getInsurancePendingSummary() {
+    const { data, error } = await _supabase
+        .from('ac_journal')
+        .select('Type,Account,Debit,Credit')
+        .in('Account', ['선급금', '미지급금'])
+        .ilike('Description', `${INSURANCE_PENDING_TAG}%`);
+
+    if (error) return { error, prepaid: 0, payable: 0, net: 0 };
+
+    let prepaid = 0;
+    let payable = 0;
+    (data || []).forEach((row) => {
+        const debit = Number(row.Debit || 0);
+        const credit = Number(row.Credit || 0);
+        if (row.Type === '자산' && row.Account === '선급금') prepaid += (debit - credit);
+        if (row.Type === '부채' && row.Account === '미지급금') payable += (credit - debit);
+    });
+
+    return {
+        error: null,
+        prepaid,
+        payable,
+        net: prepaid - payable
+    };
+}
+
+async function refreshInsurancePendingSummary() {
+    const valueEl = document.getElementById("txtPendingVal");
+    const detailEl = document.getElementById("txtPendingDetail");
+    if (!valueEl || !detailEl) return;
+
+    valueEl.className = 'fw-bold fs-6 text-secondary';
+    valueEl.innerText = '조회 중...';
+    detailEl.innerText = '-';
+
+    const summary = await getInsurancePendingSummary();
+    if (summary.error) {
+        valueEl.className = 'fw-bold fs-6 text-secondary';
+        valueEl.innerText = '조회 실패';
+        detailEl.innerText = summary.error.message || '-';
+        return;
+    }
+
+    renderInsurancePendingSummary(summary.prepaid, summary.payable);
+}
+
+async function applyInsurancePendingSettlement() {
+    const summary = await getInsurancePendingSummary();
+    if (summary.error) return showAlert('오류', '정산대기 조회 실패: ' + summary.error.message);
+
+    const prepaid = Number(summary.prepaid || 0);
+    const payable = Number(summary.payable || 0);
+    if (!(prepaid > 0 || payable > 0)) return showAlert('알림', '정산할 4대보험 정산대기가 없습니다.');
+
+    const fDate = document.getElementById('dateField')?.value || '';
+    if (!fDate) return showAlert('오류', '전표일자를 입력하세요.');
+    const project = document.getElementById('projectSelect')?.value || '본사';
+    const writer = myInfo ? myInfo.emp_name : 'WebUser';
+    const entries = [];
+    const offsetAmount = Math.min(prepaid, payable);
+
+    if (offsetAmount > 0) {
+        entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: `${INSURANCE_PENDING_TAG} 일괄정산 상계`, Debit: offsetAmount, Credit: 0, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+        entries.push({ Date: fDate, Type: '자산', Account: '선급금', Description: `${INSURANCE_PENDING_TAG} 일괄정산 상계`, Debit: 0, Credit: offsetAmount, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+    }
+
+    const prepaidRemainder = prepaid - offsetAmount;
+    const payableRemainder = payable - offsetAmount;
+
+    if (prepaidRemainder > 0) {
+        entries.push({ Date: fDate, Type: '비용', Account: '잡손실', Description: `${INSURANCE_PENDING_TAG} 일괄정산 손실반영`, Debit: prepaidRemainder, Credit: 0, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+        entries.push({ Date: fDate, Type: '자산', Account: '선급금', Description: `${INSURANCE_PENDING_TAG} 일괄정산 손실반영`, Debit: 0, Credit: prepaidRemainder, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+    }
+
+    if (payableRemainder > 0) {
+        entries.push({ Date: fDate, Type: '부채', Account: '미지급금', Description: `${INSURANCE_PENDING_TAG} 일괄정산 이익반영`, Debit: payableRemainder, Credit: 0, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+        entries.push({ Date: fDate, Type: '매출', Account: '잡이익', Description: `${INSURANCE_PENDING_TAG} 일괄정산 이익반영`, Debit: 0, Credit: payableRemainder, Project: project, Operator: writer, Evidence_Type: '내부기표' });
+    }
+
+    if (!entries.length) return showAlert('알림', '정산할 잔액이 없습니다.');
+
+    applyTransId(entries);
+    const { error } = await _supabase.from('ac_journal').insert(entries);
+    if (error) return showAlert('오류', '일괄정산 저장 실패: ' + error.message);
+
+    await logAudit('accounting.insurance_pending_settle', null, '4대보험 정산대기 일괄정산', {
+        prepaid,
+        payable,
+        offset: offsetAmount,
+        prepaid_remainder: prepaidRemainder,
+        payable_remainder: payableRemainder,
+        entries: entries.length,
+        project
+    });
+
+    await refreshInsurancePendingSummary();
+    await refreshDashboard();
+    showAlert('완료', `4대보험 정산대기 일괄정산이 완료되었습니다.
+- 상계: ${offsetAmount.toLocaleString()}원
+- 손실반영: ${prepaidRemainder.toLocaleString()}원
+- 이익반영: ${payableRemainder.toLocaleString()}원`);
+}
+
+async function runInsurancePendingSettlement() {
+    if (!canPerform('accounting.edit')) return showAlert('수정 권한이 없습니다.');
+    const fDate = document.getElementById('dateField')?.value || '';
+    if (!fDate) return showAlert('오류', '전표일자를 입력하세요.');
+
+    const summary = await getInsurancePendingSummary();
+    if (summary.error) return showAlert('오류', '정산대기 조회 실패: ' + summary.error.message);
+    if (!(summary.prepaid > 0 || summary.payable > 0)) return showAlert('알림', '정산할 4대보험 정산대기가 없습니다.');
+
+    const msg = [
+        '누적된 4대보험 정산대기를 일괄정산합니다.',
+        `- 선급금: ${Number(summary.prepaid || 0).toLocaleString()}원`,
+        `- 미지급금: ${Number(summary.payable || 0).toLocaleString()}원`,
+        `- 순액: ${Number(summary.net || 0).toLocaleString()}원`,
+        '',
+        '먼저 선급금/미지급금을 서로 상계하고, 남는 금액만 잡손실/잡이익으로 반영합니다.'
+    ].join('\n');
+
+    const dateWarning = getDateGuardMessage(fDate);
+    if (dateWarning) {
+        return showConfirm('날짜 확인', `${dateWarning}\n\n${msg}`, async () => { await applyInsurancePendingSettlement(); });
+    }
+    showConfirm('정산대기 일괄정산', msg, async () => { await applyInsurancePendingSettlement(); });
+}
+
   // [신규] 4대보험 납부 시 장부상 부채(직원분+회사분) 조회 함수
 async function fetchLiabilitySum() {
-    const ym = document.getElementById("payTargetMonth").value;
-    if(!ym) return showAlert("알림", "귀속월을 선택하세요.");
+    const startYm = normalizeAccountingYm(document.getElementById("payTargetMonthStart")?.value || document.getElementById("payTargetMonth")?.value || '');
+    const endYm = normalizeAccountingYm(document.getElementById("payTargetMonthEnd")?.value || startYm);
+    if(!startYm) return showAlert("알림", "귀속 시작월을 선택하세요.");
 
-    // hr_salary에서 해당 월의 [직원공제총액]과 [회사부담총액] 조회
+    const targetMonths = listAccountingMonthRange(startYm, endYm);
+    if (!targetMonths.length) return showAlert("알림", "귀속월 형식을 확인하세요.");
+    const periodLabel = targetMonths.length === 1
+        ? targetMonths[0]
+        : `${targetMonths[0]}~${targetMonths[targetMonths.length - 1]}`;
+
+    // hr_salary에서 선택 기간의 [직원공제총액]과 [회사부담총액] 조회
     const { data, error } = await _supabase.from('hr_salary')
-        .select('ded_total, co_total')
-        .eq('year_month', ym);
+        .select('year_month,emp_id,pay_total,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total,co_total')
+        .in('year_month', targetMonths);
     
     if(error) return showAlert("오류", "조회 실패: " + error.message);
-    if(!data || data.length === 0) return showAlert("알림", `${ym}월 급여대장 데이터가 없습니다. 급여 연동을 먼저 진행했는지 확인하세요.`);
+    if(!data || data.length === 0) return showAlert("알림", `${periodLabel} 급여대장 데이터가 없습니다. 급여 연동을 먼저 진행했는지 확인하세요.`);
+
+    const adjustedRows = [];
+    for (const ym of targetMonths) {
+        const monthRows = (data || []).filter((row) => String(row.year_month || '') === ym);
+        if (!monthRows.length) continue;
+        const monthAdjustedRows = await applyDurunuriAdjustmentsByMonth(monthRows, ym);
+        adjustedRows.push(...monthAdjustedRows);
+    }
+    const rowsForSum = adjustedRows.length > 0 ? adjustedRows : data;
 
     let totalYesu = 0;      // 예수금 (직원부담분)
     let totalMigigeub = 0;  // 미지급비용 (회사부담분)
 
-    data.forEach(row => {
+    rowsForSum.forEach(row => {
         totalYesu += Number(row.ded_total || 0);
         totalMigigeub += Number(row.co_total || 0);
     });
@@ -4483,7 +5647,7 @@ async function fetchLiabilitySum() {
 
     // 화면 표시
     document.getElementById("txtBookVal").innerText = totalBook.toLocaleString() + "원";
-    document.getElementById("txtDetailVal").innerText = `(예수금: ${totalYesu.toLocaleString()} + 미지급비용: ${totalMigigeub.toLocaleString()})`;
+    document.getElementById("txtDetailVal").innerText = `[${periodLabel}] (예수금: ${totalYesu.toLocaleString()} + 미지급비용: ${totalMigigeub.toLocaleString()})`;
     
     // 숨겨진 필드에 값 저장 (저장 시 사용)
     document.getElementById("hiddenBookVal").value = totalBook;
@@ -4493,7 +5657,7 @@ async function fetchLiabilitySum() {
     // 편의상 입력창에 장부금액을 넣어줌 (사용자가 고지서 금액으로 수정 가능)
     document.getElementById("inputAmount").value = totalBook;
 
-    showAlert("조회 성공", "장부상 금액을 불러왔습니다.\n실제 고지서 금액과 다르다면 '금액' 란을 수정하세요.");
+    showAlert("조회 성공", `[${periodLabel}] 장부상 금액을 불러왔습니다.\n실제 고지서 금액과 다르다면 '금액' 란을 수정하세요.`);
 }
 </script>
 </body>

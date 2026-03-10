@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.22 | Change: 2026-02-27 - Delegation RPC fallback + userModal focus guard. -->
+<!-- Version: v1.1.31 | Change: 2026-03-10 - 완료 문서 제목 클릭 시 결재 내용을 모달로 조회하도록 개선. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.22 | approval.html');</script>
+  <script>console.log('[Version] v1.1.31 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script src="payroll_durunuri_module.js"></script>
   <script src="salary_ledger_module.js"></script>
   <script src="leave_ledger.js"></script>
   
@@ -407,7 +408,7 @@
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header py-2"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-4" id="confirmBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="confirmOkBtn">확인</button></div></div></div></div>
 <div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
-<div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">📄 관련 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
+<div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="relViewModalTitle">📄 문서 내용</h6><div><button class="btn btn-sm btn-outline-primary me-2" onclick="openRelNewTab()">↗ 새 창으로 보기</button><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
 <div class="modal fade" id="physicalRejectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 실물결재 반려</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">반려 사유</label><textarea id="physicalRejectReason" class="form-control" rows="5" placeholder="반려 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-danger btn-sm" id="btnPhysicalRejectSubmit" onclick="submitPhysicalReject()">반려 처리</button></div></div></div></div>
 <div class="modal fade" id="cancelDraftModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">🗑️ 상신 취소</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">취소 사유</label><textarea id="cancelDraftReason" class="form-control" rows="4" placeholder="취소 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button><button class="btn btn-danger btn-sm" id="btnCancelDraftSubmit" onclick="submitDraftCancel()">취소 확정</button></div></div></div></div>
 <div class="modal fade" id="appDescPreviewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1" id="appDescPreviewTitle">본문 미리보기</h6><div class="small text-muted" id="appDescPreviewMeta">HTML 렌더링 결과</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="appDescPreviewBody" class="html-preview-box"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
@@ -452,6 +453,7 @@ let delegationRpcWarned = false;
 let jeongyeolLineLocked = false;
 let savedApproversBeforeJeongyeol = [];
 let manualJeongyeolSelected = false;
+let manualJeongyeolToggleTouched = false;
 let jeongyeolLockReasonLabel = '';
 const JEONGYEOL_AUTO_EXPENSE_LIMIT = 300000;
 const JEONGYEOL_MONTHLY_DOC_TYPE = '전결월간보고';
@@ -564,6 +566,12 @@ function getCurrentDraftAmount() {
     return raw;
 }
 
+function toPositiveDocId(value) {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) return null;
+    return parsed;
+}
+
 function getUserByEmpId(empId) {
     const key = String(empId || '').trim();
     if (!key) return null;
@@ -585,10 +593,9 @@ function isSecretaryGeneralByEmpId(empId) {
     return isSecretaryGeneralUserInfo(user);
 }
 
-function getJeongyeolDecision(mainType, amountValue, options = {}) {
+function getJeongyeolAutoDecision(mainType, amountValue, options = {}) {
     const type = String(mainType || '').trim();
     const amount = Number(amountValue || 0);
-    const manualToggle = !!manualJeongyeolSelected;
     const drafterEmpId = String(options?.drafterEmpId || '').trim() || String(myInfo?.emp_id || '').trim();
     const drafterIsSecretary = isSecretaryGeneralByEmpId(drafterEmpId);
 
@@ -618,6 +625,21 @@ function getJeongyeolDecision(mainType, amountValue, options = {}) {
             ruleLabel: `30만원 이하 지출결의 자동 전결 (${formatMoney(amount)}원)`,
             targetApprover: 'SECRETARY'
         };
+    }
+    return null;
+}
+
+function getJeongyeolDecision(mainType, amountValue, options = {}) {
+    const manualToggle = !!manualJeongyeolSelected;
+    const autoDecision = getJeongyeolAutoDecision(mainType, amountValue, options);
+    if (autoDecision) {
+        if (isCurrentUserSecretaryGeneral()) {
+            const useAuto = manualJeongyeolToggleTouched ? manualToggle : true;
+            return useAuto
+                ? autoDecision
+                : { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' };
+        }
+        return autoDecision;
     }
     if (manualToggle) {
         return {
@@ -679,21 +701,30 @@ function updateJeongyeolUi() {
     const toggleEl = document.getElementById('chkSecretaryJeongyeol');
     const mainType = getCurrentDraftMainType();
     const amount = getCurrentDraftAmount();
-    const decision = getJeongyeolDecision(mainType, amount, { drafterEmpId: getCurrentDraftDrafterEmpId() });
-    const isAuto = decision.mode === 'AUTO';
+    const options = { drafterEmpId: getCurrentDraftDrafterEmpId() };
+    const autoDecision = getJeongyeolAutoDecision(mainType, amount, options);
+    const decision = getJeongyeolDecision(mainType, amount, options);
+    const autoRuleMatched = !!autoDecision;
+    const canSecretaryControlAuto = autoRuleMatched && isCurrentUserSecretaryGeneral();
 
     if (toggleEl) {
-        if (isAuto) {
+        if (autoRuleMatched && !canSecretaryControlAuto) {
             toggleEl.checked = true;
             toggleEl.disabled = true;
         } else {
             toggleEl.disabled = false;
-            toggleEl.checked = manualJeongyeolSelected;
+            if (canSecretaryControlAuto && !manualJeongyeolToggleTouched) {
+                toggleEl.checked = true;
+            } else {
+                toggleEl.checked = manualJeongyeolSelected;
+            }
         }
     }
     if (hintEl) {
         if (decision.applied) {
             hintEl.textContent = `적용중: ${decision.ruleLabel}`;
+        } else if (canSecretaryControlAuto && autoDecision?.ruleLabel) {
+            hintEl.textContent = `자동 전결 가능: ${autoDecision.ruleLabel}`;
         } else {
             hintEl.textContent = '자동 전결 규정(30만원 이하 지출결의/근태)을 우선 적용합니다.';
         }
@@ -705,6 +736,7 @@ function handleJeongyeolToggleChanged() {
     const toggleEl = document.getElementById('chkSecretaryJeongyeol');
     if (toggleEl && !toggleEl.disabled) {
         manualJeongyeolSelected = !!toggleEl.checked;
+        manualJeongyeolToggleTouched = true;
     }
     updateJeongyeolUi();
 }
@@ -956,6 +988,14 @@ async function fetchSalaryLedgerRowsByMonth(ym) {
         ded_total: Math.round(Number(row.ded_total || 0)),
         net_pay: Math.round(Number(row.net_pay || 0))
     }));
+    if (window.PayrollDurunuriModule) {
+        try {
+            const supportMap = await window.PayrollDurunuriModule.getSupportMap(_supabase, ym);
+            return { rows: window.PayrollDurunuriModule.adjustSalaryRows(rows, supportMap), error: null };
+        } catch (durErr) {
+            console.warn('Durunuri support load failed:', durErr?.message || durErr);
+        }
+    }
     return { rows, error: null };
 }
 
@@ -1520,19 +1560,24 @@ function syncDelegationAvailabilityUi() {
     openBtn.title = '위임 기능 미설치';
 }
 
+function moveFocusOutsideModal(modalEl, fallbackEl) {
+    if (!modalEl) return;
+    const active = document.activeElement;
+    if (!active || !modalEl.contains(active)) return;
+    if (typeof active.blur === 'function') active.blur();
+    const fallback = fallbackEl || document.getElementById('tab1');
+    if (fallback && typeof fallback.focus === 'function') {
+        try { fallback.focus({ preventScroll: true }); }
+        catch (_) { fallback.focus(); }
+    }
+}
+
 function bindModalFocusGuard(modalEl, fallbackEl) {
     if (!modalEl || modalEl.dataset.focusGuardBound === '1') return;
     modalEl.dataset.focusGuardBound = '1';
-    modalEl.addEventListener('hide.bs.modal', () => {
-        const active = document.activeElement;
-        if (!active || !modalEl.contains(active)) return;
-        if (typeof active.blur === 'function') active.blur();
-        const fallback = fallbackEl || document.getElementById('tab1');
-        if (fallback && typeof fallback.focus === 'function') {
-            try { fallback.focus({ preventScroll: true }); }
-            catch (_) { fallback.focus(); }
-        }
-    });
+    const guard = () => moveFocusOutsideModal(modalEl, fallbackEl);
+    modalEl.addEventListener('hide.bs.modal', guard, true);
+    modalEl.addEventListener('hidden.bs.modal', guard, true);
 }
 
 async function loadDelegationContext(options = {}) {
@@ -1724,6 +1769,9 @@ window.onload = async function() {
     bindModalFocusGuard(userModalEl, document.getElementById('tab1'));
     bindModalFocusGuard(alertModalEl, document.getElementById('tab1'));
     bindModalFocusGuard(confirmModalEl, document.getElementById('tab1'));
+    document.querySelectorAll('.modal').forEach((modalEl) => {
+        bindModalFocusGuard(modalEl, document.getElementById('tab1'));
+    });
     syncDelegationAvailabilityUi();
     
     const stored = localStorage.getItem('erp_user');
@@ -1799,6 +1847,7 @@ window.onload = async function() {
     const jeongyeolToggleEl = document.getElementById('chkSecretaryJeongyeol');
     if (jeongyeolToggleEl) {
         manualJeongyeolSelected = false;
+        manualJeongyeolToggleTouched = false;
         jeongyeolToggleEl.checked = false;
     }
     handleCategoryChange(); // UI 초기화
@@ -1919,7 +1968,11 @@ function handleExpenseSubTypeChange() {
     if (amountLabel) amountLabel.innerText = "실지급 합계 (원)";
     if (amountInput) amountInput.placeholder = "급여대장 불러오기 시 자동 입력";
     const currentDesc = getApprovalEditorContent();
-    if (desc && (!currentDesc.trim() || currentDesc.includes("지출하고자 하오니 승인하여"))) {
+    if (
+        !currentDesc.trim()
+        || currentDesc.includes("지출하고자 하오니 승인하여")
+        || currentDesc.includes("지출결의를 상신하오니 승인하여")
+    ) {
         const ymLabel = formatYearMonthLabel(monthInput?.value || '');
         setApprovalEditorContent(`${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.`);
     }
@@ -2215,8 +2268,14 @@ function handleCategoryChange() {
         } else {
             resetSalaryExpenseUi();
         }
-        const currentDesc = getApprovalEditorContent();
-        if(!currentDesc) setApprovalEditorContent("위와 같이 지출하고자 하오니 승인하여 주시기 바랍니다.");
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (
+            !currentDesc
+            || currentDesc.includes("품의하오니 승인하여")
+            || currentDesc.includes("지출하고자 하오니 승인하여")
+        ) {
+            setApprovalEditorContent("아래와 같이 지출결의를 상신하오니 승인하여 주시기 바랍니다.");
+        }
     }
     else if (type === '공문') {
         divNoticeReceiver.classList.remove("hidden");
@@ -2563,6 +2622,7 @@ async function buildJeongyeolMonthlyDraft() {
 
     const jeongyeolToggleEl = document.getElementById('chkSecretaryJeongyeol');
     manualJeongyeolSelected = false;
+    manualJeongyeolToggleTouched = false;
     if (jeongyeolToggleEl) jeongyeolToggleEl.checked = false;
     updateJeongyeolUi();
 
@@ -3472,6 +3532,12 @@ function renderDocs(target, list, isTodo) {
             ? `<span class="badge bg-secondary me-1">전결-${escapeHtml(formatJeongyeolModeLabel(jeongyeolMeta.mode))}</span>`
             : '';
         const safeTitle = escapeHtml(doc.title);
+        const titleDocId = (!isTodo && ['완료', '실물결재완료'].includes(String(doc.status || '')))
+            ? toPositiveDocId(doc.id)
+            : null;
+        const titleHtml = titleDocId
+            ? `<h6 class="fw-bold mb-1"><button type="button" class="btn btn-link p-0 fw-bold text-start align-baseline text-decoration-underline text-dark" title="결재 내용 보기" onclick="openRelView(${titleDocId})">${safeTitle}</button></h6>`
+            : `<h6 class="fw-bold mb-1">${safeTitle}</h6>`;
         const safeDate = escapeHtml(formatApprovalKstDateISO(doc.created_at, '-'));
         const lineHtml = approvalLine.map(s => {
             const status = s.status || '';
@@ -3510,8 +3576,8 @@ function renderDocs(target, list, isTodo) {
         }
         
         let relBtn = "";
-        const relId = Number(doc.related_doc_id);
-        if (Number.isFinite(relId)) {
+        const relId = toPositiveDocId(doc.related_doc_id);
+        if (relId) {
             relBtn = `<button class="btn btn-sm btn-outline-info ms-2" style="font-size: 0.75rem;" onclick="openRelView(${relId})">🔗 근거문서 보기</button>`;
         }
 
@@ -3587,7 +3653,7 @@ function renderDocs(target, list, isTodo) {
             }
         }
         
-        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${safeDocType}</span>${jeongyeolBadge}${relBtn}</div><small class="text-muted">${safeDate}${ageBadge}</small></div><h6 class="fw-bold">${safeTitle}</h6><div class="small mb-2">${lineHtml}</div>${reasonHtml}${btnHtml}</div>`;
+        target.innerHTML += `<div class="list-group-item shadow-sm mb-3 border-0 p-3"><div class="d-flex justify-content-between mb-2"><div><span class="badge bg-primary me-1">${safeDocType}</span>${jeongyeolBadge}${relBtn}</div><small class="text-muted">${safeDate}${ageBadge}</small></div>${titleHtml}<div class="small mb-2">${lineHtml}</div>${reasonHtml}${btnHtml}</div>`;
     });
 }
 function updateFileList() {
@@ -3631,6 +3697,11 @@ function buildPhysicalPrintHtml(doc) {
     const safeDocHeading = escapeHtml(docHeading);
     const safeSectionHeading = escapeHtml(sectionHeading);
     const safeDate = escapeHtml(formatApprovalKstDateISO(doc.created_at, ''));
+    const relId = toPositiveDocId(doc.related_doc_id);
+    const safeRelDocId = relId ? String(relId) : '';
+    const relatedDoc = doc?._related_doc && typeof doc._related_doc === 'object'
+        ? doc._related_doc
+        : null;
     const amountDisplay = getApprovalAmountDisplayPayload(doc);
     const safeAmountMain = escapeHtml(amountDisplay.mainText || '');
     const safeAmountSub = amountDisplay.subText ? escapeHtml(amountDisplay.subText) : '';
@@ -3719,6 +3790,49 @@ function buildPhysicalPrintHtml(doc) {
     const emptyText = '<span class="text-muted-light">-</span>';
     const safePrintedAt = escapeHtml(formatApprovalKstDateISO(new Date().toISOString(), ''));
     const pageRule = 'A4 portrait';
+    const relatedDocType = String(relatedDoc?.doc_type || '');
+    const relatedDocIsNotice = relatedDocType.startsWith('공문');
+    const relatedDocAllowHtml = relatedDocType.startsWith('일반품의') || relatedDocIsNotice;
+    const relatedDocNoticeParts = relatedDocIsNotice
+        ? splitNoticeApprovalContent(relatedDoc?.content || '')
+        : null;
+    const relatedDocContentSource = relatedDocIsNotice
+        ? String(relatedDocNoticeParts?.publicBody || '')
+        : String(relatedDoc?.content || '');
+    const relatedDocRenderedContent = relatedDoc
+        ? (relatedDocAllowHtml
+            ? renderApprovalContent(relatedDocContentSource, true)
+            : escapeHtml(relatedDocContentSource).replace(/\n/g, '<br>'))
+        : '';
+    const relatedDocAmountDisplay = relatedDoc ? getApprovalAmountDisplayPayload(relatedDoc) : null;
+    const safeRelatedDocTitle = escapeHtml(String(relatedDoc?.title || '연동 품의서'));
+    const relatedMetaItems = [];
+    if (relatedDoc?.doc_no) relatedMetaItems.push(`문서번호 ${escapeHtml(String(relatedDoc.doc_no))}`);
+    if (relatedDocType) relatedMetaItems.push(`유형 ${escapeHtml(relatedDocType)}`);
+    if (relatedDoc?.drafter_name) relatedMetaItems.push(`작성자 ${escapeHtml(String(relatedDoc.drafter_name))}`);
+    if (relatedDoc?.created_at) relatedMetaItems.push(`기안일 ${escapeHtml(formatApprovalKstDateISO(relatedDoc.created_at, ''))}`);
+    const relatedMetaHtml = relatedMetaItems.length > 0
+        ? `<div class="small text-muted mb-2">${relatedMetaItems.join(' | ')}</div>`
+        : '';
+    const relatedAmountHtml = relatedDocAmountDisplay
+        ? `<div class="small text-end fw-bold mt-2">${escapeHtml(relatedDocAmountDisplay.labelText || '금액')}: ${escapeHtml(relatedDocAmountDisplay.mainText || '-')}</div>`
+        : '';
+    const relatedDocSectionHtml = relatedDoc
+        ? `
+            <div class="section-title">집행 근거 (연동 품의서)</div>
+            <div class="content-box" style="min-height: 0;">
+              <div class="fw-bold mb-1">${safeRelatedDocTitle}</div>
+              ${relatedMetaHtml}
+              <div>${relatedDocRenderedContent || emptyText}</div>
+              ${relatedAmountHtml}
+            </div>
+          `
+        : (safeRelDocId
+            ? `
+                <div class="section-title">집행 근거 (연동 품의서)</div>
+                <div class="content-box" style="min-height: 0;">연동된 품의서(ID: ${escapeHtml(safeRelDocId)})를 불러오지 못했습니다.</div>
+              `
+            : '');
 
     return `
       <html>
@@ -3853,6 +3967,7 @@ function buildPhysicalPrintHtml(doc) {
             ${noticeMemoSectionHtml}
             <div class="section-title">${safeSectionHeading}</div>
             <div class="content-box">${renderedContent || emptyText}</div>
+            ${relatedDocSectionHtml}
             ${attachmentSectionHtml}
             <div class="footer-row">
               <span>출력일시: ${safePrintedAt || emptyText}</span>
@@ -3891,6 +4006,18 @@ async function printPhysicalDoc(docId) {
             .eq('emp_id', doc.drafter_id)
             .maybeSingle();
         doc._drafter_is_secretary = !!(drafterEmp?.position || '').includes('사무국장');
+    }
+
+    const relatedDocId = toPositiveDocId(doc.related_doc_id);
+    if (relatedDocId) {
+        const { data: relatedDoc, error: relatedErr } = await _supabase
+            .from('ref_approval')
+            .select('*')
+            .eq('id', relatedDocId)
+            .maybeSingle();
+        if (!relatedErr && relatedDoc) {
+            doc._related_doc = relatedDoc;
+        }
     }
 
     const win = window.open('', '_blank');
@@ -4062,7 +4189,7 @@ function openRelSearch() {
     setTimeout(()=> document.getElementById("relKeyword").focus(), 500);
 }
 
-// 2. 검색 실행 (완료된 '일반품의' & 같은 부서)
+// 2. 검색 실행 (완료/실물결재완료된 '일반품의' & 같은 부서)
 async function runRelSearch() {
     const key = document.getElementById("relKeyword").value.trim();
     const listEl = document.getElementById("relResultList");
@@ -4071,10 +4198,10 @@ async function runRelSearch() {
     // 내 부서 찾기 (ref_employees 이용 안 하고 allUsers에서 찾음)
     const myDept = myInfo.department;
 
-    // 쿼리: status=완료, doc_type=일반품의
+    // 쿼리: status in (완료, 실물결재완료), doc_type=일반품의
     let query = _supabase.from('ref_approval')
         .select('*')
-        .eq('status', '완료')
+        .in('status', ['완료', '실물결재완료'])
         .eq('doc_type', '일반품의') // 품의서만 검색
         .order('created_at', {ascending: false})
         .limit(20);
@@ -4100,7 +4227,7 @@ async function runRelSearch() {
     });
 
     if (filtered.length === 0) {
-        listEl.innerHTML = '<div class="p-3 text-center text-muted">검색 결과가 없습니다. (완료된 품의서만 조회됨)</div>';
+        listEl.innerHTML = '<div class="p-3 text-center text-muted">검색 결과가 없습니다. (완료/실물결재완료 품의서만 조회됨)</div>';
         return;
     }
 
@@ -4138,12 +4265,19 @@ function selectRelDoc(doc) {
 
 // 4. 관련 문서 내용 보기 (모달)
 async function openRelView(docId) {
-    currentViewingDocId = docId;
+    const safeDocId = toPositiveDocId(docId);
+    if (!safeDocId) {
+        showAlert("문서를 불러올 수 없습니다.");
+        return;
+    }
+    currentViewingDocId = safeDocId;
     const contentEl = document.getElementById("relViewContent");
+    const modalTitleEl = document.getElementById("relViewModalTitle");
+    if (modalTitleEl) modalTitleEl.textContent = "📄 문서 내용";
     contentEl.textContent = "Loading...";
     relViewModal.show();
 
-    const { data, error } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
+    const { data, error } = await _supabase.from('ref_approval').select('*').eq('id', safeDocId).maybeSingle();
     if (error || !data) { contentEl.textContent = "문서를 불러올 수 없습니다."; return; }
 
     // 보기 전용 템플릿 렌더링 (안전한 DOM 구성)
