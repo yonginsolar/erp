@@ -12,6 +12,7 @@ Change: 2026-02-04 - Render permissions table with safe DOM nodes.
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp_runtime_guard.js"></script>
   <style>
     body { background-color: #f8f9fa; padding: 20px; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; }
     .main-container { max-width: 1100px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); padding: 25px; }
@@ -129,6 +130,13 @@ window.onload = async function() {
     setTimeout(() => location.href = 'index.html', 1200);
     return;
   }
+  const permissionRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
+    moduleKey: 'permission',
+    moduleLabel: '권한 관리',
+    alertFn: function(msg) { showAlert(msg); },
+    redirectUrl: 'index.html'
+  });
+  if (!permissionRuntimeGate.ok) return;
 
   initPermissionKeys();
   await loadPermissionList();
@@ -199,10 +207,13 @@ async function savePermission() {
   const permissionKey = document.getElementById('permKey').value;
   const desc = document.getElementById('permDesc').value.trim();
   const isEnabled = document.getElementById('permEnabled').checked;
+  const coopId = myInfo?.coop_id || null;
 
   if (!roleKey || !permissionKey) return showAlert("역할/직급과 권한 키를 입력하세요.");
+  if (!coopId) return showAlert("조합 정보가 없어 저장할 수 없습니다. 다시 로그인해 주세요.");
 
   const payload = {
+    coop_id: coopId,
     scope,
     role_key: roleKey,
     permission_key: permissionKey,
@@ -213,7 +224,7 @@ async function savePermission() {
 
   const { error } = await _supabase
     .from('erp_role_permissions')
-    .upsert(payload, { onConflict: 'scope,role_key,permission_key' });
+    .upsert(payload, { onConflict: 'coop_id,scope,role_key,permission_key' });
 
   if (error) return showAlert("저장 실패: " + error.message);
   await logAudit('permission.upsert', '권한 저장', payload);

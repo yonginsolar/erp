@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="erp_runtime_guard.js"></script>
 <script src="print_service.js"></script>
 <script src="payroll_durunuri_module.js"></script>
 <script src="leave_ledger.js"></script>
@@ -186,9 +187,329 @@ let permissionSet = new Set();
 let purposeModal,leaveDetailModal,noticeDetailModal,alertModal,eventModal;
 let confirmModal;
 let confirmActionFunc = null; // 확인 버튼 눌렀을 때 실행할 함수 저장소
+let mypageRuntimeProfile='legacy_full';
+let noticeComposeModal=null;
+let mypageTelegramConnectUrl='';
+let mypageTelegramConnectCommand='';
+let mypageLeaveTypeCatalog=null;
+let mypageLeaveSnapshotSupported=false;
+const MYPAGE_LEAVE_TYPE_CONFIG_KEY='approval_leave_type_catalog_json';
+const MYPAGE_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT='id,created_at,doc_type,title,content,amount,status,drafter_id,leave_snapshot';
+const MYPAGE_DEFAULT_LEAVE_TYPE_CATALOG=Object.freeze([
+{id:'annual',label:'연차',enabled:true,deductible:true,duration_mode:'date_range',aliases:['연차']},
+{id:'half_day',label:'반차',enabled:true,deductible:true,duration_mode:'half_day',aliases:['반차']},
+{id:'birthday_half',label:'생일반차',enabled:true,deductible:false,duration_mode:'half_day',aliases:['생일반차']}
+]);
 function hasMypageRoleFallback(){
 const role=String(myInfo?.role||'').toLowerCase();
 return ['admin','admin_all','admin_home','admin_accounting','staff'].includes(role);
+}
+function isMypageWorkforceLiteProfile(){
+return mypageRuntimeProfile==='workforce_lite';
+}
+function isMypageAdminUser(){
+const role=String(myInfo?.role||'').toLowerCase();
+return role==='admin'||role==='admin_all';
+}
+function getMypageDefaultLeaveTypeCatalog(){
+return MYPAGE_DEFAULT_LEAVE_TYPE_CATALOG.map(item=>({id:String(item.id||'').trim(),label:String(item.label||'').trim(),enabled:item.enabled!==false,deductible:item.deductible===true,duration_mode:String(item.duration_mode||'date_range').trim(),aliases:Array.from(new Set((Array.isArray(item.aliases)?item.aliases:[]).map(alias=>String(alias||'').trim()).filter(Boolean)))}));
+}
+function normalizeMypageLeaveTypeAliases(value){
+const source=Array.isArray(value)?value:(()=>{if(typeof value!=='string'||!value.trim()) return [];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed:[]}catch(_){return []}})();
+return Array.from(new Set(source.map(item=>String(item||'').trim()).filter(Boolean)));
+}
+function parseMypageLeaveTypeCatalog(rawValue){
+const fallback=getMypageDefaultLeaveTypeCatalog();
+if(typeof rawValue!=='string'||!rawValue.trim()) return fallback;
+try{
+const parsed=JSON.parse(rawValue);
+if(!Array.isArray(parsed)) return fallback;
+const rows=parsed.map((item,index)=>{
+const label=String(item?.label||'').trim();
+if(!label) return null;
+const id=String(item?.id||'').trim().toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'')||`leave_type_${index+1}`;
+return {id,label,enabled:item?.enabled!==false,deductible:item?.deductible===true,duration_mode:String(item?.duration_mode||'date_range').trim(),aliases:normalizeMypageLeaveTypeAliases(item?.aliases)};
+}).filter(Boolean);
+return rows;
+}catch(_){
+return fallback;
+}
+}
+function getMypageLeaveTypeCatalog(){
+return Array.isArray(mypageLeaveTypeCatalog)?mypageLeaveTypeCatalog:getMypageDefaultLeaveTypeCatalog();
+}
+function getMypageLeaveTypeConfigByStoredSubtype(subType){
+const safe=String(subType||'').trim();
+if(!safe) return null;
+return getMypageLeaveTypeCatalog().find(item=>item.id===safe||item.label===safe||normalizeMypageLeaveTypeAliases(item.aliases).includes(safe))||null;
+}
+function getMypageLeaveSnapshotMeta(doc){
+const raw=doc?.leave_snapshot;
+if(!raw) return null;
+if(raw&&typeof raw==='object'&&!Array.isArray(raw)) return raw;
+if(typeof raw!=='string') return null;
+try{
+const parsed=JSON.parse(raw);
+return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:null;
+}catch(_){
+return null;
+}
+}
+function getMypageLeaveTypeDisplayLabel(subType,doc){
+const snapshot=getMypageLeaveSnapshotMeta(doc);
+if(snapshot?.label) return String(snapshot.label).trim();
+const config=getMypageLeaveTypeConfigByStoredSubtype(subType);
+return config?.label||String(subType||'').trim();
+}
+function isMypageHalfDayLeaveSubtype(subType,doc){
+const snapshot=getMypageLeaveSnapshotMeta(doc);
+if(snapshot?.duration_mode) return String(snapshot.duration_mode).trim()==='half_day';
+const config=getMypageLeaveTypeConfigByStoredSubtype(subType);
+return String(config?.duration_mode||'').trim()==='half_day';
+}
+function isMypageDeductibleLeaveDoc(doc){
+const snapshot=getMypageLeaveSnapshotMeta(doc);
+if(snapshot&&typeof snapshot.deductible==='boolean') return snapshot.deductible===true;
+const leaveLedger=window.LeaveLedger||{};
+const subType=typeof leaveLedger.getLeaveSubType==='function'?leaveLedger.getLeaveSubType(doc?.doc_type):'';
+const config=getMypageLeaveTypeConfigByStoredSubtype(subType);
+return config?.deductible===true;
+}
+function formatMypageLeaveDocType(docOrType){
+const doc=docOrType&&typeof docOrType==='object'?docOrType:null;
+const raw=String(doc?doc.doc_type:docOrType||'').trim();
+if(!raw.startsWith('휴가(')) return raw;
+const snapshot=getMypageLeaveSnapshotMeta(doc);
+if(snapshot?.label) return `휴가(${String(snapshot.label).trim()})`;
+const leaveLedger=window.LeaveLedger||{};
+const subType=typeof leaveLedger.getLeaveSubType==='function'?String(leaveLedger.getLeaveSubType(raw)||'').trim():'';
+if(!subType) return raw;
+return `휴가(${getMypageLeaveTypeDisplayLabel(subType,doc)})`;
+}
+function syncMypageLeaveTypeRuntime(){
+mypageLeaveTypeCatalog=parseMypageLeaveTypeCatalog(companyInfo[MYPAGE_LEAVE_TYPE_CONFIG_KEY]);
+if(window.LeaveLedger&&typeof window.LeaveLedger.setDeductibleSubTypes==='function'){
+const tokens=[];
+getMypageLeaveTypeCatalog().forEach(item=>{
+if(item.deductible!==true) return;
+[item.id,item.label,...normalizeMypageLeaveTypeAliases(item.aliases)].forEach(token=>{
+const safe=String(token||'').trim();
+if(safe) tokens.push(safe);
+});
+});
+window.LeaveLedger.setDeductibleSubTypes(Array.from(new Set(tokens)));
+}
+}
+async function detectMypageLeaveSnapshotSupport(){
+try{
+const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`,{headers:{Accept:'application/openapi+json'}});
+if(!response.ok) return false;
+const openapi=await response.json();
+return !!openapi?.definitions?.ref_approval?.properties?.leave_snapshot;
+}catch(_){
+return false;
+}
+}
+
+function ensureTelegramConnectUi(){
+const tabInfo=document.getElementById('tabInfo');
+if(!tabInfo||document.getElementById('mypageTelegramConnectSection')) return;
+const section=document.createElement('div');
+section.id='mypageTelegramConnectSection';
+section.className='mt-4 pt-3 border-top';
+section.innerHTML=`<div class="d-flex justify-content-between align-items-center mb-2"><h6 class="fw-bold m-0">🤖 Telegram 연결</h6><span class="badge bg-secondary" id="telegramConnectStatusBadge">미확인</span></div><div class="small text-muted mb-2" id="telegramConnectHelpText">결재 알림을 Telegram 개인 DM으로 받을 수 있습니다.</div><div class="d-flex flex-wrap gap-2 mb-2"><button class="btn btn-sm btn-outline-primary" type="button" id="btnTelegramConnect" onclick="openMypageTelegramConnect()">Telegram 연결</button><button class="btn btn-sm btn-outline-secondary hidden" type="button" id="btnTelegramCopyLink" onclick="copyMypageTelegramConnectLink()">봇 링크 복사</button><button class="btn btn-sm btn-outline-secondary hidden" type="button" id="btnTelegramCopyStart" onclick="copyMypageTelegramConnectCommand()">연결 명령 복사</button><button class="btn btn-sm btn-outline-danger hidden" type="button" id="btnTelegramDisconnect" onclick="disconnectMypageTelegramLink()">연결 해제</button></div><div class="small text-muted" id="telegramConnectMeta">1. Telegram 연결을 누르면 봇 화면이 열립니다. 2. Telegram에서 START BOT을 누르면 연결이 완료됩니다. 3. 자동 연결이 안 되면 연결 명령 복사를 눌러 Telegram 대화창에 그대로 붙여넣어 주세요.</div>`;
+const emergencySection=tabInfo.querySelector('.mt-5.pt-3.border-top');
+if(emergencySection&&emergencySection.parentNode){
+emergencySection.parentNode.insertBefore(section, emergencySection);
+}else{
+tabInfo.appendChild(section);
+}
+} // End of ensureTelegramConnectUi
+
+function renderMypageTelegramLinkStatus(statusData){
+ensureTelegramConnectUi();
+const badge=document.getElementById('telegramConnectStatusBadge');
+const help=document.getElementById('telegramConnectHelpText');
+const meta=document.getElementById('telegramConnectMeta');
+const connectBtn=document.getElementById('btnTelegramConnect');
+const copyBtn=document.getElementById('btnTelegramCopyLink');
+const copyCommandBtn=document.getElementById('btnTelegramCopyStart');
+const disconnectBtn=document.getElementById('btnTelegramDisconnect');
+if(!badge||!help||!meta||!connectBtn||!copyBtn||!copyCommandBtn||!disconnectBtn) return;
+const enabled=!!statusData?.enabled;
+const linked=!!statusData?.linked;
+const botUsername=String(statusData?.bot_username||'').trim();
+const maskedChat=String(statusData?.chat_id_masked||'').trim();
+connectBtn.disabled=!enabled||!botUsername;
+copyBtn.classList.toggle('hidden',!mypageTelegramConnectUrl);
+copyCommandBtn.classList.toggle('hidden',!mypageTelegramConnectCommand);
+if(!enabled){
+badge.className='badge bg-secondary';
+badge.textContent='미사용';
+help.textContent='이 조합은 Telegram 결재 알림을 사용하지 않습니다.';
+meta.textContent='통합 관리자와 조합 관리자 설정이 끝나면 개인 DM 연결을 진행할 수 있습니다.';
+copyCommandBtn.classList.add('hidden');
+disconnectBtn.classList.add('hidden');
+return;
+}
+if(!botUsername){
+badge.className='badge bg-warning text-dark';
+badge.textContent='준비 중';
+help.textContent='봇 연결 정보를 확인하는 중입니다.';
+meta.textContent='통합 관리자가 공용 Telegram 봇 설정 저장을 다시 실행하면 봇 username과 webhook이 자동 동기화됩니다.';
+copyCommandBtn.classList.add('hidden');
+disconnectBtn.classList.add('hidden');
+return;
+}
+if(linked){
+badge.className='badge bg-success';
+badge.textContent='연결됨';
+help.textContent=`@${botUsername} 봇과 연결되었습니다.`;
+meta.textContent=maskedChat?`현재 연결 채팅: ${maskedChat}`:`@${botUsername} 봇과 연결되어 있습니다.`;
+copyCommandBtn.classList.add('hidden');
+disconnectBtn.classList.remove('hidden');
+return;
+}
+badge.className='badge bg-light text-dark border';
+badge.textContent='미연결';
+help.textContent=`@${botUsername} 봇으로 결재 알림을 받을 수 있습니다.`;
+meta.textContent='Telegram 연결을 누른 뒤 Telegram에서 START BOT을 누르면 연결됩니다. 자동 연결이 안 되면 연결 명령 복사를 눌러 Telegram 대화창에 그대로 붙여넣어 주세요.';
+disconnectBtn.classList.add('hidden');
+} // End of renderMypageTelegramLinkStatus
+
+async function loadMypageTelegramLinkStatus(){
+ensureTelegramConnectUi();
+try{
+const {data,error}=await _supabase.rpc('erp_get_telegram_link_status');
+if(error) throw error;
+renderMypageTelegramLinkStatus(data||{});
+}catch(error){
+renderMypageTelegramLinkStatus({enabled:false,linked:false});
+console.warn('telegram link status load failed:', error?.message||error);
+}
+} // End of loadMypageTelegramLinkStatus
+
+async function openMypageTelegramConnect(){
+try{
+const {data,error}=await _supabase.rpc('erp_issue_my_telegram_link_request');
+if(error) throw error;
+mypageTelegramConnectUrl=String(data?.connect_url||'').trim();
+if(!mypageTelegramConnectUrl) throw new Error('TELEGRAM_CONNECT_URL_MISSING');
+const botUsername=String(data?.bot_username||'').trim();
+const connectCommand=String(data?.connect_command||'').trim();
+const connectCode=String(data?.connect_code||'').trim();
+const connectToken=String(data?.token||'').trim();
+const telegramAppUrl=(botUsername&&connectToken)?`tg://resolve?domain=${encodeURIComponent(botUsername)}&start=${encodeURIComponent(connectToken)}`:'';
+mypageTelegramConnectCommand=connectCommand||'';
+renderMypageTelegramLinkStatus(await _supabase.rpc('erp_get_telegram_link_status').then((result)=>result.data||{}).catch(()=>({enabled:true,linked:false,bot_username:String(data?.bot_username||'').trim()})));
+document.getElementById('telegramConnectMeta').textContent=`봇 화면을 열었습니다. Telegram에서 START BOT을 누르면 연결됩니다. 연결 코드: ${connectCode||'-'} / 만료 시각: ${String(data?.expires_at||'').replace('T',' ').replace('Z','')}. 자동 연결이 안 되면 연결 명령 복사를 눌러 Telegram 대화창에 그대로 붙여넣어 주세요.`;
+document.getElementById('btnTelegramCopyLink')?.classList.remove('hidden');
+document.getElementById('btnTelegramCopyStart')?.classList.remove('hidden');
+if(telegramAppUrl){
+window.location.href=telegramAppUrl;
+setTimeout(function openTelegramWebFallback(){
+window.open(mypageTelegramConnectUrl,'_blank','noopener');
+},900);
+}else{
+window.open(mypageTelegramConnectUrl,'_blank','noopener');
+}
+}catch(error){
+showAlert('Telegram 연결 링크 생성 실패: '+(error?.message||error));
+}
+} // End of openMypageTelegramConnect
+
+async function copyMypageTelegramConnectCommand(){
+if(!mypageTelegramConnectCommand) return showAlert('먼저 Telegram 연결 링크를 생성해 주세요.');
+try{
+await navigator.clipboard.writeText(mypageTelegramConnectCommand);
+showAlert('연결 명령을 복사했습니다. Telegram 대화창에 그대로 붙여넣고 전송해 주세요.');
+}catch(error){
+showAlert('연결 명령 복사 실패: '+(error?.message||error));
+}
+} // End of copyMypageTelegramConnectCommand
+
+async function copyMypageTelegramConnectLink(){
+if(!mypageTelegramConnectUrl) return showAlert('먼저 Telegram 연결 링크를 생성해 주세요.');
+try{
+await navigator.clipboard.writeText(mypageTelegramConnectUrl);
+showAlert('Telegram 연결 링크를 복사했습니다.');
+}catch(error){
+showAlert('링크 복사 실패: '+(error?.message||error));
+}
+} // End of copyMypageTelegramConnectLink
+
+async function disconnectMypageTelegramLink(){
+try{
+const {data,error}=await _supabase.rpc('erp_disconnect_my_telegram_link');
+if(error) throw error;
+mypageTelegramConnectUrl='';
+mypageTelegramConnectCommand='';
+await loadMypageTelegramLinkStatus();
+showAlert(data?'Telegram 연결을 해제했습니다.':'해제할 Telegram 연결이 없습니다.');
+}catch(error){
+showAlert('Telegram 연결 해제 실패: '+(error?.message||error));
+}
+} // End of disconnectMypageTelegramLink
+function ensureNoticeComposeUi(){
+const tabNotice=document.getElementById('tabNotice');
+if(!tabNotice) return;
+if(!document.getElementById('mypageNoticeToolbar')){
+const toolbar=document.createElement('div');
+toolbar.id='mypageNoticeToolbar';
+toolbar.className='d-flex justify-content-end mb-2 hidden';
+toolbar.innerHTML='<button class="btn btn-sm btn-primary" type="button" onclick="openNoticeComposeModal()">공지 작성</button>';
+tabNotice.prepend(toolbar);
+}
+if(!document.getElementById('noticeComposeModal')){
+const modalWrapper=document.createElement('div');
+modalWrapper.innerHTML=`<div class="modal fade" id="noticeComposeModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">공지 작성</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-2"><label class="small text-muted fw-bold">제목</label><input type="text" id="noticeComposeTitle" class="form-control" maxlength="120"></div><div><label class="small text-muted fw-bold">내용</label><textarea id="noticeComposeContent" class="form-control" rows="8" placeholder="공지 내용을 입력하세요."></textarea></div></div><div class="modal-footer justify-content-end"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-primary btn-sm" id="btnSaveMypageNotice" onclick="saveMypageNotice()">저장</button></div></div></div></div>`;
+document.body.appendChild(modalWrapper.firstChild);
+}
+if(!noticeComposeModal){
+noticeComposeModal=new bootstrap.Modal(document.getElementById('noticeComposeModal'));
+}
+}
+function applyMypageRuntimeProfileUi(){
+const dependentCol=document.getElementById('myDependents')?.closest('.col-md-6');
+if(dependentCol) dependentCol.classList.toggle('hidden',isMypageWorkforceLiteProfile());
+ensureNoticeComposeUi();
+ensureTelegramConnectUi();
+const toolbar=document.getElementById('mypageNoticeToolbar');
+if(toolbar){
+toolbar.classList.toggle('hidden',!(isMypageWorkforceLiteProfile()&&isMypageAdminUser()));
+}
+}
+function openNoticeComposeModal(){
+if(!(isMypageWorkforceLiteProfile()&&isMypageAdminUser())) return;
+ensureNoticeComposeUi();
+document.getElementById('noticeComposeTitle').value='';
+document.getElementById('noticeComposeContent').value='';
+noticeComposeModal.show();
+}
+async function saveMypageNotice(){
+if(!(isMypageWorkforceLiteProfile()&&isMypageAdminUser())) return showAlert('관리자만 공지사항을 작성할 수 있습니다.');
+const titleEl=document.getElementById('noticeComposeTitle');
+const contentEl=document.getElementById('noticeComposeContent');
+const saveBtn=document.getElementById('btnSaveMypageNotice');
+const title=String(titleEl?.value||'').trim();
+const content=String(contentEl?.value||'').trim();
+if(!title||!content) return showAlert('제목과 내용을 입력해주세요.');
+if(saveBtn) saveBtn.disabled=true;
+try{
+const {error}=await _supabase.from('ref_notice').insert({
+title:title,
+content:content,
+writer:myInfo.emp_name||'관리자'
+});
+if(error) throw error;
+if(noticeComposeModal) noticeComposeModal.hide();
+await loadNotices();
+showAlert('공지사항이 저장되었습니다.');
+}catch(error){
+showAlert('공지사항 저장 실패: '+(error?.message||error));
+}finally{
+if(saveBtn) saveBtn.disabled=false;
+}
 }
 function focusLeaveBadgeFallback(){
 const badge=document.querySelector('.leave-badge');
@@ -233,10 +554,20 @@ if (!hasMypageView) {
     setTimeout(() => location.href = 'index.html', 1200);
     return;
 }
+const mypageRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
+    moduleKey: 'mypage',
+    moduleLabel: '마이페이지',
+    alertFn: function(msg) { showAlert(msg); },
+    redirectUrl: 'index.html'
+});
+if (!mypageRuntimeGate.ok) return;
+mypageRuntimeProfile=String(mypageRuntimeGate.runtime?.runtime_profile||'legacy_full');
+applyMypageRuntimeProfileUi();
 document.getElementById("salaryMonth").value=formatMypageKstMonth();
 document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
 await loadCompanyInfo();
-await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave()]);
+await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave(),loadMypageTelegramLinkStatus()]);
+applyMypageRuntimeProfileUi();
 };
 function showAlert(m){document.getElementById("alertBody").textContent=m||"";alertModal.show()}
 window.viewContract=function(){
@@ -268,7 +599,7 @@ async function loadPermissions(user) {
     }
     return result;
 }
-async function loadCompanyInfo(){const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
+async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
 async function loadProfile() {
     const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
     if (data) {
@@ -382,14 +713,69 @@ b.appendChild(tr);
 function addEmergencyUI(){const b=document.getElementById("emergencyListBody"),t=document.createElement('tr');t.innerHTML=`<td><input type="text" class="form-control form-control-sm" id="newEmName" placeholder="이름"></td><td><input type="text" class="form-control form-control-sm" id="newEmRel" placeholder="관계"></td><td><input type="text" class="form-control form-control-sm" id="newEmPhone" placeholder="연락처" oninput="autoHyphen(this)"></td><td><button class="btn btn-sm btn-primary py-0" onclick="confirmAddEm(this)">V</button></td>`;b.appendChild(t)}
 function confirmAddEm(b){const t=b.closest('tr'),n=t.querySelector('#newEmName').value,r=t.querySelector('#newEmRel').value,p=t.querySelector('#newEmPhone').value;if(!n||!r)return;tempEmergencyList.push({contact_name:n,relation:r,phone:p});renderEmergencyTable()}
 function removeTempEm(i){tempEmergencyList.splice(i,1);renderEmergencyTable()}
+function parseMypageDotDateToIso(value){
+const raw=String(value||'').trim();
+const m=raw.match(/(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})/);
+if(!m) return '';
+return `${m[1]}-${m[2]}-${m[3]}`;
+}
+function addDaysToIsoDate(isoDate,days){
+const raw=String(isoDate||'').trim();
+const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+if(!m) return '';
+const d=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3])));
+if(Number.isNaN(d.getTime())) return '';
+d.setUTCDate(d.getUTCDate()+Number(days||0));
+const y=d.getUTCFullYear();
+const mm=String(d.getUTCMonth()+1).padStart(2,'0');
+const dd=String(d.getUTCDate()).padStart(2,'0');
+return `${y}-${mm}-${dd}`;
+}
+function buildLeaveCalendarTitle(doc,deptText,periodText){
+const leaveLedger=window.LeaveLedger||{};
+const subType=typeof leaveLedger.getLeaveSubType==='function'?String(leaveLedger.getLeaveSubType(doc?.doc_type)||'').trim():'';
+const displayLabel=getMypageLeaveTypeDisplayLabel(subType,doc);
+const ampmMatch=String(periodText||'').match(/\b(오전|오후)\b/);
+const ampm=ampmMatch?ampmMatch[1]:'';
+if(isMypageHalfDayLeaveSubtype(subType,doc)){
+const suffix=ampm?`${ampm}${displayLabel}`:displayLabel;
+return `${doc?.drafter_name||''}${deptText} ${suffix}`.trim();
+}
+if(displayLabel && displayLabel !== '연차'){
+return `${doc?.drafter_name||''}${deptText} ${displayLabel}`.trim();
+}
+return `${doc?.drafter_name||''}${deptText} 휴가`.trim();
+}
+function buildLeaveCalendarEvent(doc){
+const leaveLedger=window.LeaveLedger||{};
+const periodLabel=typeof leaveLedger.extractLeavePeriodLabel==='function'?leaveLedger.extractLeavePeriodLabel(doc):'';
+const startIso=typeof leaveLedger.getLeaveStartIso==='function'?leaveLedger.getLeaveStartIso(doc):parseMypageDotDateToIso(periodLabel);
+if(!startIso) return null;
+let endIso=startIso;
+const rangeMatch=String(periodLabel||'').match(/(\d{4}[.\-\/]\d{2}[.\-\/]\d{2})\s*~\s*(\d{4}[.\-\/]\d{2}[.\-\/]\d{2})/);
+if(rangeMatch){
+const parsedEnd=parseMypageDotDateToIso(rangeMatch[2]);
+if(parsedEnd) endIso=parsedEnd;
+}
+const endExclusive=endIso!==startIso?addDaysToIsoDate(endIso,1):'';
+const deptText=doc?.drafter_dept?`(${doc.drafter_dept})`:'';
+const periodText=typeof leaveLedger.formatLeavePeriodText==='function'?leaveLedger.formatLeavePeriodText(doc):periodLabel;
+const leaveTitle=buildLeaveCalendarTitle(doc,deptText,periodText);
+const memoLines=[`결재 처리된 휴가입니다.`,`상태: ${doc?.status||'-'}`,`사번: ${doc?.drafter_id||'-'}`,`기안자: ${doc?.drafter_name||'-'}`];
+if(periodText) memoLines.push(`휴가일: ${periodText}`);
+const event={title:leaveTitle,start:startIso,color:(doc?.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true,extendedProps:{origin:{title:leaveTitle,start_date:startIso,end_date:endIso,type:'leave',visibility:'company',cal_memo:memoLines.join('\n')}}};
+if(endExclusive) event.end=endExclusive;
+return event;
+}
 async function renderCalendar(){
-const{data:l}=await _supabase.from('ref_approval').select('*').eq('doc_type','휴가').eq('status','완료');
+const leaveStatuses=['완료','가승인','증빙확인중','실물결재대기','실물결재완료'];
+const{data:l}=await _supabase.from('ref_approval').select('*').ilike('doc_type','휴가%').in('status',leaveStatuses);
 const{data:e}=await _supabase.from('view_employees_calendar').select('*');
 const{data:c}=await _supabase.from('ref_calendar').select('*');
 let evts=[];
 const bY=new Date().getFullYear();
 const yrs=[bY-2,bY-1,bY,bY+1,bY+2];
-if(l)l.forEach(x=>evts.push({title:`${x.drafter_name}(${x.drafter_dept||''}) 휴가`,start:x.start_date,end:x.end_date,color:(x.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true,extendedProps:{origin:{title:`${x.drafter_name} 휴가`,start_date:x.start_date,type:'leave',visibility:'company',cal_memo:`결재 완료된 휴가입니다.\n사번: ${x.drafter_id}\n기안자: ${x.drafter_name}`}}}));
+if(l)l.forEach(x=>{const leaveEvent=buildLeaveCalendarEvent(x);if(leaveEvent) evts.push(leaveEvent);});
 if(e)e.forEach(p=>{const dn=p.department?`(${p.department})`:'';if(p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));if(p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}});
 if(c)c.forEach(x=>{if(x.visibility==='admin'&&!(myInfo.role==='admin' || myInfo.role==='admin_all'))return;if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;const bg=x.visibility==='admin'?'#6610f2':(x.visibility==='private'?'#198754':(x.type==='holiday'?'#dc3545':'#0d6efd'));const startParts=getMypageKstDateParts(x.start_date);const endParts=getMypageKstDateParts(x.end_date);const timeSuffix=startParts.hasTime&&startParts.time?`T${startParts.time}`:'';if(x.recurrence==='yearly'){yrs.forEach(y=>{const md=startParts.date?startParts.date.slice(5,10):'';if(!md) return;evts.push({id:x.id,title:x.title,start:`${y}-${md}${timeSuffix}`,color:bg,extendedProps:{origin:x}})});}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=startParts.date?startParts.date.slice(8,10):'';if(!dd) return;if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${timeSuffix}`,color:bg,extendedProps:{origin:x}})}}});}else{const startVal=startParts.date?`${startParts.date}${timeSuffix}`:x.start_date;const endSuffix=endParts.hasTime&&endParts.time?`T${endParts.time}`:'';const endVal=endParts.date?`${endParts.date}${endSuffix}`:x.end_date;evts.push({id:x.id,title:x.title,start:startVal,end:endVal,color:bg,extendedProps:{origin:x}})}}); 
 if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:"🎉 창립기념일",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true,extendedProps:{origin:{title:"🎉 창립기념일",start_date:`${y}-${companyInfo.estDate.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`}}})}}
@@ -408,7 +794,7 @@ if(remain<=0){b.style.borderColor='#dc3545';b.style.color='#dc3545'}else{b.style
 async function calculateLeave(){
 try{
 if(window.LeaveLedger&&typeof window.LeaveLedger.getLeaveSnapshot==='function'){
-leaveSnapshotState=await window.LeaveLedger.getLeaveSnapshot(_supabase,myInfo.emp_id,{reservedStatuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'],includeToday:true,unknownAsReserved:false});
+leaveSnapshotState=await window.LeaveLedger.getLeaveSnapshot(_supabase,myInfo.emp_id,{columns:mypageLeaveSnapshotSupported?MYPAGE_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT:undefined,reservedStatuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'],includeToday:true,unknownAsReserved:false});
 renderLeaveBadge(leaveSnapshotState);
 return;
 }
@@ -434,7 +820,7 @@ const periodLabel=period?` · ${escapeHtml(period)}`:'';
 const statusBadge=getLeaveStatusBadgeHtml(String(doc?.status||''));
 const createdAt=formatMypageKstDate(doc?.created_at,'-');
 const amount=Math.max(0,Number(doc?.amount||doc?._leave_amount||0));
-html+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${escapeHtml(doc?.doc_type||'휴가')} ${statusBadge}${periodLabel}</span><span class="fw-bold text-danger">-${amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${createdAt}</div></li>`;
+html+=`<li class="border-bottom pb-1 mb-1"><div class="d-flex justify-content-between"><span>${escapeHtml(formatMypageLeaveDocType(doc||doc?.doc_type||'휴가'))} ${statusBadge}${periodLabel}</span><span class="fw-bold text-danger">-${amount}일</span></div><div class="text-muted" style="font-size:0.75rem;">${createdAt}</div></li>`;
 });
 }else{
 html+=`<li class="text-muted">${emptyText||'- 없음 -'}</li>`;
@@ -450,11 +836,12 @@ const{data:em}=await _supabase.from('ref_employees').select('hire_date').eq('emp
 const{data:al}=await _supabase.from('hr_leave_adj').select('*').eq('emp_id',myInfo.emp_id).order('created_at',{ascending:false});
 let leaveDocs=[],summary={reservedDocs:[],pastOrUsedDocs:[],unknownDateDocs:[],reservedDays:0,pastOrUsedDays:0,unknownDateDays:0};
 if(window.LeaveLedger&&typeof window.LeaveLedger.fetchLeaveApprovals==='function'){
-leaveDocs=await window.LeaveLedger.fetchLeaveApprovals(_supabase,myInfo.emp_id,{statuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료']});
+leaveDocs=await window.LeaveLedger.fetchLeaveApprovals(_supabase,myInfo.emp_id,{columns:mypageLeaveSnapshotSupported?MYPAGE_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT:undefined,statuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료']});
 summary=window.LeaveLedger.summarizeLeaveDocs(leaveDocs,{reservedStatuses:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'],includeToday:true,unknownAsReserved:false});
 }else{
-const{data:ul}=await _supabase.from('ref_approval').select('id,created_at,doc_type,title,content,amount,status').eq('drafter_id',myInfo.emp_id).in('status',['완료','가승인','증빙확인중']).or('doc_type.ilike.%(연차)%,doc_type.ilike.%(반차)%').order('created_at',{ascending:false});
-leaveDocs=ul||[];
+const leaveSelect=mypageLeaveSnapshotSupported?'id,created_at,doc_type,title,content,amount,status,leave_snapshot':'id,created_at,doc_type,title,content,amount,status';
+const{data:ul}=await _supabase.from('ref_approval').select(leaveSelect).eq('drafter_id',myInfo.emp_id).in('status',['완료','가승인','증빙확인중','실물결재대기','실물결재완료']).ilike('doc_type','휴가%').order('created_at',{ascending:false});
+leaveDocs=(ul||[]).filter(doc=>isMypageDeductibleLeaveDoc(doc));
 summary={reservedDocs:[],pastOrUsedDocs:leaveDocs,unknownDateDocs:[],reservedDays:0,pastOrUsedDays:0,unknownDateDays:0};
 }
 let h='<div class="d-flex flex-column gap-3">';

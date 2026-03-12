@@ -2,7 +2,8 @@
   'use strict';
 
   var KST_TZ = 'Asia/Seoul';
-  var DEDUCTIBLE_SUB_TYPES = ['연차', '반차'];
+  var DEFAULT_DEDUCTIBLE_SUB_TYPES = ['연차', '반차'];
+  var deductibleSubTypes = DEFAULT_DEDUCTIBLE_SUB_TYPES.slice();
   var DEFAULT_RESERVED_STATUSES = ['완료', '가승인', '증빙확인중', '실물결재대기', '실물결재완료'];
   var DEFAULT_APPROVAL_SELECT_COLUMNS = 'id,created_at,doc_type,title,content,amount,status,drafter_id';
 
@@ -40,15 +41,32 @@
     return match ? normalizeText(match[1]) : '';
   }
 
+  function getLeaveSnapshotMeta(doc) {
+    var raw = doc && doc.leave_snapshot;
+    if (!raw) return null;
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    if (typeof raw !== 'string') return null;
+    try {
+      var parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function isLeaveDocType(docType) {
     return normalizeText(docType).indexOf('휴가') === 0;
   }
 
   function isDeductibleLeaveSubType(subType) {
-    return DEDUCTIBLE_SUB_TYPES.indexOf(normalizeText(subType)) !== -1;
+    return deductibleSubTypes.indexOf(normalizeText(subType)) !== -1;
   }
 
   function isDeductibleLeaveDoc(doc) {
+    var snapshot = getLeaveSnapshotMeta(doc);
+    if (snapshot && typeof snapshot.deductible === 'boolean') {
+      return snapshot.deductible === true;
+    }
     var subType = getLeaveSubType(doc && doc.doc_type);
     return isDeductibleLeaveSubType(subType);
   }
@@ -103,6 +121,7 @@
     copy._leave_amount = roundLeaveDays(amount);
     copy._leave_period_label = extractLeavePeriodLabel(doc);
     copy._leave_sub_type = getLeaveSubType(doc && doc.doc_type);
+    copy._leave_snapshot = getLeaveSnapshotMeta(doc);
     return copy;
   }
 
@@ -246,13 +265,31 @@
     return formatDotDate(startIso);
   }
 
+  function setDeductibleSubTypes(subTypes) {
+    if (!Array.isArray(subTypes)) {
+      deductibleSubTypes = DEFAULT_DEDUCTIBLE_SUB_TYPES.slice();
+      return deductibleSubTypes.slice();
+    }
+    deductibleSubTypes = Array.from(new Set(subTypes.map(function (item) {
+      return normalizeText(item);
+    }).filter(Boolean)));
+    return deductibleSubTypes.slice();
+  }
+
+  function getDeductibleSubTypes() {
+    return deductibleSubTypes.slice();
+  }
+
   global.LeaveLedger = {
     KST_TZ: KST_TZ,
-    DEDUCTIBLE_SUB_TYPES: DEDUCTIBLE_SUB_TYPES.slice(),
+    DEDUCTIBLE_SUB_TYPES: DEFAULT_DEDUCTIBLE_SUB_TYPES.slice(),
+    setDeductibleSubTypes: setDeductibleSubTypes,
+    getDeductibleSubTypes: getDeductibleSubTypes,
     DEFAULT_RESERVED_STATUSES: DEFAULT_RESERVED_STATUSES.slice(),
     getTodayKstIso: getTodayKstIso,
     roundLeaveDays: roundLeaveDays,
     getLeaveSubType: getLeaveSubType,
+    getLeaveSnapshotMeta: getLeaveSnapshotMeta,
     isLeaveDocType: isLeaveDocType,
     isDeductibleLeaveDoc: isDeductibleLeaveDoc,
     extractLeavePeriodLabel: extractLeavePeriodLabel,

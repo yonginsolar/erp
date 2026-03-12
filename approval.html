@@ -7,8 +7,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전자결재 (Final)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp_runtime_guard.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <script src="payroll_durunuri_module.js"></script>
   <script src="salary_ledger_module.js"></script>
@@ -48,6 +51,39 @@
     .approval-editor-tabs { display: flex; gap: 8px; margin: 6px 0 10px; }
     .approval-editor-panel { display: none; }
     .approval-editor-panel.active { display: block; }
+    .general-proposal-quill-wrap {
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .general-proposal-quill-wrap .ql-toolbar.ql-snow {
+      border: none;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+    .general-proposal-template-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #ffffff;
+    }
+    .general-proposal-template-toolbar .btn {
+      white-space: nowrap;
+    }
+    .general-proposal-quill-wrap .ql-container.ql-snow {
+      border: none;
+      min-height: 500px;
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    .general-proposal-quill-wrap .ql-editor {
+      min-height: 500px;
+      padding: 16px;
+    }
     .approval-visual-editor {
       min-height: 500px;
       border: 1px solid #cbd5e1;
@@ -116,7 +152,7 @@
 
       <div class="mb-3 hidden" id="divProxyTarget">
         <label class="small text-muted fw-bold">기안 대상자 (하급자)</label>
-        <select class="form-select" id="proxyTargetSelect" onchange="calculateLeave(); updateJeongyeolUi();">
+        <select class="form-select" id="proxyTargetSelect" onchange="calculateLeave(); updateJeongyeolUi(); applyDefaultApprovalLineTemplate();">
             </select>
       </div>
 
@@ -230,7 +266,7 @@
           <div class="small text-muted mt-1">이 메모는 전자결재 내부에서만 사용되며 문서함 공개 본문에는 포함되지 않습니다.</div>
         </div>
         <div class="col-12 hidden mb-3" id="divProposalSubject">
-          <label class="small text-muted fw-bold">품의 제목</label>
+          <label class="small text-muted fw-bold" id="proposalSubjectLabel">품의 제목</label>
           <input type="text" class="form-control" id="proposalSubject" placeholder="예: 2026년 2월 사무국 운영비 집행 건">
         </div>
         <div class="col-12" id="divAmount">
@@ -242,7 +278,7 @@
           <div class="p-3 bg-light border rounded">
             <div id="dateRangeArea">
                 <div class="d-flex justify-content-between mb-2">
-                  <span class="fw-bold">📅 기간 선택</span>
+                  <span class="fw-bold" id="dateRangeAreaTitle">📅 기간 선택</span>
                   <span class="badge bg-primary">잔여 연차: <span id="remainDaysBadge">조회중...</span>일</span>
                 </div>
                 <div class="input-group mb-2">
@@ -252,9 +288,19 @@
                 </div>
             </div>
 
+            <div id="singleDayArea" class="hidden">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="fw-bold" id="singleDayAreaTitle">📅 날짜 선택</span>
+                    <span class="badge bg-primary">잔여 연차: <span id="remainDaysBadgeSingle">0</span>일</span>
+                </div>
+                <div class="input-group mb-2">
+                    <input type="date" class="form-control" id="singleLeaveDate" onchange="calcLeaveDays()">
+                </div>
+            </div>
+
             <div id="halfDayArea" class="hidden">
                 <div class="d-flex justify-content-between mb-2">
-                    <span class="fw-bold">📅 반차 날짜</span>
+                    <span class="fw-bold" id="halfDayAreaTitle">📅 날짜 선택</span>
                     <span class="badge bg-primary">잔여 연차: <span id="remainDaysBadgeHalf">0</span>일</span>
                 </div>
                 <div class="input-group mb-2">
@@ -287,7 +333,7 @@
             <input class="form-check-input" type="checkbox" id="chkSecretaryJeongyeol" onchange="handleJeongyeolToggleChanged()">
             <label class="form-check-label fw-bold" for="chkSecretaryJeongyeol">사무국장 전결 사용</label>
           </div>
-          <div class="small text-muted mt-2" id="jeongyeolHint">자동 전결 규정(30만원 이하 지출결의/근태)을 우선 적용합니다.</div>
+          <div class="small text-muted mt-2" id="jeongyeolHint">자동 전결 규정을 확인하는 중입니다.</div>
         </div>
       </div>
 
@@ -322,7 +368,7 @@
           </div>
         </div>
         <div id="appDescEditorControls" class="hidden">
-          <div class="approval-editor-toolbar">
+          <div class="approval-editor-toolbar" id="legacyApprovalEditorToolbar">
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<h3>','</h3>')">제목</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<p>','</p>')">문단</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertApprovalTag('<strong>','</strong>')">굵게</button>
@@ -337,6 +383,41 @@
           </div>
         </div>
         <div id="app-desc-panel-visual" class="approval-editor-panel">
+          <div id="generalProposalEditorWrap" class="general-proposal-quill-wrap hidden">
+            <div id="generalProposalQuillToolbar">
+              <span class="ql-formats">
+                <select class="ql-header">
+                  <option selected></option>
+                  <option value="1"></option>
+                  <option value="2"></option>
+                </select>
+              </span>
+              <span class="ql-formats">
+                <button type="button" class="ql-bold"></button>
+                <button type="button" class="ql-italic"></button>
+                <button type="button" class="ql-underline"></button>
+              </span>
+              <span class="ql-formats">
+                <button type="button" class="ql-list" value="ordered"></button>
+                <button type="button" class="ql-list" value="bullet"></button>
+                <button type="button" class="ql-blockquote"></button>
+              </span>
+              <span class="ql-formats">
+                <button type="button" class="ql-link"></button>
+                <button type="button" class="ql-clean"></button>
+              </span>
+            </div>
+            <div id="generalProposalTemplateToolbar" class="general-proposal-template-toolbar hidden">
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('full')">기본안 넣기</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('summary')">개요</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('background')">추진 배경</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('details')">주요 내용</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('budget')">예산</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('schedule')">일정</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertGeneralProposalTemplateBlock('effect')">기대 효과</button>
+            </div>
+            <div id="generalProposalQuill"></div>
+          </div>
           <div id="appDescVisual" class="approval-visual-editor" contenteditable="true" data-placeholder="여기에 내용을 입력하세요."></div>
         </div>
         <div id="app-desc-panel-html" class="approval-editor-panel active">
@@ -439,6 +520,8 @@ let delegationModalInstance = null;
 let approvalTemplateCandidates = [];
 let approvalTemplateSelectedId = '';
 let approvalEditorMode = 'html';
+let generalProposalQuill = null;
+let generalProposalQuillSyncing = false;
 let leaveSnapshotState = null;
 let historyStatusFilter = 'ALL';
 let historyDocTypeFilter = 'ALL';
@@ -452,12 +535,60 @@ let delegationRpcUnavailable = false;
 let delegationRpcWarned = false;
 let jeongyeolLineLocked = false;
 let savedApproversBeforeJeongyeol = [];
+let approvalLineTemplateAutoApplied = false;
 let manualJeongyeolSelected = false;
 let manualJeongyeolToggleTouched = false;
 let jeongyeolLockReasonLabel = '';
-const JEONGYEOL_AUTO_EXPENSE_LIMIT = 300000;
+let approvalRuntimeProfile = 'legacy_full';
+let approvalCompanyInfo = {};
+let approvalSecretaryJeongyeolEnabled = true;
+let approvalSecretaryAttendanceEnabled = true;
+let approvalSecretaryExpenseLimit = 300000;
+let approvalLeaveTypeCatalog = null;
+let approvalDocRuleCatalog = {};
+let approvalLeaveSnapshotSupported = false;
+const APPROVAL_LEAVE_TYPE_CONFIG_KEY = 'approval_leave_type_catalog_json';
+const APPROVAL_DOC_RULE_CONFIG_KEY = 'approval_doc_rule_catalog_json';
+const APPROVAL_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT = 'id,created_at,doc_type,title,content,amount,status,drafter_id,leave_snapshot';
+const APPROVAL_DEFAULT_LEAVE_TYPE_CATALOG = Object.freeze([
+    { id: 'annual', label: '연차', enabled: true, deductible: true, duration_mode: 'date_range', aliases: ['연차'] },
+    { id: 'half_day', label: '반차', enabled: true, deductible: true, duration_mode: 'half_day', aliases: ['반차'] },
+    { id: 'birthday_half', label: '생일반차', enabled: true, deductible: false, duration_mode: 'half_day', aliases: ['생일반차'] }
+]);
+const WORKFORCE_LITE_APPROVAL_DOC_GROUPS = Object.freeze([
+    {
+        label: '회계/지출',
+        items: [
+            { value: '일반품의', label: '📄 일반품의서', key: 'approval_doc_general_proposal_enabled', defaultEnabled: true, ruleOptions: ['require_attachment'] },
+            { value: '지출결의', label: '💰 지출결의서', key: 'approval_doc_expense_enabled', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_amount'] },
+            { value: '구매요청', label: '🛒 구매요청서', key: 'approval_doc_purchase_enabled', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_amount'], ruleDefaults: { require_amount: true } }
+        ]
+    },
+    {
+        label: '인사/근태',
+        items: [
+            { value: '휴가', label: '🏖️ 휴가 신청', key: 'approval_doc_leave_enabled', defaultEnabled: true, ruleOptions: ['require_attachment'] },
+            { value: '출장신청', label: '🚄 출장신청서', key: 'approval_doc_business_trip_enabled', defaultEnabled: true, ruleOptions: ['require_attachment'] },
+            { value: '근무변경', label: '🕒 근무변경 신청서', key: 'approval_doc_work_change_enabled', defaultEnabled: true, ruleOptions: ['require_attachment'] }
+        ]
+    },
+    {
+        label: '대외/증명',
+        items: [
+            { value: '공문', label: '📢 공문', key: 'approval_doc_notice_enabled', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_receiver', 'require_via'] },
+            { value: '증명서발급', label: '📄 증명서 발급 신청서', key: 'approval_doc_certificate_enabled', defaultEnabled: false, ruleOptions: ['require_attachment'] }
+        ]
+    }
+]);
+const APPROVAL_PROPOSAL_LIKE_TYPES = Object.freeze(['일반품의', '출장신청', '구매요청', '증명서발급', '근무변경']);
 const JEONGYEOL_MONTHLY_DOC_TYPE = '전결월간보고';
 const JEONGYEOL_MONTHLY_TITLE_PREFIX = '전결 월간보고';
+const APPROVAL_DOC_RULE_OPTION_CATALOG = Object.freeze({
+    require_attachment: { label: '첨부 필수' },
+    require_amount: { label: '금액 필수' },
+    require_receiver: { label: '수신 필수' },
+    require_via: { label: '경유 필수' }
+});
 function hasApprovalRoleFallback(permissionKey) {
     const role = String(myInfo?.role || '').toLowerCase();
     const match = (roles) => roles.includes(role);
@@ -500,6 +631,593 @@ const formatYearMonthLabel = (ym) => {
 };
 const formatMoney = (value) => Number(value || 0).toLocaleString();
 
+function isApprovalWorkforceLiteProfile() {
+    return approvalRuntimeProfile === 'workforce_lite';
+}
+
+function parseApprovalBoolean(value, fallback = true) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const safe = String(value).trim().toLowerCase();
+    if (['true', 't', '1', 'yes', 'y', 'on'].includes(safe)) return true;
+    if (['false', 'f', '0', 'no', 'n', 'off'].includes(safe)) return false;
+    return fallback;
+}
+
+function getApprovalDocRuleDefaults(item) {
+    const defaults = {};
+    (Array.isArray(item?.ruleOptions) ? item.ruleOptions : []).forEach((ruleKey) => {
+        defaults[ruleKey] = parseApprovalBoolean(item?.ruleDefaults?.[ruleKey], false);
+    });
+    return defaults;
+}
+
+function parseApprovalDocRuleCatalog(rawValue) {
+    const catalog = {};
+    WORKFORCE_LITE_APPROVAL_DOC_GROUPS.forEach((group) => {
+        (Array.isArray(group?.items) ? group.items : []).forEach((item) => {
+            catalog[item.value] = getApprovalDocRuleDefaults(item);
+        });
+    });
+    if (typeof rawValue !== 'string' || !rawValue.trim()) return catalog;
+    try {
+        const parsed = JSON.parse(rawValue);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return catalog;
+        Object.keys(catalog).forEach((docType) => {
+            const source = parsed[docType];
+            if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+            Object.keys(catalog[docType]).forEach((ruleKey) => {
+                catalog[docType][ruleKey] = parseApprovalBoolean(source[ruleKey], catalog[docType][ruleKey]);
+            });
+        });
+        return catalog;
+    } catch (_) {
+        return catalog;
+    }
+}
+
+function getApprovalDocRuleConfig(docType) {
+    const safeDocType = String(docType || '').trim();
+    if (!safeDocType || !isApprovalWorkforceLiteProfile()) return {};
+    if (!approvalDocRuleCatalog || typeof approvalDocRuleCatalog !== 'object') {
+        approvalDocRuleCatalog = parseApprovalDocRuleCatalog(approvalCompanyInfo[APPROVAL_DOC_RULE_CONFIG_KEY]);
+    }
+    return approvalDocRuleCatalog[safeDocType] || {};
+}
+
+function isApprovalDocRuleEnabled(docType, ruleKey) {
+    const config = getApprovalDocRuleConfig(docType);
+    return parseApprovalBoolean(config?.[ruleKey], false);
+}
+
+function parseApprovalNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function isApprovalJeongyeolFeatureEnabled() {
+    if (!isApprovalWorkforceLiteProfile()) return true;
+    return approvalSecretaryJeongyeolEnabled === true;
+}
+
+function isApprovalAttendanceJeongyeolEnabled() {
+    if (!isApprovalWorkforceLiteProfile()) return true;
+    return approvalSecretaryAttendanceEnabled === true;
+}
+
+function getApprovalExpenseJeongyeolLimit() {
+    if (!isApprovalWorkforceLiteProfile()) return 300000;
+    return Math.max(0, parseApprovalNumber(approvalSecretaryExpenseLimit, 300000));
+}
+
+function getApprovalDefaultLeaveTypeCatalog() {
+    return APPROVAL_DEFAULT_LEAVE_TYPE_CATALOG.map((item) => ({
+        id: String(item.id || '').trim(),
+        label: String(item.label || '').trim(),
+        enabled: item.enabled !== false,
+        deductible: item.deductible === true,
+        duration_mode: String(item.duration_mode || 'date_range').trim(),
+        aliases: Array.from(new Set((Array.isArray(item.aliases) ? item.aliases : []).map((alias) => String(alias || '').trim()).filter(Boolean)))
+    }));
+}
+
+function normalizeApprovalLeaveTypeDurationMode(value) {
+    const safe = String(value || '').trim();
+    if (safe === 'half_day' || safe === 'single_day' || safe === 'date_range') return safe;
+    return 'date_range';
+}
+
+function normalizeApprovalLeaveTypeAliases(value) {
+    const source = Array.isArray(value)
+        ? value
+        : (() => {
+            if (typeof value !== 'string' || !value.trim()) return [];
+            try {
+                const parsed = JSON.parse(value);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+                return [];
+            }
+        })();
+    return Array.from(new Set(source.map((item) => String(item || '').trim()).filter(Boolean)));
+}
+
+function parseApprovalLeaveTypeCatalog(rawValue) {
+    const fallback = getApprovalDefaultLeaveTypeCatalog();
+    if (typeof rawValue !== 'string' || !rawValue.trim()) return fallback;
+
+    try {
+        const parsed = JSON.parse(rawValue);
+        if (!Array.isArray(parsed)) return fallback;
+        const usedIds = new Set();
+        const sanitized = [];
+        parsed.forEach((item, index) => {
+            const label = String(item?.label || '').trim();
+            if (!label) return;
+            let id = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+            if (!id || usedIds.has(id)) id = `leave_type_${index + 1}`;
+            if (usedIds.has(id)) return;
+            usedIds.add(id);
+            const aliases = Array.from(new Set([
+                ...normalizeApprovalLeaveTypeAliases(item?.aliases),
+                ...normalizeApprovalLeaveTypeAliases(item?.alias_json),
+                ...(String(item?.originalLabel || '').trim() && String(item?.originalLabel || '').trim() !== label ? [String(item.originalLabel || '').trim()] : [])
+            ].map((alias) => String(alias || '').trim()).filter(Boolean).filter((alias) => alias !== label)));
+            sanitized.push({
+                id,
+                label,
+                enabled: item?.enabled !== false,
+                deductible: item?.deductible === true,
+                duration_mode: normalizeApprovalLeaveTypeDurationMode(item?.duration_mode),
+                aliases
+            });
+        });
+        return sanitized;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function getApprovalLeaveTypeCatalog() {
+    if (!isApprovalWorkforceLiteProfile()) return getApprovalDefaultLeaveTypeCatalog();
+    return Array.isArray(approvalLeaveTypeCatalog)
+        ? approvalLeaveTypeCatalog.map((item) => ({
+            id: String(item.id || '').trim(),
+            label: String(item.label || '').trim(),
+            enabled: item.enabled !== false,
+            deductible: item.deductible === true,
+            duration_mode: normalizeApprovalLeaveTypeDurationMode(item.duration_mode),
+            aliases: normalizeApprovalLeaveTypeAliases(item.aliases)
+        }))
+        : parseApprovalLeaveTypeCatalog(approvalCompanyInfo[APPROVAL_LEAVE_TYPE_CONFIG_KEY]);
+}
+
+function getApprovalEnabledLeaveTypeCatalog() {
+    return getApprovalLeaveTypeCatalog().filter((item) => item.enabled !== false);
+}
+
+function getApprovalLeaveTypeConfigByStoredSubtype(subType) {
+    const safe = String(subType || '').trim();
+    if (!safe) return null;
+    const hit = getApprovalLeaveTypeCatalog().find((item) => (
+        item.id === safe
+        || item.label === safe
+        || normalizeApprovalLeaveTypeAliases(item.aliases).includes(safe)
+    ));
+    return hit || null;
+}
+
+function getApprovalCurrentLeaveTypeConfig() {
+    const selectEl = document.getElementById('leaveTypeSelect');
+    const selectedValue = String(selectEl?.value || '').trim();
+    if (!selectedValue) return null;
+    if (!isApprovalWorkforceLiteProfile()) return getApprovalLeaveTypeConfigByStoredSubtype(selectedValue);
+    return getApprovalEnabledLeaveTypeCatalog().find((item) => item.id === selectedValue)
+        || getApprovalLeaveTypeConfigByStoredSubtype(selectedValue);
+}
+
+function getApprovalCurrentLeaveTypeLabel() {
+    const config = getApprovalCurrentLeaveTypeConfig();
+    if (config?.label) return config.label;
+    return String(document.getElementById('leaveTypeSelect')?.value || '').trim();
+}
+
+function getApprovalCurrentLeaveTypeStoredKey() {
+    const config = getApprovalCurrentLeaveTypeConfig();
+    if (!config) return String(document.getElementById('leaveTypeSelect')?.value || '').trim();
+    return isApprovalWorkforceLiteProfile() ? String(config.id || '').trim() : String(config.label || '').trim();
+}
+
+function getApprovalLeaveSnapshotMeta(doc) {
+    const raw = doc?.leave_snapshot;
+    if (!raw) return null;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    if (typeof raw !== 'string') return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function resolveApprovalLeaveTypeMeta(configOrSubType, doc) {
+    const snapshot = getApprovalLeaveSnapshotMeta(doc);
+    if (snapshot) return snapshot;
+    return (configOrSubType && typeof configOrSubType === 'object')
+        ? configOrSubType
+        : getApprovalLeaveTypeConfigByStoredSubtype(configOrSubType);
+}
+
+function isApprovalHalfDayLeaveType(configOrSubType, doc) {
+    const config = resolveApprovalLeaveTypeMeta(configOrSubType, doc);
+    return normalizeApprovalLeaveTypeDurationMode(config?.duration_mode) === 'half_day';
+}
+
+function isApprovalSingleDayLeaveType(configOrSubType, doc) {
+    const config = resolveApprovalLeaveTypeMeta(configOrSubType, doc);
+    return normalizeApprovalLeaveTypeDurationMode(config?.duration_mode) === 'single_day';
+}
+
+function isApprovalDeductibleLeaveType(configOrSubType, doc) {
+    const config = resolveApprovalLeaveTypeMeta(configOrSubType, doc);
+    return config?.deductible === true;
+}
+
+function buildApprovalLeaveTypeOptionLabel(config) {
+    const durationLabel = isApprovalHalfDayLeaveType(config)
+        ? '반차'
+        : (isApprovalSingleDayLeaveType(config) ? '1일' : '기간');
+    const deductibleLabel = isApprovalDeductibleLeaveType(config) ? '연차 차감' : '차감 없음';
+    return `${config.label} (${durationLabel}, ${deductibleLabel})`;
+}
+
+function renderApprovalLeaveTypeOptions() {
+    const selectEl = document.getElementById('leaveTypeSelect');
+    if (!selectEl || !isApprovalWorkforceLiteProfile()) return;
+    const previous = String(selectEl.value || '').trim();
+    const enabledItems = getApprovalEnabledLeaveTypeCatalog();
+    selectEl.innerHTML = '';
+
+    if (enabledItems.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '사용 가능한 휴가 종류가 없습니다';
+        selectEl.appendChild(option);
+        selectEl.value = '';
+        return;
+    }
+
+    enabledItems.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = buildApprovalLeaveTypeOptionLabel(item);
+        selectEl.appendChild(option);
+    });
+
+    const previousMatch = enabledItems.find((item) => (
+        item.id === previous
+        || item.label === previous
+        || normalizeApprovalLeaveTypeAliases(item.aliases).includes(previous)
+    ));
+    selectEl.value = previousMatch ? previousMatch.id : enabledItems[0].id;
+}
+
+function getApprovalDeductibleSubtypeTokens() {
+    const tokens = [];
+    getApprovalLeaveTypeCatalog().forEach((item) => {
+        if (item.deductible !== true) return;
+        [item.id, item.label, ...normalizeApprovalLeaveTypeAliases(item.aliases)].forEach((token) => {
+            const safe = String(token || '').trim();
+            if (safe) tokens.push(safe);
+        });
+    });
+    return Array.from(new Set(tokens));
+}
+
+function syncApprovalLeaveTypeRuntime() {
+    approvalLeaveTypeCatalog = parseApprovalLeaveTypeCatalog(approvalCompanyInfo[APPROVAL_LEAVE_TYPE_CONFIG_KEY]);
+    if (window.LeaveLedger && typeof window.LeaveLedger.setDeductibleSubTypes === 'function') {
+        window.LeaveLedger.setDeductibleSubTypes(getApprovalDeductibleSubtypeTokens());
+    }
+    renderApprovalLeaveTypeOptions();
+}
+
+function getApprovalLeaveTypeDisplayLabel(subType, doc) {
+    const snapshot = getApprovalLeaveSnapshotMeta(doc);
+    if (snapshot?.label) return String(snapshot.label).trim();
+    const config = getApprovalLeaveTypeConfigByStoredSubtype(subType);
+    return config?.label || String(subType || '').trim();
+}
+
+function formatApprovalDocTypeLabel(docOrType) {
+    const doc = (docOrType && typeof docOrType === 'object') ? docOrType : null;
+    const raw = String(doc ? doc.doc_type : docOrType || '').trim();
+    if (!raw.startsWith('휴가(')) return raw;
+    const snapshot = getApprovalLeaveSnapshotMeta(doc);
+    if (snapshot?.label) return `휴가(${String(snapshot.label).trim()})`;
+    const subType = getApprovalLeaveSubType(raw);
+    if (!subType) return raw;
+    return `휴가(${getApprovalLeaveTypeDisplayLabel(subType, doc)})`;
+}
+
+function syncApprovalLeaveInputMode() {
+    const config = getApprovalCurrentLeaveTypeConfig();
+    const mode = normalizeApprovalLeaveTypeDurationMode(config?.duration_mode);
+    const label = String(config?.label || '휴가').trim();
+    const dateRangeArea = document.getElementById('dateRangeArea');
+    const singleDayArea = document.getElementById('singleDayArea');
+    const halfDayArea = document.getElementById('halfDayArea');
+    const dateRangeTitle = document.getElementById('dateRangeAreaTitle');
+    const singleDayTitle = document.getElementById('singleDayAreaTitle');
+    const halfDayTitle = document.getElementById('halfDayAreaTitle');
+
+    if (dateRangeArea) dateRangeArea.classList.toggle('hidden', mode !== 'date_range');
+    if (singleDayArea) singleDayArea.classList.toggle('hidden', mode !== 'single_day');
+    if (halfDayArea) halfDayArea.classList.toggle('hidden', mode !== 'half_day');
+    if (dateRangeTitle) dateRangeTitle.textContent = `📅 ${label} 기간`;
+    if (singleDayTitle) singleDayTitle.textContent = `📅 ${label} 날짜`;
+    if (halfDayTitle) halfDayTitle.textContent = `📅 ${label} 날짜`;
+}
+
+function isApprovalProposalLikeType(docType) {
+    return APPROVAL_PROPOSAL_LIKE_TYPES.includes(String(docType || '').trim());
+}
+
+function isApprovalHtmlEditorType(docType) {
+    const safeDocType = String(docType || '').trim();
+    return safeDocType === '공문' || isApprovalProposalLikeType(safeDocType);
+}
+
+function getWorkforceLiteApprovalDocGroups() {
+    return WORKFORCE_LITE_APPROVAL_DOC_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+            const current = approvalCompanyInfo[item.key];
+            return parseApprovalBoolean(current, item.defaultEnabled !== false);
+        })
+    })).filter((group) => group.items.length > 0);
+}
+
+function getFirstAvailableWorkforceLiteApprovalDocType() {
+    const groups = getWorkforceLiteApprovalDocGroups();
+    for (const group of groups) {
+        if (Array.isArray(group.items) && group.items.length > 0) return group.items[0].value;
+    }
+    return '';
+}
+
+function isApprovalDocEnabledForCurrentProfile(docType) {
+    const safeDocType = String(docType || '').trim();
+    if (!safeDocType) return false;
+    if (!isApprovalWorkforceLiteProfile()) return true;
+    for (const group of WORKFORCE_LITE_APPROVAL_DOC_GROUPS) {
+        const hit = group.items.find((item) => item.value === safeDocType);
+        if (hit) return parseApprovalBoolean(approvalCompanyInfo[hit.key], hit.defaultEnabled !== false);
+    }
+    return false;
+}
+
+function renderApprovalCategoryOptions() {
+    const categoryEl = document.getElementById('appCategory');
+    if (!categoryEl || !isApprovalWorkforceLiteProfile()) return;
+
+    const previousValue = String(categoryEl.value || '').trim();
+    const groups = getWorkforceLiteApprovalDocGroups();
+    const enabledValues = [];
+
+    categoryEl.innerHTML = '';
+    groups.forEach((group) => {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = group.label;
+        group.items.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            optGroup.appendChild(option);
+            enabledValues.push(item.value);
+        });
+        categoryEl.appendChild(optGroup);
+    });
+
+    if (enabledValues.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '사용 가능한 문서유형이 없습니다';
+        categoryEl.appendChild(option);
+        categoryEl.value = '';
+        return;
+    }
+
+    categoryEl.value = enabledValues.includes(previousValue) ? previousValue : enabledValues[0];
+}
+
+function getApprovalSubjectConfig(docType) {
+    const safeDocType = String(docType || '').trim();
+    switch (safeDocType) {
+        case '출장신청':
+            return {
+                label: '출장 제목',
+                placeholder: '예: 2026년 3월 서울 협동조합 간담회 출장',
+                defaultBody: '위와 같이 출장을 신청하오니 승인하여 주시기 바랍니다.',
+                amountLabel: '금액 (원)',
+                amountPlaceholder: '0',
+                showAmount: false,
+                htmlHelp: '출장신청서는 출장 목적, 일정, 장소를 본문에 작성해 결재합니다.'
+            };
+        case '구매요청':
+            return {
+                label: '구매 요청 제목',
+                placeholder: '예: 사무용 노트북 구매 요청',
+                defaultBody: '아래와 같이 구매를 요청하오니 승인하여 주시기 바랍니다.',
+                amountLabel: '예상 금액 (원)',
+                amountPlaceholder: '예: 1000000',
+                showAmount: true,
+                htmlHelp: '구매요청서는 구매 목적, 품목, 수량, 사용 용도를 본문에 작성해 결재합니다.'
+            };
+        case '증명서발급':
+            return {
+                label: '증명서 신청 제목',
+                placeholder: '예: 재직증명서 발급 신청',
+                defaultBody: '아래와 같이 증명서 발급을 신청하오니 확인하여 주시기 바랍니다.',
+                amountLabel: '금액 (원)',
+                amountPlaceholder: '0',
+                showAmount: false,
+                htmlHelp: '증명서 발급 신청서는 증명서 종류, 제출처, 사용 목적을 본문에 작성해 결재합니다.'
+            };
+        case '근무변경':
+            return {
+                label: '근무변경 제목',
+                placeholder: '예: 2026년 3월 재택근무 신청',
+                defaultBody: '아래와 같이 근무 변경을 신청하오니 승인하여 주시기 바랍니다.',
+                amountLabel: '금액 (원)',
+                amountPlaceholder: '0',
+                showAmount: false,
+                htmlHelp: '근무변경 신청서는 변경 사유와 적용 기간을 본문에 작성해 결재합니다.'
+            };
+        case '일반품의':
+        default:
+            return {
+                label: '품의 제목',
+                placeholder: '예: 2026년 2월 사무국 운영비 집행 건',
+                defaultBody: '위와 같이 품의하오니 승인하여 주시기 바랍니다.',
+                amountLabel: '금액 (원)',
+                amountPlaceholder: '0',
+                showAmount: false,
+                htmlHelp: '일반품의서는 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.'
+            };
+    }
+}
+
+function getApprovalAttachmentRequirementMessage(docType) {
+    if (!isApprovalWorkforceLiteProfile()) return '';
+    return isApprovalDocRuleEnabled(docType, 'require_attachment')
+        ? '이 문서유형은 첨부파일이 필수입니다.'
+        : '';
+}
+
+function syncApprovalAttachmentHelp(docType) {
+    const fileHelp = document.getElementById('fileHelp');
+    if (!fileHelp) return;
+    const message = getApprovalAttachmentRequirementMessage(docType);
+    if (!message) {
+        if (String(fileHelp.textContent || '').trim() === '이 문서유형은 첨부파일이 필수입니다.') {
+            fileHelp.textContent = '';
+            fileHelp.classList.add('hidden');
+        }
+        return;
+    }
+    fileHelp.textContent = `(${message})`;
+    fileHelp.classList.remove('hidden');
+}
+
+function getApprovalAutoGeneratedBodyList() {
+    const bodies = [
+        '위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.',
+        '아래와 같이 지출결의를 상신하오니 승인하여 주시기 바랍니다.',
+        '아래와 같이 안내드립니다.',
+        '아래와 같이 지출하고자 하오니 승인하여 주시기 바랍니다.'
+    ];
+    APPROVAL_PROPOSAL_LIKE_TYPES.forEach((docType) => {
+        bodies.push(getApprovalSubjectConfig(docType).defaultBody);
+    });
+    return Array.from(new Set(bodies.map((body) => String(body || '').trim()).filter(Boolean)));
+}
+
+function isApprovalDependentTemplateContent(content) {
+    const raw = String(content || '').trim();
+    return raw.startsWith('[부양가족 ') && raw.includes('위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.');
+}
+
+function isApprovalAutoGeneratedTemplateContent(content) {
+    const raw = String(content || '').trim();
+    if (!raw) return false;
+    if (isApprovalDependentTemplateContent(raw)) return true;
+    if (getApprovalAutoGeneratedBodyList().includes(raw)) return true;
+    if (raw.includes('[급여대장 연동]')) return true;
+    if (raw.includes('급여 지급을 위해 지출결의를 상신합니다.')) return true;
+    return false;
+}
+
+function setSelectOptionHidden(selectEl, optionValue, hidden) {
+    if (!selectEl) return;
+    Array.from(selectEl.options || []).forEach((option) => {
+        if (String(option.value || '') !== String(optionValue || '')) return;
+        option.hidden = !!hidden;
+        option.disabled = !!hidden;
+    });
+}
+
+function applyApprovalRuntimeProfileUi() {
+    const isLite = isApprovalWorkforceLiteProfile();
+    const categoryEl = document.getElementById('appCategory');
+    const historyTypeEl = document.getElementById('historyDocTypeFilter');
+    const dependentSection = document.getElementById('divDependentOption');
+    const jeongyeolCard = document.getElementById('chkSecretaryJeongyeol')?.closest('.mb-3');
+    const monthlyPanel = document.getElementById('secretaryMonthlyReportPanel');
+
+    if (isLite) {
+        renderApprovalCategoryOptions();
+        renderApprovalLeaveTypeOptions();
+    } else {
+        setSelectOptionHidden(categoryEl, '부양가족', false);
+    }
+    setSelectOptionHidden(historyTypeEl, 'DEPENDENT', isLite);
+
+    if (isLite && categoryEl && !isApprovalDocEnabledForCurrentProfile(categoryEl.value)) {
+        categoryEl.value = getFirstAvailableWorkforceLiteApprovalDocType();
+    }
+    if (isLite && historyTypeEl && historyTypeEl.value === 'DEPENDENT') {
+        historyTypeEl.value = 'ALL';
+    }
+    if (dependentSection) {
+        dependentSection.classList.toggle('hidden', isLite);
+    }
+    if (jeongyeolCard) {
+        jeongyeolCard.classList.toggle('hidden', isLite && !isApprovalJeongyeolFeatureEnabled());
+    }
+    if (monthlyPanel) {
+        monthlyPanel.classList.toggle('hidden', !isCurrentUserSecretaryGeneral() || (isLite && !isApprovalJeongyeolFeatureEnabled()));
+    }
+    syncApprovalLeaveInputMode();
+}
+
+async function loadApprovalCompanyInfo() {
+    try {
+        approvalLeaveSnapshotSupported = await detectApprovalLeaveSnapshotSupport();
+    } catch (_) {
+        approvalLeaveSnapshotSupported = false;
+    }
+    const { data, error } = await _supabase.from('ref_company_info').select('key,value');
+    if (error) throw error;
+    approvalCompanyInfo = {};
+    (data || []).forEach((row) => {
+        approvalCompanyInfo[row.key] = row.value;
+    });
+    approvalSecretaryJeongyeolEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_jeongyeol_enabled'], true);
+    approvalSecretaryAttendanceEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_attendance_enabled'], true);
+    approvalSecretaryExpenseLimit = Math.max(0, parseApprovalNumber(approvalCompanyInfo['approval_secretary_expense_limit'], 300000));
+    approvalDocRuleCatalog = parseApprovalDocRuleCatalog(approvalCompanyInfo[APPROVAL_DOC_RULE_CONFIG_KEY]);
+    syncApprovalLeaveTypeRuntime();
+    try {
+        localStorage.setItem('erp_company_info', JSON.stringify(approvalCompanyInfo));
+    } catch (_) {
+        void 0;
+    }
+}
+
+async function detectApprovalLeaveSnapshotSupport() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
+            headers: { Accept: 'application/openapi+json' }
+        });
+        if (!response.ok) return false;
+        const openapi = await response.json();
+        return !!openapi?.definitions?.ref_approval?.properties?.leave_snapshot;
+    } catch (_) {
+        return false;
+    }
+}
+
 function isSecretaryGeneralUserInfo(user) {
     return String(user?.position || '').includes('사무국장');
 }
@@ -535,6 +1253,59 @@ function getSecretaryApprover() {
 function getChairmanApprover() {
     const chairman = getPrimaryApproverByPosition('이사장');
     return toApproverObject(chairman);
+}
+
+function getApprovalLineTargetEmpInfo() {
+    const isProxy = !!document.getElementById("chkProxy")?.checked;
+    if (!isProxy) return myInfo || null;
+    const targetId = String(document.getElementById("proxyTargetSelect")?.value || '').trim();
+    if (!targetId) return null;
+    return allUsers.find((user) => String(user?.emp_id || '') === targetId) || null;
+}
+
+function getTeamLeaderApproverForTarget(targetUser) {
+    const targetEmpId = String(targetUser?.emp_id || '').trim();
+    const targetDept = String(targetUser?.department || '').trim();
+    if (!targetEmpId || !targetDept) return null;
+    const teamLeader = (allUsers || []).find((user) => (
+        String(user?.emp_id || '').trim() !== targetEmpId
+        && String(user?.department || '').trim() === targetDept
+        && String(user?.position || '').includes('팀장')
+    )) || null;
+    return toApproverObject(teamLeader);
+}
+
+function buildDefaultApprovalLineTemplate() {
+    const targetUser = getApprovalLineTargetEmpInfo();
+    const targetEmpId = String(targetUser?.emp_id || '').trim();
+    const candidates = [
+        getTeamLeaderApproverForTarget(targetUser),
+        getSecretaryApprover(),
+        getChairmanApprover()
+    ];
+    const unique = [];
+    const seen = new Set();
+    candidates.forEach((candidate) => {
+        const safeEmpId = String(candidate?.emp_id || '').trim();
+        if (!safeEmpId || safeEmpId === targetEmpId || seen.has(safeEmpId)) return;
+        seen.add(safeEmpId);
+        unique.push(candidate);
+    });
+    return unique;
+}
+
+function applyDefaultApprovalLineTemplate(force = false) {
+    if (!isApprovalWorkforceLiteProfile()) return false;
+    if (jeongyeolLineLocked) return false;
+    if (!force && finalApprovers.length > 0 && !approvalLineTemplateAutoApplied) return false;
+
+    const defaults = buildDefaultApprovalLineTemplate();
+    if (defaults.length === 0) return false;
+
+    finalApprovers = defaults;
+    approvalLineTemplateAutoApplied = true;
+    renderLinePreview();
+    return true;
 }
 
 function getPreviousKstMonth() {
@@ -594,12 +1365,15 @@ function isSecretaryGeneralByEmpId(empId) {
 }
 
 function getJeongyeolAutoDecision(mainType, amountValue, options = {}) {
+    if (!isApprovalJeongyeolFeatureEnabled()) return null;
     const type = String(mainType || '').trim();
     const amount = Number(amountValue || 0);
     const drafterEmpId = String(options?.drafterEmpId || '').trim() || String(myInfo?.emp_id || '').trim();
     const drafterIsSecretary = isSecretaryGeneralByEmpId(drafterEmpId);
+    const expenseLimit = getApprovalExpenseJeongyeolLimit();
 
     if (type === '휴가') {
+        if (!isApprovalAttendanceJeongyeolEnabled()) return null;
         if (drafterIsSecretary) {
             return {
                 mode: 'AUTO',
@@ -617,12 +1391,12 @@ function getJeongyeolAutoDecision(mainType, amountValue, options = {}) {
             targetApprover: 'SECRETARY'
         };
     }
-    if (type === '지출결의' && amount > 0 && amount <= JEONGYEOL_AUTO_EXPENSE_LIMIT) {
+    if (type === '지출결의' && expenseLimit > 0 && amount > 0 && amount <= expenseLimit) {
         return {
             mode: 'AUTO',
             applied: true,
             ruleCode: 'AUTO_EXPENSE_UNDER_300K',
-            ruleLabel: `30만원 이하 지출결의 자동 전결 (${formatMoney(amount)}원)`,
+            ruleLabel: `${formatMoney(expenseLimit)}원 이하 지출결의 자동 전결 (${formatMoney(amount)}원)`,
             targetApprover: 'SECRETARY'
         };
     }
@@ -699,6 +1473,20 @@ function applyJeongyeolLineDecision(decision, options = {}) {
 function updateJeongyeolUi() {
     const hintEl = document.getElementById('jeongyeolHint');
     const toggleEl = document.getElementById('chkSecretaryJeongyeol');
+    if (!isApprovalJeongyeolFeatureEnabled()) {
+        if (toggleEl) {
+            toggleEl.checked = false;
+            toggleEl.disabled = true;
+        }
+        manualJeongyeolSelected = false;
+        manualJeongyeolToggleTouched = false;
+        if (hintEl) {
+            hintEl.textContent = '관리자 설정에서 사무국장 전결이 꺼져 있습니다.';
+        }
+        applyJeongyeolLineDecision({ mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' }, { showAlertOnMissing: false });
+        applyApprovalRuntimeProfileUi();
+        return;
+    }
     const mainType = getCurrentDraftMainType();
     const amount = getCurrentDraftAmount();
     const options = { drafterEmpId: getCurrentDraftDrafterEmpId() };
@@ -726,7 +1514,12 @@ function updateJeongyeolUi() {
         } else if (canSecretaryControlAuto && autoDecision?.ruleLabel) {
             hintEl.textContent = `자동 전결 가능: ${autoDecision.ruleLabel}`;
         } else {
-            hintEl.textContent = '자동 전결 규정(30만원 이하 지출결의/근태)을 우선 적용합니다.';
+            const hintParts = [];
+            if (isApprovalAttendanceJeongyeolEnabled()) hintParts.push('근태');
+            if (getApprovalExpenseJeongyeolLimit() > 0) hintParts.push(`${formatMoney(getApprovalExpenseJeongyeolLimit())}원 이하 지출결의`);
+            hintEl.textContent = hintParts.length > 0
+                ? `자동 전결 규정(${hintParts.join('/')})을 우선 적용합니다.`
+                : '자동 전결 규정이 없습니다. 필요 시 수동으로 전결을 선택하세요.';
         }
     }
     applyJeongyeolLineDecision(decision, { showAlertOnMissing: false });
@@ -769,11 +1562,17 @@ function getApprovalLeaveSubType(docType) {
 }
 
 function buildLeavePeriodLabelForDraft(leaveType, daysValue) {
-    const isHalf = leaveType === '반차' || leaveType === '생일반차';
-    if (isHalf) {
+    const currentConfig = getApprovalCurrentLeaveTypeConfig();
+    const config = currentConfig && [currentConfig.id, currentConfig.label].includes(String(leaveType || '').trim())
+        ? currentConfig
+        : getApprovalLeaveTypeConfigByStoredSubtype(leaveType);
+    if (isApprovalHalfDayLeaveType(config)) {
         const halfDate = formatApprovalDotDate(document.getElementById('halfDate')?.value || '');
         const ampm = String(document.querySelector('input[name="ampm"]:checked')?.value || '').trim();
         return halfDate ? `${halfDate}${ampm ? ` ${ampm}` : ''}` : '';
+    }
+    if (isApprovalSingleDayLeaveType(config)) {
+        return formatApprovalDotDate(document.getElementById('singleLeaveDate')?.value || '');
     }
     const start = formatApprovalDotDate(document.getElementById('leaveStart')?.value || '');
     const end = formatApprovalDotDate(document.getElementById('leaveEnd')?.value || '');
@@ -798,7 +1597,9 @@ function buildLeaveAmountLabel(doc) {
     if (!rawType.startsWith('휴가')) return '';
 
     const leaveSubType = getApprovalLeaveSubType(rawType);
-    const isHalf = leaveSubType === '반차' || leaveSubType === '생일반차';
+    const leaveSnapshot = getApprovalLeaveSnapshotMeta(doc);
+    const leaveTypeLabel = leaveSnapshot?.label || getApprovalLeaveTypeDisplayLabel(leaveSubType, doc);
+    const isHalf = isApprovalHalfDayLeaveType(leaveSubType, doc);
     const periodLabel = extractLeavePeriodLabelFromDoc(doc);
     const daysLabel = formatLeaveDayCount(doc?.amount);
 
@@ -813,6 +1614,7 @@ function buildLeaveAmountLabel(doc) {
         return periodLabel;
     }
 
+    if (leaveTypeLabel && leaveTypeLabel !== '연차' && leaveTypeLabel !== leaveSubType) return leaveTypeLabel;
     if (daysLabel) return `${daysLabel}일`;
     return '';
 }
@@ -1158,6 +1960,149 @@ function getApprovalVisualEditor() {
     return document.getElementById("appDescVisual");
 }
 
+function getCurrentApprovalCategory() {
+    return String(document.getElementById("appCategory")?.value || '').trim();
+}
+
+function hasGeneralProposalEnhancedEditor(docType) {
+    return String(docType || '').trim() === '일반품의' && typeof window.Quill === 'function';
+}
+
+function getGeneralProposalQuillWrap() {
+    return document.getElementById('generalProposalEditorWrap');
+}
+
+function getGeneralProposalQuillEditor() {
+    return document.getElementById('generalProposalQuill');
+}
+
+function getGeneralProposalTemplateToolbar() {
+    return document.getElementById('generalProposalTemplateToolbar');
+}
+
+function buildGeneralProposalTemplateBlockHtml(blockKey) {
+    switch (String(blockKey || '').trim()) {
+        case 'summary':
+            return '<h3>1. 품의 개요</h3><p>품의 목적과 요청 사항을 간단히 작성합니다.</p>';
+        case 'background':
+            return '<h3>2. 추진 배경</h3><p>현재 상황과 추진이 필요한 배경을 작성합니다.</p>';
+        case 'details':
+            return '<h3>3. 주요 내용</h3><ul><li>추진 항목</li><li>세부 실행 내용</li></ul>';
+        case 'budget':
+            return '<h3>4. 예산 계획</h3><table><tbody><tr><th>항목</th><th>금액</th><th>비고</th></tr><tr><td>예산 항목</td><td></td><td></td></tr></tbody></table>';
+        case 'schedule':
+            return '<h3>5. 추진 일정</h3><table><tbody><tr><th>일정</th><th>내용</th></tr><tr><td></td><td></td></tr></tbody></table>';
+        case 'effect':
+            return '<h3>6. 기대 효과</h3><ul><li>기대 효과를 작성합니다.</li></ul>';
+        case 'full':
+            return [
+                '<h3>1. 품의 개요</h3><p>품의 목적과 요청 사항을 간단히 작성합니다.</p>',
+                '<h3>2. 추진 배경</h3><p>현재 상황과 추진이 필요한 배경을 작성합니다.</p>',
+                '<h3>3. 주요 내용</h3><ul><li>추진 항목</li><li>세부 실행 내용</li></ul>',
+                '<h3>4. 예산 계획</h3><table><tbody><tr><th>항목</th><th>금액</th><th>비고</th></tr><tr><td>예산 항목</td><td></td><td></td></tr></tbody></table>',
+                '<h3>5. 추진 일정</h3><table><tbody><tr><th>일정</th><th>내용</th></tr><tr><td></td><td></td></tr></tbody></table>',
+                '<h3>6. 기대 효과</h3><ul><li>기대 효과를 작성합니다.</li></ul>',
+                '<h3>7. 요청 사항</h3><p>위와 같이 품의하오니 승인하여 주시기 바랍니다.</p>'
+            ].join('');
+        default:
+            return '';
+    }
+}
+
+function syncGeneralProposalTemplateToolbar(docType) {
+    const toolbar = getGeneralProposalTemplateToolbar();
+    if (!toolbar) return;
+    const visible = hasGeneralProposalEnhancedEditor(docType) && isApprovalWorkforceLiteProfile();
+    toolbar.classList.toggle('hidden', !visible);
+}
+
+function buildGeneralProposalQuillHtml(rawValue) {
+    const rendered = renderApprovalContent(rawValue, true);
+    return rendered || '<p><br></p>';
+}
+
+function normalizeGeneralProposalQuillHtml(rawHtml) {
+    const normalized = normalizeApprovalVisualHtml(rawHtml);
+    if (!normalized || /^<p><br><\/p>$/i.test(normalized)) return '';
+    return sanitizeApprovalHtml(normalized);
+}
+
+function ensureGeneralProposalQuill() {
+    if (generalProposalQuill) return true;
+    if (typeof window.Quill !== 'function') return false;
+    const editorEl = getGeneralProposalQuillEditor();
+    if (!editorEl) return false;
+
+    generalProposalQuill = new window.Quill(editorEl, {
+        theme: 'snow',
+        modules: {
+            toolbar: '#generalProposalQuillToolbar'
+        },
+        placeholder: '일반품의 내용을 작성하세요.'
+    });
+    generalProposalQuill.on('text-change', function () {
+        if (generalProposalQuillSyncing) return;
+        if (approvalEditorMode !== 'visual') return;
+        if (!hasGeneralProposalEnhancedEditor(getCurrentApprovalCategory())) return;
+        syncApprovalSourceFromGeneralProposalQuill();
+    });
+    return true;
+}
+
+function syncGeneralProposalQuillFromSource() {
+    if (!ensureGeneralProposalQuill()) return false;
+    const source = getApprovalHtmlEditor();
+    if (!source) return false;
+    generalProposalQuillSyncing = true;
+    generalProposalQuill.clipboard.dangerouslyPasteHTML(buildGeneralProposalQuillHtml(source.value));
+    generalProposalQuillSyncing = false;
+    return true;
+}
+
+function syncApprovalSourceFromGeneralProposalQuill() {
+    if (!ensureGeneralProposalQuill()) return false;
+    const source = getApprovalHtmlEditor();
+    if (!source) return false;
+    source.value = normalizeGeneralProposalQuillHtml(generalProposalQuill.root.innerHTML);
+    return true;
+}
+
+function shouldReplaceGeneralProposalEditorWithTemplate(currentHtml) {
+    const normalized = normalizeGeneralProposalQuillHtml(currentHtml);
+    if (!normalized) return true;
+    const plainText = normalized.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return isApprovalAutoGeneratedTemplateContent(normalized) || isApprovalAutoGeneratedTemplateContent(plainText);
+}
+
+function insertGeneralProposalTemplateBlock(blockKey) {
+    if (!hasGeneralProposalEnhancedEditor(getCurrentApprovalCategory())) return;
+    if (!ensureGeneralProposalQuill()) return;
+    const html = buildGeneralProposalTemplateBlockHtml(blockKey);
+    if (!html) return;
+
+    const currentHtml = normalizeGeneralProposalQuillHtml(generalProposalQuill.root.innerHTML);
+    const shouldReplaceAll = shouldReplaceGeneralProposalEditorWithTemplate(currentHtml);
+    if (shouldReplaceAll && String(blockKey || '').trim() === 'full') {
+        generalProposalQuill.clipboard.dangerouslyPasteHTML(html, 'user');
+    } else {
+        const range = generalProposalQuill.getSelection(true);
+        const insertIndex = range && Number.isInteger(range.index) ? range.index : generalProposalQuill.getLength();
+        generalProposalQuill.clipboard.dangerouslyPasteHTML(insertIndex, html, 'user');
+    }
+    syncApprovalSourceFromGeneralProposalQuill();
+}
+
+function syncApprovalVisualSurface(docType) {
+    const useGeneralProposalEditor = hasGeneralProposalEnhancedEditor(docType);
+    const quillWrap = getGeneralProposalQuillWrap();
+    const visual = getApprovalVisualEditor();
+    if (quillWrap) quillWrap.classList.toggle('hidden', !useGeneralProposalEditor);
+    if (visual) visual.classList.toggle('hidden', useGeneralProposalEditor);
+    syncGeneralProposalTemplateToolbar(docType);
+    if (useGeneralProposalEditor) syncGeneralProposalQuillFromSource();
+    else syncApprovalVisualFromSource();
+}
+
 function normalizeApprovalVisualHtml(rawHtml) {
     return String(rawHtml || '')
         .replace(/^\s*<br>\s*$/i, '')
@@ -1183,11 +2128,17 @@ function setApprovalEditorContent(rawValue) {
     const source = getApprovalHtmlEditor();
     if (!source) return;
     source.value = String(rawValue || '');
-    syncApprovalVisualFromSource();
+    const currentCategory = getCurrentApprovalCategory();
+    if (hasGeneralProposalEnhancedEditor(currentCategory)) syncGeneralProposalQuillFromSource();
+    else syncApprovalVisualFromSource();
 }
 
 function getApprovalEditorContent() {
-    if (approvalEditorMode === 'visual') syncApprovalSourceFromVisual();
+    if (approvalEditorMode === 'visual') {
+        const currentCategory = getCurrentApprovalCategory();
+        if (hasGeneralProposalEnhancedEditor(currentCategory)) syncApprovalSourceFromGeneralProposalQuill();
+        else syncApprovalSourceFromVisual();
+    }
     return getApprovalHtmlEditor()?.value || '';
 }
 
@@ -1251,8 +2202,14 @@ window.switchApprovalEditorTab = (mode = 'visual') => {
     if (!visualBtn || !htmlBtn || !visualPanel || !htmlPanel) return;
 
     const isVisual = mode !== 'html';
-    if (isVisual) syncApprovalVisualFromSource();
-    else syncApprovalSourceFromVisual();
+    const currentCategory = getCurrentApprovalCategory();
+    if (isVisual) {
+        if (hasGeneralProposalEnhancedEditor(currentCategory)) syncGeneralProposalQuillFromSource();
+        else syncApprovalVisualFromSource();
+    } else {
+        if (hasGeneralProposalEnhancedEditor(currentCategory)) syncApprovalSourceFromGeneralProposalQuill();
+        else syncApprovalSourceFromVisual();
+    }
 
     approvalEditorMode = isVisual ? 'visual' : 'html';
     visualPanel.classList.toggle('active', isVisual);
@@ -1261,24 +2218,31 @@ window.switchApprovalEditorTab = (mode = 'visual') => {
     visualBtn.classList.toggle('btn-outline-primary', !isVisual);
     htmlBtn.classList.toggle('btn-primary', !isVisual);
     htmlBtn.classList.toggle('btn-outline-primary', isVisual);
+    if (isVisual) syncApprovalVisualSurface(currentCategory);
 };
 
 function setApprovalEditorForCategory(docType) {
     const controls = document.getElementById('appDescEditorControls');
+    const legacyToolbar = document.getElementById('legacyApprovalEditorToolbar');
     const visualPanel = document.getElementById('app-desc-panel-visual');
     const htmlPanel = document.getElementById('app-desc-panel-html');
     if (!controls || !visualPanel || !htmlPanel) return;
 
-    const supportsHtmlEditor = (docType === '일반품의' || docType === '공문');
+    const supportsHtmlEditor = isApprovalHtmlEditorType(docType);
+    const useGeneralProposalEditor = hasGeneralProposalEnhancedEditor(docType);
+    if (legacyToolbar) legacyToolbar.classList.toggle('hidden', useGeneralProposalEditor);
     if (supportsHtmlEditor) {
         controls.classList.remove('hidden');
+        syncApprovalVisualSurface(docType);
         window.switchApprovalEditorTab('visual');
     } else {
         controls.classList.add('hidden');
-        syncApprovalSourceFromVisual();
+        if (useGeneralProposalEditor) syncApprovalSourceFromGeneralProposalQuill();
+        else syncApprovalSourceFromVisual();
         approvalEditorMode = 'html';
         visualPanel.classList.remove('active');
         htmlPanel.classList.add('active');
+        syncApprovalVisualSurface(docType);
     }
 }
 
@@ -1288,7 +2252,10 @@ function initializeApprovalEditor() {
     if (!source || !visual) return;
 
     source.addEventListener('input', () => {
-        if (approvalEditorMode === 'html') syncApprovalVisualFromSource();
+        if (approvalEditorMode !== 'html') return;
+        const currentCategory = getCurrentApprovalCategory();
+        if (hasGeneralProposalEnhancedEditor(currentCategory)) syncGeneralProposalQuillFromSource();
+        else syncApprovalVisualFromSource();
     });
     visual.addEventListener('input', () => {
         if (approvalEditorMode === 'visual') syncApprovalSourceFromVisual();
@@ -1298,6 +2265,7 @@ function initializeApprovalEditor() {
     });
 
     syncApprovalVisualFromSource();
+    ensureGeneralProposalQuill();
 }
 
 function mapApprovalDocTypeToMainCategory(docType) {
@@ -1307,6 +2275,10 @@ function mapApprovalDocTypeToMainCategory(docType) {
     if (raw.startsWith('부양가족')) return '부양가족';
     if (raw.startsWith('지출결의')) return '지출결의';
     if (raw.startsWith('공문')) return '공문';
+    if (raw.startsWith('출장신청')) return '출장신청';
+    if (raw.startsWith('구매요청')) return '구매요청';
+    if (raw.startsWith('증명서발급')) return '증명서발급';
+    if (raw.startsWith('근무변경')) return '근무변경';
     if (raw.startsWith('일반품의')) return '일반품의';
     return raw;
 }
@@ -1347,7 +2319,7 @@ function renderApprovalTemplateList() {
 
         const metaEl = document.createElement('small');
         metaEl.className = isSelected ? 'text-white-50' : 'text-muted';
-        metaEl.textContent = `${String(doc?.doc_type || '-')} · ${formatApprovalKstDateISO(doc?.created_at, '-')}`;
+        metaEl.textContent = `${formatApprovalDocTypeLabel(doc || doc?.doc_type || '-')} · ${formatApprovalKstDateISO(doc?.created_at, '-')}`;
 
         const snippetEl = document.createElement('div');
         snippetEl.className = `small mt-1${isSelected ? ' text-white-50' : ' text-muted'}`;
@@ -1441,20 +2413,59 @@ function applySelectedApprovalTemplate() {
     showAlert(`양식을 불러왔습니다.\n제목: ${selected.title || '제목 없음'}`);
 }
 
+async function sendTelegramApprovalNotification(notificationRow) {
+    try {
+        const notificationId = Number(notificationRow?.id || 0);
+        if (!Number.isFinite(notificationId) || notificationId <= 0) return;
+        const { data: sessionData } = await _supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token || '';
+        if (!accessToken) return;
+        const erpBaseUrl = new URL('./', window.location.href).toString();
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/erp-approval-telegram-dm`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'apikey': SUPABASE_KEY
+            },
+            body: JSON.stringify({
+                notificationId,
+                erpBaseUrl
+            })
+        });
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            console.warn('[telegram] approval notification skipped:', response.status, errText);
+        }
+    } catch (e) {
+        console.warn('[telegram] approval notification failed:', e);
+    }
+} // End of sendTelegramApprovalNotification
+
 async function createNotification(targetEmpId, title, message, linkUrl, meta = null) {
     try {
         if (!targetEmpId) return;
-        await _supabase.from('erp_notifications').insert({
-            user_emp_id: targetEmpId,
-            title: title || '알림',
-            message: message || '',
-            type: 'approval',
-            link_url: linkUrl || 'approval.html',
-            meta: meta,
-            created_by: myInfo?.emp_id || null
-        });
+        const { data: insertedRows, error: insertError } = await _supabase
+            .from('erp_notifications')
+            .insert({
+                user_emp_id: targetEmpId,
+                title: title || '알림',
+                message: message || '',
+                type: 'approval',
+                link_url: linkUrl || 'approval.html',
+                meta: meta,
+                created_by: myInfo?.emp_id || null
+            })
+            .select('id, user_emp_id, title, message, link_url, meta, coop_id')
+            .limit(1);
+        if (insertError) throw insertError;
+
+        const insertedRow = Array.isArray(insertedRows) ? insertedRows[0] : null;
+        if (insertedRow) {
+            await sendTelegramApprovalNotification(insertedRow);
+        }
     } catch (e) { /* noop */ }
-}
+} // End of createNotification
 
 async function logAudit(action, entityId, summary, detail = null) {
     try {
@@ -1551,6 +2562,11 @@ function isDelegationRpcMissingError(error) {
 function syncDelegationAvailabilityUi() {
     const openBtn = document.querySelector('button[onclick="openDelegationModal()"]');
     if (!openBtn) return;
+    if (!isApprovalWorkforceLiteProfile()) {
+        openBtn.disabled = false;
+        openBtn.removeAttribute('title');
+        return;
+    }
     if (!delegationRpcUnavailable) {
         openBtn.disabled = false;
         openBtn.removeAttribute('title');
@@ -1581,6 +2597,16 @@ function bindModalFocusGuard(modalEl, fallbackEl) {
 }
 
 async function loadDelegationContext(options = {}) {
+    if (!isApprovalWorkforceLiteProfile()) {
+        delegationOutgoing = null;
+        delegationIncoming = [];
+        delegationIncomingMap = new Map();
+        delegatedApproverEmpIds = [];
+        renderDelegationBanner();
+        populateDelegationTargets();
+        syncDelegationAvailabilityUi();
+        return;
+    }
     const refreshTodo = !!options.refreshTodo;
     if (delegationRpcUnavailable) {
         delegationOutgoing = null;
@@ -1637,6 +2663,10 @@ function canProcessApprovals() {
 }
 
 async function openDelegationModal() {
+    if (!isApprovalWorkforceLiteProfile()) {
+        showAlert('현재 환경에는 결재 위임 기능(DB RPC)이 설치되어 있지 않습니다.');
+        return;
+    }
     if (!delegationModalInstance) return;
     if (delegationRpcUnavailable) {
         showAlert('현재 환경에는 결재 위임 기능(DB RPC)이 설치되어 있지 않습니다.');
@@ -1787,13 +2817,23 @@ window.onload = async function() {
         setTimeout(() => location.href = 'index.html', 1200);
         return;
     }
+    const approvalRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
+        moduleKey: 'approval',
+        moduleLabel: '전자결재',
+        alertFn: function(msg) { showAlert(msg); },
+        redirectUrl: 'index.html'
+    });
+    if (!approvalRuntimeGate.ok) return;
+    approvalRuntimeProfile = String(approvalRuntimeGate.runtime?.runtime_profile || 'legacy_full');
+    await loadApprovalCompanyInfo();
+    applyApprovalRuntimeProfileUi();
 
     // [로직] 직원 목록 로드 (1급 이사장 -> 9급 사원)
     const { data } = await _supabase.from('ref_employees').select('*').order('auth_level', {ascending: true});
     if(data) allUsers = data;
     populateDelegationTargets();
     setDelegationDefaultPeriod();
-    if (!canPerform('approval.process')) {
+    if (isApprovalWorkforceLiteProfile()) {
         await loadDelegationContext({ refreshTodo: false });
     }
 
@@ -1834,7 +2874,7 @@ window.onload = async function() {
     calculateLeave(); // 연차 계산 (대리상신 고려하여 함수 분리됨)
     const monthlyPanel = document.getElementById('secretaryMonthlyReportPanel');
     if (monthlyPanel) {
-        monthlyPanel.classList.toggle('hidden', !isCurrentUserSecretaryGeneral());
+        monthlyPanel.classList.toggle('hidden', !isCurrentUserSecretaryGeneral() || !isApprovalJeongyeolFeatureEnabled());
     }
     const reportMonthEl = document.getElementById('jeongyeolReportMonth');
     if (reportMonthEl && !reportMonthEl.value) {
@@ -1850,6 +2890,7 @@ window.onload = async function() {
         manualJeongyeolToggleTouched = false;
         jeongyeolToggleEl.checked = false;
     }
+    applyApprovalRuntimeProfileUi();
     handleCategoryChange(); // UI 초기화
 };
 
@@ -2061,6 +3102,7 @@ function toggleProxyMode() {
     }
     calculateLeave(); // 대상자가 바뀌었으니 연차 다시 조회
     updateJeongyeolUi();
+    applyDefaultApprovalLineTemplate();
 }
 
 function applyLeaveRemainToUi(snapshot) {
@@ -2070,6 +3112,8 @@ function applyLeaveRemainToUi(snapshot) {
     document.getElementById("remainDaysBadge").innerText = effective;
     const halfBadge = document.getElementById("remainDaysBadgeHalf");
     if (halfBadge) halfBadge.innerText = effective;
+    const singleBadge = document.getElementById("remainDaysBadgeSingle");
+    if (singleBadge) singleBadge.innerText = effective;
 
     const reservedEl = document.getElementById("reservedLeaveDaysBadge");
     if (reservedEl) reservedEl.innerText = reserved;
@@ -2092,6 +3136,7 @@ async function calculateLeave() {
     try {
         if (window.LeaveLedger && typeof window.LeaveLedger.getLeaveSnapshot === 'function') {
             leaveSnapshotState = await window.LeaveLedger.getLeaveSnapshot(_supabase, targetId, {
+                columns: approvalLeaveSnapshotSupported ? APPROVAL_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT : undefined,
                 reservedStatuses: ['완료', '가승인', '증빙확인중', '실물결재대기', '실물결재완료'],
                 includeToday: true,
                 unknownAsReserved: false
@@ -2195,7 +3240,16 @@ function switchTab(tab) {
 // [수정] 카테고리 변경 핸들러 (반차 UI 제어 포함)
 // [수정] 카테고리 변경 핸들러 (관련 문서 UI 제어 추가)
 function handleCategoryChange() {
-    const type = document.getElementById("appCategory").value;
+    const categoryEl = document.getElementById("appCategory");
+    let type = categoryEl.value;
+    if (isApprovalWorkforceLiteProfile() && type === '부양가족') {
+        type = '휴가';
+        categoryEl.value = type;
+    }
+    if (isApprovalWorkforceLiteProfile() && type && !isApprovalDocEnabledForCurrentProfile(type)) {
+        type = getFirstAvailableWorkforceLiteApprovalDocType();
+        categoryEl.value = type;
+    }
     const amtLabel = document.getElementById("amountLabel");
     const amountInput = document.getElementById("appAmount");
     const fileHelp = document.getElementById("fileHelp");
@@ -2213,6 +3267,8 @@ function handleCategoryChange() {
     const divNoticeApprovalMemo = document.getElementById("divNoticeApprovalMemo");
     const noticeApprovalMemoInput = document.getElementById("noticeApprovalMemo");
     const divProposalSubject = document.getElementById("divProposalSubject");
+    const proposalSubjectLabel = document.getElementById("proposalSubjectLabel");
+    const proposalSubjectInput = document.getElementById("proposalSubject");
     const btnAppDescPreview = document.getElementById("btnAppDescPreview");
     const appDescHtmlHelp = document.getElementById("appDescHtmlHelp");
 
@@ -2234,6 +3290,8 @@ function handleCategoryChange() {
     
     amtLabel.innerText = "금액 (원)";
     amountInput.placeholder = "0";
+    if (proposalSubjectLabel) proposalSubjectLabel.textContent = "품의 제목";
+    if (proposalSubjectInput) proposalSubjectInput.placeholder = "예: 2026년 2월 사무국 운영비 집행 건";
     
     // 반차 UI 초기화
     document.getElementById("dateRangeArea").classList.remove("hidden");
@@ -2241,16 +3299,15 @@ function handleCategoryChange() {
     if (type !== '지출결의') resetSalaryExpenseUi();
 
     if (type === '휴가') {
+        if (isApprovalWorkforceLiteProfile()) renderApprovalLeaveTypeOptions();
         divLeave.classList.remove("hidden");
         divLeaveType.classList.remove("hidden");
         divAmt.classList.add("hidden");
-        setApprovalEditorContent("위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.");
-        
-        const lType = document.getElementById("leaveTypeSelect").value;
-        if(lType === '반차' || lType === '생일반차') {
-            document.getElementById("dateRangeArea").classList.add("hidden");
-            document.getElementById("halfDayArea").classList.remove("hidden");
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (!currentDesc || isApprovalAutoGeneratedTemplateContent(currentDesc)) {
+            setApprovalEditorContent("위와 같이 휴가를 신청하오니 재가하여 주시기 바랍니다.");
         }
+        syncApprovalLeaveInputMode();
     } 
     else if (type === '부양가족') {
         divDep.classList.remove("hidden");
@@ -2271,8 +3328,7 @@ function handleCategoryChange() {
         const currentDesc = String(getApprovalEditorContent() || '').trim();
         if (
             !currentDesc
-            || currentDesc.includes("품의하오니 승인하여")
-            || currentDesc.includes("지출하고자 하오니 승인하여")
+            || isApprovalAutoGeneratedTemplateContent(currentDesc)
         ) {
             setApprovalEditorContent("아래와 같이 지출결의를 상신하오니 승인하여 주시기 바랍니다.");
         }
@@ -2287,7 +3343,7 @@ function handleCategoryChange() {
         appDescHtmlHelp.textContent = "공문은 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.";
         divAmt.classList.add("hidden");
         const currentDesc = String(getApprovalEditorContent() || '').trim();
-        if (currentDesc === "아래와 같이 안내드립니다." || currentDesc === "위와 같이 품의하오니 승인하여 주시기 바랍니다.") {
+        if (!currentDesc || isApprovalAutoGeneratedTemplateContent(currentDesc)) {
             setApprovalEditorContent("");
         }
         if (noticeApprovalMemoInput && !String(noticeApprovalMemoInput.value || '').trim()) {
@@ -2298,16 +3354,36 @@ function handleCategoryChange() {
         divProposalSubject.classList.remove("hidden");
         btnAppDescPreview.classList.remove("hidden");
         appDescHtmlHelp.classList.remove("hidden");
-        appDescHtmlHelp.textContent = "일반품의서는 테이블 포함 HTML 본문을 작성할 수 있습니다. 미리보기 편집 또는 HTML 편집 탭으로 작성하고 제출 전 미리보기로 확인하세요.";
-        const currentDesc = getApprovalEditorContent();
-        if (!currentDesc.trim() || currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) {
-            setApprovalEditorContent("위와 같이 품의하오니 승인하여 주시기 바랍니다.");
+        appDescHtmlHelp.textContent = hasGeneralProposalEnhancedEditor(type)
+            ? '일반품의서는 전용 간편 편집기를 사용합니다. 블록 버튼으로 기본 품의안을 빠르게 넣고, 표나 세부 HTML이 필요하면 HTML 편집 탭에서 직접 수정하세요.'
+            : getApprovalSubjectConfig(type).htmlHelp;
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (!currentDesc || isApprovalAutoGeneratedTemplateContent(currentDesc)) {
+            setApprovalEditorContent(getApprovalSubjectConfig(type).defaultBody);
+        }
+    }
+    else if (isApprovalProposalLikeType(type)) {
+        const subjectConfig = getApprovalSubjectConfig(type);
+        divProposalSubject.classList.remove("hidden");
+        btnAppDescPreview.classList.remove("hidden");
+        appDescHtmlHelp.classList.remove("hidden");
+        if (proposalSubjectLabel) proposalSubjectLabel.textContent = subjectConfig.label;
+        if (proposalSubjectInput) proposalSubjectInput.placeholder = subjectConfig.placeholder;
+        appDescHtmlHelp.textContent = subjectConfig.htmlHelp;
+        amtLabel.innerText = subjectConfig.amountLabel;
+        amountInput.placeholder = subjectConfig.amountPlaceholder;
+        divAmt.classList.toggle("hidden", !subjectConfig.showAmount);
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (!currentDesc || isApprovalAutoGeneratedTemplateContent(currentDesc)) {
+            setApprovalEditorContent(subjectConfig.defaultBody);
         }
     }
     else {
-        const currentDesc = getApprovalEditorContent();
-        if(currentDesc.includes("휴가를 신청") || currentDesc.includes("부양가족")) setApprovalEditorContent("");
+        const currentDesc = String(getApprovalEditorContent() || '').trim();
+        if (isApprovalAutoGeneratedTemplateContent(currentDesc)) setApprovalEditorContent("");
     }
+    syncApprovalAttachmentHelp(type);
+    applyDefaultApprovalLineTemplate();
     setApprovalEditorForCategory(type);
     updateJeongyeolUi();
 }
@@ -2323,7 +3399,7 @@ function openAppDescPreview() {
     const modalBody = document.getElementById("appDescPreviewBody");
     if (!modalTitle || !modalMeta || !modalBody) return;
 
-    const allowHtml = (type === '일반품의' || type === '공문');
+    const allowHtml = isApprovalHtmlEditorType(type);
     modalTitle.textContent = proposalTitle || `${type || '문서'} 본문 미리보기`;
     modalMeta.textContent = allowHtml
         ? `${type || '문서'} HTML 렌더링 미리보기`
@@ -2334,28 +3410,289 @@ function openAppDescPreview() {
 
 // [기능] 부양가족 템플릿 업데이트
 function updateDepTemplate() {
+    if (isApprovalWorkforceLiteProfile()) return;
     const mode = document.querySelector('input[name="depOption"]:checked').value;
     const actionText = mode === 'add' ? "등재" : "해제";
     setApprovalEditorContent(`[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`);
 }
 
+function getApprovalLeaveTargetEmpInfo() {
+    const isProxy = !!document.getElementById("chkProxy")?.checked;
+    if (!isProxy) return myInfo || null;
+    const targetId = String(document.getElementById("proxyTargetSelect")?.value || '').trim();
+    if (!targetId) return null;
+    return allUsers.find((user) => String(user?.emp_id || '') === targetId) || null;
+}
+
+function getApprovalSelectedLeaveStartDate(leaveType) {
+    const config = getApprovalCurrentLeaveTypeConfig() || getApprovalLeaveTypeConfigByStoredSubtype(leaveType);
+    if (isApprovalHalfDayLeaveType(config)) {
+        return String(document.getElementById("halfDate")?.value || '').trim();
+    }
+    if (isApprovalSingleDayLeaveType(config)) {
+        return String(document.getElementById("singleLeaveDate")?.value || '').trim();
+    }
+    return String(document.getElementById("leaveStart")?.value || '').trim();
+}
+
+function isApprovalBirthdayHalfLeaveType(configOrSubType, doc) {
+    const config = (() => {
+        if (configOrSubType && typeof configOrSubType === 'object' && !Array.isArray(configOrSubType)) return configOrSubType;
+        const safeSubType = String(configOrSubType || '').trim();
+        const normalizedSubType = safeSubType.startsWith('휴가(') ? getApprovalLeaveSubType(safeSubType) : safeSubType;
+        return getApprovalLeaveTypeConfigByStoredSubtype(normalizedSubType || getApprovalLeaveSubType(doc?.doc_type || ''));
+    })();
+    const tokens = Array.from(new Set([
+        String(config?.id || '').trim(),
+        String(config?.label || '').trim(),
+        ...normalizeApprovalLeaveTypeAliases(config?.aliases),
+        String(configOrSubType || '').trim(),
+        getApprovalLeaveSubType(doc?.doc_type || '')
+    ].filter(Boolean)));
+    return tokens.includes('birthday_half') || tokens.includes('생일반차');
+}
+
+function getApprovalLeaveStartIsoFromDoc(doc) {
+    const direct = String(doc?.start_date || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+    const periodLabel = extractLeavePeriodLabelFromDoc(doc);
+    const match = periodLabel.match(/(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})/);
+    if (!match) return '';
+    return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function getApprovalLeaveTargetBirthDateIso(targetEmp) {
+    const safeEmpId = String(targetEmp?.emp_id || '').trim();
+    const birthDate = String(targetEmp?.birth_date || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return birthDate;
+    if (!safeEmpId || !Array.isArray(allUsers)) return '';
+    const matched = allUsers.find((user) => String(user?.emp_id || '').trim() === safeEmpId);
+    const fallbackBirthDate = String(matched?.birth_date || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(fallbackBirthDate) ? fallbackBirthDate : '';
+}
+
+function getApprovalBirthdayHalfUsageSummary(leaveType) {
+    const leaveTypeConfig = getApprovalCurrentLeaveTypeConfig() || getApprovalLeaveTypeConfigByStoredSubtype(leaveType);
+    if (!isApprovalBirthdayHalfLeaveType(leaveTypeConfig, null)) {
+        return { enabled: false, blocked: false, mode: 'not_birthday_half', availableDays: 0, requestedYear: null, message: '' };
+    }
+
+    const startDate = getApprovalSelectedLeaveStartDate(String(leaveType || leaveTypeConfig?.label || '').trim());
+    const match = startDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+        return { enabled: false, blocked: false, mode: 'missing_date', availableDays: 0, requestedYear: null, message: '' };
+    }
+
+    const targetEmp = getApprovalLeaveTargetEmpInfo();
+    const birthDateIso = getApprovalLeaveTargetBirthDateIso(targetEmp);
+    if (!birthDateIso) {
+        return {
+            enabled: true,
+            blocked: true,
+            mode: 'missing_birth_date',
+            availableDays: 0,
+            requestedYear: Number(match[1]),
+            message: `${String(leaveTypeConfig?.label || '생일반차').trim()}는 생년월일 정보가 등록된 직원만 신청할 수 있습니다.`
+        };
+    }
+
+    const requestedYear = Number(match[1]);
+    const requestedMonth = match[2];
+    const birthMonth = birthDateIso.slice(5, 7);
+    const leaveLabel = String(leaveTypeConfig?.label || '생일반차').trim();
+
+    if (requestedMonth !== birthMonth) {
+        return {
+            enabled: true,
+            blocked: true,
+            mode: 'outside_birth_month',
+            availableDays: 0,
+            requestedYear,
+            message: `${leaveLabel}는 생일이 속한 달에만 사용할 수 있습니다.`
+        };
+    }
+
+    const docs = Array.isArray(leaveSnapshotState?.docs) ? leaveSnapshotState.docs : [];
+    const reservedStatuses = Array.isArray(leaveSnapshotState?.reservedStatuses) ? leaveSnapshotState.reservedStatuses : ['완료', '가승인', '증빙확인중', '실물결재대기', '실물결재완료'];
+    const usedCount = docs.reduce((sum, doc) => {
+        const status = String(doc?.status || '').trim();
+        if (!reservedStatuses.includes(status)) return sum;
+        if (!isApprovalBirthdayHalfLeaveType(getApprovalLeaveSubType(doc?.doc_type || ''), doc)) return sum;
+        const startIso = getApprovalLeaveStartIsoFromDoc(doc);
+        if (!startIso.startsWith(`${requestedYear}-`)) return sum;
+        return sum + 1;
+    }, 0);
+
+    if (usedCount > 0) {
+        return {
+            enabled: true,
+            blocked: true,
+            mode: 'already_used',
+            availableDays: 0,
+            requestedYear,
+            message: `${leaveLabel}는 ${requestedYear}년에 1회만 사용할 수 있습니다.`
+        };
+    }
+
+    return {
+        enabled: true,
+        blocked: false,
+        mode: 'birthday_half',
+        availableDays: 1,
+        requestedYear,
+        message: ''
+    };
+}
+
+function getApprovalAdvanceLeaveSummary(leaveType) {
+    const safeType = String(leaveType || '').trim();
+    const leaveTypeConfig = getApprovalCurrentLeaveTypeConfig() || getApprovalLeaveTypeConfigByStoredSubtype(safeType);
+    if (!isApprovalDeductibleLeaveType(leaveTypeConfig)) {
+        return { enabled: false, blocked: false, mode: 'not_deductible', availableDays: 0, requestedYear: null, message: '' };
+    }
+
+    const startDate = getApprovalSelectedLeaveStartDate(safeType);
+    const match = startDate.match(/^(\d{4})-\d{2}-\d{2}$/);
+    if (!match) {
+        return { enabled: false, blocked: false, mode: 'missing_date', availableDays: 0, requestedYear: null, message: '' };
+    }
+
+    const requestedYear = Number(match[1]);
+    const currentYear = new Date().getFullYear();
+    if (requestedYear !== currentYear + 1) {
+        return { enabled: false, blocked: false, mode: 'outside_next_year', availableDays: 0, requestedYear: requestedYear, message: '' };
+    }
+
+    const targetEmp = getApprovalLeaveTargetEmpInfo();
+    const hireDate = String(targetEmp?.hire_date || '').trim();
+    const hireYearMatch = hireDate.match(/^(\d{4})-\d{2}-\d{2}$/);
+    if (!targetEmp || !hireYearMatch) {
+        return { enabled: false, blocked: false, mode: 'missing_employee', availableDays: 0, requestedYear: requestedYear, message: '' };
+    }
+
+    const hireYear = Number(hireYearMatch[1]);
+    const annualGrant = requestedYear > hireYear ? 15 : 0;
+    const leaveLedger = window.LeaveLedger || {};
+    const docs = Array.isArray(leaveSnapshotState?.docs) ? leaveSnapshotState.docs : [];
+    const reservedStatuses = Array.isArray(leaveSnapshotState?.reservedStatuses) ? leaveSnapshotState.reservedStatuses : ['완료', '가승인', '증빙확인중', '실물결재대기', '실물결재완료'];
+    const reservedDays = docs.reduce((sum, doc) => {
+        if (String(doc?.drafter_id || targetEmp.emp_id) !== String(targetEmp.emp_id)) return sum;
+        if (typeof leaveLedger.isDeductibleLeaveDoc === 'function' && !leaveLedger.isDeductibleLeaveDoc(doc)) return sum;
+        const status = String(doc?.status || '').trim();
+        if (!reservedStatuses.includes(status)) return sum;
+        const startIso = typeof leaveLedger.getLeaveStartIso === 'function' ? leaveLedger.getLeaveStartIso(doc) : '';
+        if (!startIso.startsWith(`${requestedYear}-`)) return sum;
+        return sum + Number(doc?.amount || doc?._leave_amount || 0);
+    }, 0);
+
+    return {
+        enabled: true,
+        blocked: false,
+        mode: 'next_year_advance',
+        requestedYear: requestedYear,
+        availableDays: Math.max(0, annualGrant - reservedDays),
+        annualGrant: annualGrant,
+        reservedDays: reservedDays,
+        message: ''
+    };
+}
+
+function getApprovalLeaveValidationSummary(leaveType) {
+    const birthday = getApprovalBirthdayHalfUsageSummary(leaveType);
+    if (birthday.enabled) return birthday;
+    const advance = getApprovalAdvanceLeaveSummary(leaveType);
+    if (advance.enabled) return advance;
+    return {
+        enabled: false,
+        blocked: false,
+        mode: 'current_year',
+        requestedYear: null,
+        availableDays: Number(document.getElementById("remainDaysBadge").innerText || 0),
+        annualGrant: 0,
+        reservedDays: 0,
+        message: ''
+    };
+}
+
+function isApprovalLeaveValidationBlocked(validation, requestedDays) {
+    if (!validation) return false;
+    if (validation.blocked === true) return true;
+    if (validation.mode === 'current_year' || validation.mode === 'next_year_advance') {
+        return Number(requestedDays || 0) > Number(validation.availableDays || 0);
+    }
+    return false;
+}
+
+function getApprovalLeaveValidationMessage(validation) {
+    const safeValidation = validation || {};
+    if (safeValidation.mode === 'next_year_advance') {
+        return `⛔ 다음 연도 예상 연차가 부족합니다! (가용 ${safeValidation.availableDays}일)`;
+    }
+    if (safeValidation.message) {
+        return `⛔ ${safeValidation.message}`;
+    }
+    return '⛔ 잔여 연차가 부족합니다!';
+}
+
 // [수정] 휴가일수 계산 (반차 0.5일 고정)
 function calcLeaveDays() {
-    const lType = document.getElementById("leaveTypeSelect").value;
+    const leaveConfig = getApprovalCurrentLeaveTypeConfig();
+    const lType = getApprovalCurrentLeaveTypeLabel();
+    const msg = document.getElementById("leaveOverMsg");
+    const requiresLeaveValidation = isApprovalDeductibleLeaveType(leaveConfig) || isApprovalBirthdayHalfLeaveType(leaveConfig);
+    if (msg) msg.textContent = '⛔ 잔여 연차가 부족합니다!';
+    if (!leaveConfig) {
+        document.getElementById("leaveDaysBadge").innerText = "0일";
+        document.getElementById("leaveDaysCalc").value = 0;
+        if (msg) msg.classList.add("hidden");
+        return;
+    }
 
     // 반차 로직
-    if(lType === '반차' || lType === '생일반차') {
+    if (isApprovalHalfDayLeaveType(leaveConfig)) {
         const d = document.getElementById("halfDate").value;
+        if (msg && !requiresLeaveValidation) msg.classList.add("hidden");
         if(d) {
             document.getElementById("leaveDaysBadge").innerText = "0.5일";
             document.getElementById("leaveDaysCalc").value = 0.5;
-            
-            // 잔여 연차 비교 (연차 차감 대상인 '반차'만)
-            if(lType === '반차') {
-                const remain = Number(document.getElementById("remainDaysBadge").innerText);
-                const msg = document.getElementById("leaveOverMsg");
-                if(0.5 > remain) msg.classList.remove("hidden"); else msg.classList.add("hidden");
+
+            if (requiresLeaveValidation) {
+                const validation = getApprovalLeaveValidationSummary(lType);
+                if (msg) {
+                    if (isApprovalLeaveValidationBlocked(validation, 0.5)) {
+                        msg.textContent = getApprovalLeaveValidationMessage(validation);
+                        msg.classList.remove("hidden");
+                    } else {
+                        msg.classList.add("hidden");
+                    }
+                }
             }
+        }
+        return;
+    }
+
+    if (isApprovalSingleDayLeaveType(leaveConfig)) {
+        const d = document.getElementById("singleLeaveDate").value;
+        if (!d) {
+            document.getElementById("leaveDaysBadge").innerText = "0일";
+            document.getElementById("leaveDaysCalc").value = 0;
+            if (msg) msg.classList.add("hidden");
+            return;
+        }
+        document.getElementById("leaveDaysBadge").innerText = "1일";
+        document.getElementById("leaveDaysCalc").value = 1;
+        if (requiresLeaveValidation) {
+            const validation = getApprovalLeaveValidationSummary(lType);
+            if (msg) {
+                if (isApprovalLeaveValidationBlocked(validation, 1)) {
+                    msg.textContent = getApprovalLeaveValidationMessage(validation);
+                    msg.classList.remove("hidden");
+                } else {
+                    msg.classList.add("hidden");
+                }
+            }
+        } else if (msg) {
+            msg.classList.add("hidden");
         }
         return;
     }
@@ -2363,7 +3700,10 @@ function calcLeaveDays() {
     // 일반 기간 로직
     const s = document.getElementById("leaveStart").value;
     const e = document.getElementById("leaveEnd").value;
-    if (!s || !e) return;
+    if (!s || !e) {
+        if (msg) msg.classList.add("hidden");
+        return;
+    }
 
     let count = 0;
     let cur = new Date(s);
@@ -2377,11 +3717,18 @@ function calcLeaveDays() {
     document.getElementById("leaveDaysBadge").innerText = count + "일";
     document.getElementById("leaveDaysCalc").value = count;
     
-    // 잔여 연차 비교 (연차만)
-    if(lType === '연차') {
-        const remain = Number(document.getElementById("remainDaysBadge").innerText);
-        const msg = document.getElementById("leaveOverMsg");
-        if(count > remain) msg.classList.remove("hidden"); else msg.classList.add("hidden");
+    if (requiresLeaveValidation) {
+        const validation = getApprovalLeaveValidationSummary(lType);
+        if (msg) {
+            if (isApprovalLeaveValidationBlocked(validation, count)) {
+                msg.textContent = getApprovalLeaveValidationMessage(validation);
+                msg.classList.remove("hidden");
+            } else {
+                msg.classList.add("hidden");
+            }
+        }
+    } else if (msg) {
+        msg.classList.add("hidden");
     }
 }
 
@@ -2472,6 +3819,7 @@ function toggleSelect(user) {
 function confirmSelection() {
     if (modalType === 'approver') {
         finalApprovers = [...tempSelection];
+        approvalLineTemplateAutoApplied = false;
     } else {
         finalRefs = [...tempSelection];
     }
@@ -2500,6 +3848,7 @@ function resetLine(type) {
             return;
         }
         finalApprovers = [];
+        approvalLineTemplateAutoApplied = false;
         renderLinePreview();
         return;
     }
@@ -2588,7 +3937,7 @@ async function buildJeongyeolMonthlyDraft() {
         const modeLabel = formatJeongyeolModeLabel(meta.mode);
         const docNo = String(doc?.doc_no || '-');
         const createdAt = formatApprovalKstDateISO(doc?.created_at, '-');
-        const docType = String(doc?.doc_type || '-');
+        const docType = formatApprovalDocTypeLabel(doc || doc?.doc_type || '-');
         const title = String(doc?.title || '-');
         const amount = formatJeongyeolAmountLabel(doc);
         const status = String(doc?.status || '-');
@@ -2742,6 +4091,12 @@ async function handleDraftSubmit(e) {
     if (!canPerform('approval.submit')) return showAlert("상신 권한이 없습니다.");
 
     const mainType = document.getElementById("appCategory").value;
+    if (isApprovalWorkforceLiteProfile() && !isApprovalDocEnabledForCurrentProfile(mainType)) {
+        return showAlert('현재 조합에서 사용하지 않는 문서유형입니다. 설정에서 사용 여부를 확인하세요.');
+    }
+    if (isApprovalWorkforceLiteProfile() && mainType === '부양가족') {
+        return showAlert('workforce_lite 프로필에서는 부양가족 신청을 사용하지 않습니다.');
+    }
     const expenseSubType = document.getElementById("expenseSubType")?.value || '일반';
     const payrollMonth = document.getElementById("payrollMonth")?.value || '';
     let subType = mainType; 
@@ -2758,6 +4113,7 @@ async function handleDraftSubmit(e) {
     let initialStatus = '진행중';
     let appendDesc = "";
     let jeongyeolDecision = { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '' };
+    let leaveSnapshotPayload = null;
     
     if (isProxy) {
         const targetSel = document.getElementById("proxyTargetSelect");
@@ -2771,16 +4127,37 @@ async function handleDraftSubmit(e) {
 
     // 1. 문서 타입 및 값 정리
     if (mainType === '휴가') {
-        const lType = document.getElementById("leaveTypeSelect").value;
-        subType = `휴가(${lType})`; // 예: "휴가(연차)"
+        const leaveTypeConfig = getApprovalCurrentLeaveTypeConfig();
+        const lType = getApprovalCurrentLeaveTypeLabel();
+        if (!leaveTypeConfig || !lType) return showAlert("휴가 종류를 먼저 설정하거나 선택하세요.");
+        subType = `휴가(${getApprovalCurrentLeaveTypeStoredKey()})`;
+        leaveSnapshotPayload = {
+            type_id: String(leaveTypeConfig.id || getApprovalCurrentLeaveTypeStoredKey() || '').trim(),
+            label: String(leaveTypeConfig.label || lType || '').trim(),
+            deductible: leaveTypeConfig.deductible === true,
+            duration_mode: normalizeApprovalLeaveTypeDurationMode(leaveTypeConfig.duration_mode),
+            saved_at: new Date().toISOString()
+        };
         
         const days = Number(document.getElementById("leaveDaysCalc").value);
         if(days <= 0) return showAlert("기간을 선택하세요.");
-        
-        // 잔여량 체크 (연차, 반차만 해당. 대리상신이어도 체크는 해야 함)
-        if (lType === '연차' || lType === '반차') {
-            const remain = Number(document.getElementById("remainDaysBadge").innerText);
-            if(days > remain) return showAlert("잔여 연차가 부족합니다.");
+
+        const leaveValidation = getApprovalLeaveValidationSummary(lType);
+        if (isApprovalLeaveValidationBlocked(leaveValidation, days)) {
+            if (leaveValidation.mode === 'next_year_advance') {
+                return showAlert(`다음 연도 예상 연차가 부족합니다.\n가용: ${leaveValidation.availableDays}일 / 요청: ${days}일`);
+            }
+            return showAlert(String(leaveValidation.message || '휴가 신청 조건을 확인하세요.'));
+        }
+
+        if (isApprovalDeductibleLeaveType(leaveTypeConfig)) {
+            const validation = getApprovalLeaveValidationSummary(lType);
+            if (days > validation.availableDays) {
+                if (validation.enabled) {
+                    return showAlert(`다음 연도 예상 연차가 부족합니다.\n가용: ${validation.availableDays}일 / 요청: ${days}일`);
+                }
+                return showAlert("잔여 연차가 부족합니다.");
+            }
         }
         finalAmt = days;
         const leavePeriodLabel = buildLeavePeriodLabelForDraft(lType, days);
@@ -2839,6 +4216,19 @@ async function handleDraftSubmit(e) {
             subType = JEONGYEOL_MONTHLY_DOC_TYPE;
         }
     }
+    else if (mainType === '출장신청' || mainType === '구매요청' || mainType === '증명서발급' || mainType === '근무변경') {
+        const proposalTitle = document.getElementById("proposalSubject").value.trim();
+        const subjectConfig = getApprovalSubjectConfig(mainType);
+        if (!proposalTitle) return showAlert(`${subjectConfig.label}을 입력하세요.`);
+        title = proposalTitle;
+        subType = mainType;
+        if (mainType === '구매요청') {
+            finalAmt = Number(document.getElementById("appAmount").value || 0);
+            if (finalAmt <= 0) return showAlert("예상 금액을 입력하세요.");
+        } else {
+            finalAmt = 0;
+        }
+    }
     else {
         title = `${mainType}`;
     }
@@ -2853,9 +4243,20 @@ async function handleDraftSubmit(e) {
 
     const draftBodyForValidation = getApprovalEditorContent();
     if (!String(draftBodyForValidation || '').trim()) return showAlert("내용을 입력하세요.");
+    if (isApprovalWorkforceLiteProfile()) {
+        if (isApprovalDocRuleEnabled(mainType, 'require_amount') && !(Number(finalAmt) > 0)) {
+            return showAlert(`${getApprovalSubjectConfig(mainType).amountLabel}을 입력하세요.`);
+        }
+        if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_receiver') && !String(receiver || '').trim()) {
+            return showAlert('수신을 입력하세요.');
+        }
+        if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_via') && !String(via || '').trim()) {
+            return showAlert('경유를 입력하세요.');
+        }
+    }
     
     // 증빙 필수 체크 (경조사, 병가) - 대리상신 제외
-    if (mainType === '휴가') {
+    if (!isApprovalWorkforceLiteProfile() && mainType === '휴가') {
         const lType = document.getElementById("leaveTypeSelect").value;
         if ((lType==='경조사' || lType==='병가') && !isProxy) {
             if(document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류 필수입니다.");
@@ -2864,6 +4265,9 @@ async function handleDraftSubmit(e) {
 
     // 첨부파일 형식/용량 검증
     const fileInput = document.getElementById("attachFile");
+    if (isApprovalWorkforceLiteProfile() && isApprovalDocRuleEnabled(mainType, 'require_attachment') && fileInput.files.length === 0) {
+        return showAlert('첨부파일이 필수입니다.');
+    }
     const validation = validateAttachments(fileInput.files);
     if (!validation.ok) return showAlert(validation.message);
 
@@ -2949,7 +4353,7 @@ async function handleDraftSubmit(e) {
 	    }
 
     const relatedDocId = document.getElementById("relDocId").value || null;
-    const allowHtmlContent = (mainType === '일반품의' || mainType === '공문');
+    const allowHtmlContent = isApprovalHtmlEditorType(mainType);
     const rawBodyContent = getApprovalEditorContent();
     const isNoticeDraft = mainType === '공문';
     const mergedBodyContent = mergeSystemAppendContent(rawBodyContent, isNoticeDraft ? '' : appendDesc, allowHtmlContent);
@@ -2995,7 +4399,8 @@ async function handleDraftSubmit(e) {
         status: initialStatus, // 가승인 or 진행중
         related_doc_id: relatedDocId, // [New]
         receiver: receiver || null,
-        via: via || null
+        via: via || null,
+        ...(approvalLeaveSnapshotSupported && leaveSnapshotPayload ? { leave_snapshot: leaveSnapshotPayload } : {})
     };
 
     let insertedDoc = null;
@@ -3372,6 +4777,10 @@ function mapHistoryDocTypeGroup(docType) {
     if (!raw) return 'OTHER';
     if (raw.startsWith(JEONGYEOL_MONTHLY_DOC_TYPE)) return 'GENERAL_PROPOSAL';
     if (raw.startsWith('일반품의')) return 'GENERAL_PROPOSAL';
+    if (raw.startsWith('출장신청')) return 'GENERAL_PROPOSAL';
+    if (raw.startsWith('구매요청')) return 'GENERAL_PROPOSAL';
+    if (raw.startsWith('증명서발급')) return 'GENERAL_PROPOSAL';
+    if (raw.startsWith('근무변경')) return 'GENERAL_PROPOSAL';
     if (raw.startsWith('지출결의')) return 'EXPENSE';
     if (raw.startsWith('휴가')) return 'LEAVE';
     if (raw.startsWith('부양가족')) return 'DEPENDENT';
@@ -3489,7 +4898,7 @@ function exportHistoryCsv() {
     const headers = ['id','doc_type','title','status','drafter_name','created_at','amount','current_approver','signed_doc_url'];
     const rows = list.map(d => [
         d.id,
-        d.doc_type || '',
+        formatApprovalDocTypeLabel(d || d.doc_type || ''),
         d.title || '',
         d.status || '',
         d.drafter_name || '',
@@ -3526,7 +4935,7 @@ function renderDocs(target, list, isTodo) {
     if(!list || list.length===0) { target.innerHTML = '<div class="p-3 text-center text-muted">없음</div>'; return; }
     list.forEach(doc => {
         const approvalLine = Array.isArray(doc.approval_line) ? doc.approval_line : [];
-        const safeDocType = escapeHtml(doc.doc_type);
+        const safeDocType = escapeHtml(formatApprovalDocTypeLabel(doc || doc.doc_type));
         const jeongyeolMeta = getJeongyeolMetaFromDoc(doc);
         const jeongyeolBadge = jeongyeolMeta
             ? `<span class="badge bg-secondary me-1">전결-${escapeHtml(formatJeongyeolModeLabel(jeongyeolMeta.mode))}</span>`
@@ -3692,7 +5101,7 @@ function buildPhysicalPrintHtml(doc) {
     const isNoticeDoc = rawType.startsWith('공문');
     const docHeading = isExpenseDoc ? '지 출 결 의 서' : (isProposalDoc ? '품 의 서' : '결 재 문 서');
     const sectionHeading = isExpenseDoc ? '결재 사유 / 집행 근거' : (isProposalDoc ? '품의 사유 / 추진 근거' : '결재 사유 / 본문');
-    const safeType = escapeHtml(rawType);
+    const safeType = escapeHtml(formatApprovalDocTypeLabel(doc || rawType));
     const safeDrafter = escapeHtml(rawDrafter);
     const safeDocHeading = escapeHtml(docHeading);
     const safeSectionHeading = escapeHtml(sectionHeading);
@@ -4300,7 +5709,7 @@ async function openRelView(docId) {
     contentBox.style.minHeight = "200px";
     const rawDocType = String(data.doc_type || '');
     const isNoticeDoc = rawDocType.startsWith('공문');
-    const allowHtmlContent = rawDocType.startsWith('일반품의') || isNoticeDoc;
+    const allowHtmlContent = isApprovalHtmlEditorType(rawDocType) || isNoticeDoc;
     const noticeParts = isNoticeDoc ? splitNoticeApprovalContent(data.content || '') : null;
     if (isNoticeDoc && String(noticeParts?.approvalMemo || '').trim()) {
         const memoBox = document.createElement("div");

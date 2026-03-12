@@ -96,13 +96,13 @@
         </button>
         
         <button class="btn btn-white btn-menu hidden" id="btnAdmin" onclick="location.href='admin_employee.html'">
-          ⚙️ <strong>직원관리</strong>
-          <span class="d-block small text-muted">인사 및 급여 설정</span>
+          ⚙️ <strong id="btnAdminTitle">직원관리</strong>
+          <span class="d-block small text-muted" id="btnAdminDesc">인사 및 급여 설정</span>
         </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnMemberAdmin" onclick="location.href='admin_member.html'">
-            🌐 <strong>홈페이지 관리</strong>
-            <span class="d-block small text-muted">조합원 명부 및 입금 매칭</span>
+            🌐 <strong id="btnMemberAdminTitle">조합원/홈페이지 관리</strong>
+            <span class="d-block small text-muted" id="btnMemberAdminDesc">조합원 명부, 공지, 사이트 운영</span>
         </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnAudit" onclick="location.href='audit_logs.html'">
@@ -113,6 +113,11 @@
         <button class="btn btn-white btn-menu hidden" id="btnPerm" onclick="location.href='permissions.html'">
           🔐 <strong>권한 관리</strong>
           <span class="d-block small text-muted">역할/직급 권한 설정</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnPlatform" onclick="location.href='platform_admin.html'">
+          🧩 <strong>통합 관리자</strong>
+          <span class="d-block small text-muted">조합 생성 및 첫 관리자 등록</span>
         </button>
       </div>
 
@@ -174,7 +179,8 @@
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const REDIRECT_URL = `${window.location.origin}/index.html`; 
+const ERP_BASE_URL = new URL('./', window.location.href);
+const REDIRECT_URL = new URL('index.html', ERP_BASE_URL).href;
 const SUPABASE_PROJECT_REF = 'ifdqlwxgqgsvnawmhlfc';
 const ERP_SESSION_EXPIRED_NOTICE_KEY = 'erp_session_expired_notice_v1';
 const MAGICLINK_RATE_KEY = 'erp_magiclink_rate_v1';
@@ -185,6 +191,8 @@ const MAGICLINK_MIN_PAGE_AGE_MS = 1200;
 
 let myInfo = null;
 let permissionSet = new Set();
+let platformContext = null;
+let coopRuntime = null;
 let notifModalInstance = null;
 let lastNotifList = [];
 let suppressSessionExpiredHandling = false;
@@ -378,9 +386,9 @@ window.onload = async function() {
 };
 
 async function loadUserInfo(user) {
-    const email = user?.email || user?.user_metadata?.email || user?.user_metadata?.account_email;
-    if (!email) {
-        showAlert("이메일 정보가 없습니다.\n카카오 로그인 시 이메일 제공에 동의해주세요.");
+    const authUserId = user?.id || null;
+    if (!authUserId) {
+        showAlert("로그인 사용자 식별값이 없습니다.\n다시 로그인해주세요.");
         await signOutSilently(_supabase); 
         showScreen('loginForm'); 
         return;
@@ -388,7 +396,7 @@ async function loadUserInfo(user) {
     const { data, error } = await _supabase
         .from('ref_employees')
         .select('*')
-        .eq('email', email)
+        .eq('auth_user_id', authUserId)
         .single();
 
     // [복구 완료] 국장님이 요청하신 모달/로그 처리 로직 그대로 복구
@@ -407,7 +415,18 @@ async function loadUserInfo(user) {
     myInfo = data;
     localStorage.setItem('erp_user', JSON.stringify(data));
     permissionSet = await loadPermissions(data);
+    platformContext = await loadPlatformContext();
+    coopRuntime = await loadCoopRuntime();
     localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+
+    if (coopRuntime && coopRuntime.is_active === false) {
+        showAlert("현재 조합 ERP 사용이 중지되었습니다.\n통합 관리자에게 문의해주세요.");
+        localStorage.removeItem('erp_user');
+        localStorage.removeItem('erp_permissions');
+        await signOutSilently(_supabase);
+        showScreen('loginForm');
+        return;
+    }
 
     const elName = document.getElementById('userName');
     const elTeam = document.getElementById('userTeam');
@@ -417,7 +436,7 @@ async function loadUserInfo(user) {
     if (elTeam) elTeam.innerText = data.department || "-";
     if (elRank) elRank.innerText = data.position || "";
 
-    applyMenuPermissions(data);
+    applyMenuPermissions(data, platformContext, coopRuntime);
 
     document.getElementById('patchNoteArea')?.classList.remove('hidden');
     await loadNotifications(false);
@@ -450,14 +469,88 @@ async function loadPermissions(user) {
     return result;
 }
 
+async function loadPlatformContext() {
+    try {
+        const { data, error } = await _supabase.rpc('platform_get_context');
+        if (error) {
+            console.error('platform_get_context failed:', error);
+            return null;
+        }
+        return data || null;
+    } catch (err) {
+        console.error('platform_get_context exception:', err);
+        return null;
+    }
+}
+
+async function loadCoopRuntime() {
+    try {
+        const { data, error } = await _supabase.rpc('get_my_erp_runtime');
+        if (error) {
+            console.error('get_my_erp_runtime failed:', error);
+            return null;
+        }
+        return data || null;
+    } catch (err) {
+        console.error('get_my_erp_runtime exception:', err);
+        return null;
+    }
+}
+
 function hasPermission(key) {
     if (!permissionSet || permissionSet.size === 0) return null; // fallback to legacy rules
     return permissionSet.has(key);
 }
 
-function applyMenuPermissions(user) {
+function isModuleEnabled(runtime, moduleKey) {
+    const modules = runtime && typeof runtime.modules === 'object' ? runtime.modules : null;
+    if (!modules || !(moduleKey in modules)) return true;
+    return modules[moduleKey] !== false;
+}
+
+function applyHrMenuLabel(runtime) {
+    const isLite = String(runtime?.runtime_profile || 'legacy_full') === 'workforce_lite';
+    const titleEl = document.getElementById('btnAdminTitle');
+    const descEl = document.getElementById('btnAdminDesc');
+    if (titleEl) titleEl.textContent = isLite ? '직원 및 설정 관리' : '직원관리';
+    if (descEl) descEl.textContent = isLite ? '직원 정보와 전자결재 설정 관리' : '인사 및 급여 설정';
+}
+
+function applyMemberAdminMenuLabel(siteEnabled, memberAdminEnabled) {
+    const titleEl = document.getElementById('btnMemberAdminTitle');
+    const descEl = document.getElementById('btnMemberAdminDesc');
+    if (!titleEl || !descEl) return;
+
+    if (siteEnabled && memberAdminEnabled) {
+        titleEl.textContent = '조합원/홈페이지 관리';
+        descEl.textContent = '조합원 명부, 공지, 사이트 운영';
+        return;
+    }
+    if (memberAdminEnabled) {
+        titleEl.textContent = '조합원 관리';
+        descEl.textContent = '조합원 명부, 신청 처리, 입금 매칭';
+        return;
+    }
+    if (siteEnabled) {
+        titleEl.textContent = '홈페이지 관리';
+        descEl.textContent = '공지, 사이트 컨텐츠, FAQ 운영';
+        return;
+    }
+    titleEl.textContent = '조합원/홈페이지 관리';
+    descEl.textContent = '조합원 명부, 공지, 사이트 운영';
+}
+
+function applyMenuPermissions(user, platformCtx, runtime) {
     const isAdmin = (user.role === 'admin' || user.role === 'admin_all' || user.position === '국장');
     const isManager = user.role === 'manager' || user.position === '이사';
+    const approvalEnabled = isModuleEnabled(runtime, 'approval');
+    const mypageEnabled = isModuleEnabled(runtime, 'mypage');
+    const accountingEnabled = isModuleEnabled(runtime, 'accounting');
+    const hrEnabled = isModuleEnabled(runtime, 'hr');
+    const siteAdminEnabled = isModuleEnabled(runtime, 'site_admin');
+    const memberAdminEnabled = isModuleEnabled(runtime, 'member_admin');
+    const auditEnabled = isModuleEnabled(runtime, 'audit');
+    const permissionEnabled = isModuleEnabled(runtime, 'permission');
 
     const canApproval = hasPermission('approval.view');
     const canMypage = hasPermission('mypage.view');
@@ -467,29 +560,41 @@ function applyMenuPermissions(user) {
     const canAudit = hasPermission('audit.view');
     const canPerm = hasPermission('permission.manage');
 
-    if (canApproval !== null && !canApproval) document.getElementById('btnApproval')?.classList.add('hidden');
-    if (canMypage !== null && !canMypage) document.getElementById('btnMypage')?.classList.add('hidden');
+    applyHrMenuLabel(runtime);
+    applyMemberAdminMenuLabel(siteAdminEnabled, memberAdminEnabled);
 
-    if (canAccounting === null) {
+    if (!approvalEnabled || (canApproval !== null && !canApproval)) document.getElementById('btnApproval')?.classList.add('hidden');
+    if (!mypageEnabled || (canMypage !== null && !canMypage)) document.getElementById('btnMypage')?.classList.add('hidden');
+
+    if (!accountingEnabled) {
+        document.getElementById('btnAccounting')?.classList.add('hidden');
+    } else if (canAccounting === null) {
         if (isAdmin || isManager) document.getElementById('btnAccounting')?.classList.remove('hidden');
     } else if (canAccounting) {
         document.getElementById('btnAccounting')?.classList.remove('hidden');
     }
 
-    if (canAdmin === null) {
+    if (!hrEnabled) {
+        document.getElementById('btnAdmin')?.classList.add('hidden');
+    } else if (canAdmin === null) {
         if (isAdmin) document.getElementById('btnAdmin')?.classList.remove('hidden');
     } else if (canAdmin) {
         document.getElementById('btnAdmin')?.classList.remove('hidden');
     }
 
-    if (canMemberAdmin === null) {
+    if (!siteAdminEnabled && !memberAdminEnabled) {
+        document.getElementById('btnMemberAdmin')?.classList.add('hidden');
+    } else if (canMemberAdmin === null) {
         if (isAdmin) document.getElementById('btnMemberAdmin')?.classList.remove('hidden');
     } else if (canMemberAdmin) {
         document.getElementById('btnMemberAdmin')?.classList.remove('hidden');
     }
 
-    if (canAudit !== null && canAudit) document.getElementById('btnAudit')?.classList.remove('hidden');
-    if (canPerm !== null && canPerm) document.getElementById('btnPerm')?.classList.remove('hidden');
+    if (!auditEnabled) document.getElementById('btnAudit')?.classList.add('hidden');
+    if (!permissionEnabled) document.getElementById('btnPerm')?.classList.add('hidden');
+    if (auditEnabled && canAudit !== null && canAudit) document.getElementById('btnAudit')?.classList.remove('hidden');
+    if (permissionEnabled && canPerm !== null && canPerm) document.getElementById('btnPerm')?.classList.remove('hidden');
+    if (platformCtx && platformCtx.is_platform_admin === true) document.getElementById('btnPlatform')?.classList.remove('hidden');
 }
 
 function showScreen(id) {
@@ -567,8 +672,10 @@ async function sendMagicLink() {
 async function startKakaoLogin() {
     if (kakaoLoginInFlight) return;
     kakaoLoginInFlight = true;
-    const nextTarget = `${window.location.origin}/index.html`;
-    const redirectUrl = `${window.location.origin}/auth_callback.html?next=${encodeURIComponent(nextTarget)}`;
+    const nextTarget = new URL('index.html', ERP_BASE_URL).href;
+    const callbackUrl = new URL('auth_callback.html', ERP_BASE_URL);
+    callbackUrl.searchParams.set('next', nextTarget);
+    const redirectUrl = callbackUrl.href;
     localStorage.setItem('auth_destination', nextTarget);
 
     await _supabase.auth.signInWithOAuth({ 
