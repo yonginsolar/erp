@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<!-- Version: v1.0.3 -->
+<html lang="ko">
+<head>
+  <script>console.log('[Version] v1.0.3 | officials_admin.html');</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+  <title>임원·대의원·선관위원 관리</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { background:#f8f9fa; padding:24px; font-family:'Segoe UI','Malgun Gothic',sans-serif; }
+    .wrap { max-width:1180px; margin:0 auto; }
+    .panel { background:#fff; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,.05); padding:24px; }
+    .helper { color:#6b7280; font-size:.92rem; }
+    .member-result { border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; background:#fff; }
+    .member-result + .member-result { margin-top:10px; }
+    .member-result .name { font-weight:700; color:#111827; }
+    .member-result .meta { color:#6b7280; font-size:.9rem; }
+    .status-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:.82rem; font-weight:700; }
+    .status-chip.active { background:#dcfce7; color:#166534; }
+    .status-chip.inactive { background:#e5e7eb; color:#475569; }
+    .role-chip { display:inline-block; padding:3px 8px; border-radius:999px; font-size:.8rem; background:#eff6ff; color:#1d4ed8; }
+    .toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .table td, .table th { vertical-align:middle; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <div class="toolbar mb-3">
+        <div>
+          <h1 class="h4 mb-1">임원·대의원·선관위원 관리</h1>
+          <div class="helper">조합원 원본은 <code>coop_members</code>, 직책/임기는 <code>coop_officials</code>로 관리합니다. 선거 결과와 전자서명도 같은 원천을 사용합니다.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='index.html'">ERP 메인</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='admin_member.html?scope=site_admin&tab=official-sign'">기존 서명 업로드 화면</button>
+        </div>
+      </div>
+
+      <div id="pageAlert" class="alert d-none" role="alert"></div>
+
+      <div class="row g-4">
+        <div class="col-lg-5">
+          <div class="card border-0 shadow-sm mb-3" id="memberSearchPanel">
+            <div class="card-body">
+              <h2 class="h6 mb-3">조합원 찾기</h2>
+              <div class="input-group mb-2">
+                <input type="text" id="memberSearchKeyword" class="form-control" placeholder="이름 또는 조합원 번호" onkeydown="if(event.key==='Enter') searchMembers();">
+                <button class="btn btn-primary" type="button" id="memberSearchBtn" onclick="searchMembers()">검색</button>
+              </div>
+              <div class="helper mb-3" id="memberSearchHelper">등록된 조합원을 검색해 직책과 바로 연결합니다.</div>
+              <div id="memberSearchResults" class="d-grid gap-2">
+                <div class="text-muted small">검색 결과가 여기에 표시됩니다.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card border-0 shadow-sm">
+            <div class="card-body">
+              <h2 class="h6 mb-3">임원·대의원 등록</h2>
+              <div class="mb-3">
+                <div class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" onclick="toggleManualOfficialInput()">
+                    직접 입력 전환
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary d-none" type="button" id="loadElectionResultsBtn" onclick="location.href='../vote/admin.html'">
+                    선거 결과 불러오기
+                  </button>
+                </div>
+                <div class="helper mt-2">주민등록번호는 기본 수집값으로 두지 않고, 법정 신고가 필요한 경우 별도 절차로 처리합니다.</div>
+              </div>
+              <div id="manualOfficialBox" class="border rounded p-3 bg-light d-none mb-3">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label for="manualOfficialName" class="form-label small fw-bold">이름</label>
+                    <input type="text" id="manualOfficialName" class="form-control" placeholder="홍길동">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialMemberId" class="form-label small fw-bold">조합원 번호</label>
+                    <input type="text" id="manualOfficialMemberId" class="form-control" placeholder="2026-001">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialMemberType" class="form-label small fw-bold">구성원 유형</label>
+                    <select id="manualOfficialMemberType" class="form-select">
+                      <option value="개인">개인</option>
+                      <option value="단체">단체</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialBirthDate" class="form-label small fw-bold">생년월일</label>
+                    <input type="date" id="manualOfficialBirthDate" class="form-control">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialPhone" class="form-label small fw-bold">전화번호</label>
+                    <input type="text" id="manualOfficialPhone" class="form-control" placeholder="010-1234-5678">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialEmail" class="form-label small fw-bold">이메일 주소</label>
+                    <input type="email" id="manualOfficialEmail" class="form-control" placeholder="name@coop.com">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="manualOfficialAddress" class="form-label small fw-bold">주소</label>
+                    <input type="text" id="manualOfficialAddress" class="form-control" placeholder="선택 입력">
+                  </div>
+                  <div class="col-md-6 d-none" id="manualOfficialCorpNumberWrap">
+                    <label for="manualOfficialCorpNumber" class="form-label small fw-bold">법인등록번호</label>
+                    <input type="text" id="manualOfficialCorpNumber" class="form-control" placeholder="단체 식별코드">
+                  </div>
+                  <div class="col-md-6 d-none" id="manualOfficialBusinessNumberWrap">
+                    <label for="manualOfficialBusinessNumber" class="form-label small fw-bold">사업자/고유번호</label>
+                    <input type="text" id="manualOfficialBusinessNumber" class="form-control" placeholder="보조 식별코드">
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <button class="btn btn-sm btn-outline-primary" type="button" onclick="selectManualOfficial()">직접 입력값 사용</button>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">선택한 조합원</label>
+                <div id="selectedMemberBox" class="form-control bg-light" style="min-height:58px;">선택된 조합원이 없습니다.</div>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="officialRole" class="form-label small fw-bold">직책</label>
+                  <select id="officialRole" class="form-select">
+                    <option value="">선택</option>
+                    <option value="이사장">이사장</option>
+                    <option value="이사">이사</option>
+                    <option value="감사">감사</option>
+                    <option value="대의원">대의원</option>
+                    <option value="선관위원장">선관위원장</option>
+                    <option value="선관위원">선관위원</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="officialCategory" class="form-label small fw-bold">구분</label>
+                  <input id="officialCategory" class="form-control bg-light" value="-" readonly>
+                </div>
+                <div class="col-md-6">
+                  <label for="officialTermStart" class="form-label small fw-bold">임기 시작일</label>
+                  <input type="date" id="officialTermStart" class="form-control">
+                </div>
+                <div class="col-md-6">
+                  <label for="officialTermEnd" class="form-label small fw-bold">임기 종료일</label>
+                  <input type="date" id="officialTermEnd" class="form-control">
+                </div>
+              </div>
+              <div class="helper mt-2">종료일이 비어 있으면 시작일 기준 2년으로 자동 계산합니다.</div>
+              <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" type="button" onclick="saveOfficial()">등록</button>
+                <button class="btn btn-outline-secondary" type="button" onclick="resetOfficialForm()">초기화</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="card border-0 shadow-sm">
+            <div class="card-body">
+              <div class="toolbar mb-3">
+                <div>
+                  <h2 class="h6 mb-1">현재 등록 현황</h2>
+                  <div class="helper">현재 조합에 등록된 임원·대의원만 표시합니다.</div>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="loadOfficials()">새로고침</button>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>이름</th>
+                      <th>직책</th>
+                      <th>임기</th>
+                      <th>상태</th>
+                      <th>서명</th>
+                      <th class="text-end">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody id="officialListBody">
+                    <tr><td colspan="6" class="text-center text-muted py-4">데이터를 불러오는 중입니다...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let permissionSet = new Set();
+    let selectedMember = null;
+    let currentRuntime = null;
+    let currentCoopId = '';
+    let memberSearchEnabled = true;
+    let voteImportEnabled = false;
+
+    function readStoredUser() {
+      try { return JSON.parse(localStorage.getItem('erp_user') || 'null'); } catch (_) { return null; }
+    }
+
+    function readStoredPermissions() {
+      try {
+        const raw = JSON.parse(localStorage.getItem('erp_permissions') || '[]');
+        return new Set(Array.isArray(raw) ? raw : []);
+      } catch (_) {
+        return new Set();
+      }
+    }
+
+    async function loadPermissions(user) {
+      const result = new Set();
+      if (!user) return result;
+      const coopId = String(user.coop_id || '').trim();
+      const roleKey = user.role || '';
+      const posKey = user.position || '';
+      if ((!roleKey && !posKey) || !coopId) return result;
+
+      const roleKeys = [roleKey, posKey].filter(Boolean);
+      if (roleKey === 'admin_all') roleKeys.push('admin');
+      if (roleKey === 'admin') roleKeys.push('admin_all');
+
+      const { data, error } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .eq('coop_id', coopId)
+        .in('scope', ['role', 'position'])
+        .in('role_key', roleKeys)
+        .eq('is_enabled', true);
+
+      if (error) throw error;
+      (data || []).forEach((row) => {
+        if (row.permission_key) result.add(row.permission_key);
+      });
+      return result;
+    }
+
+    function hasPermission(set, key) {
+      if (!set || set.size === 0) return null;
+      return set.has(key);
+    }
+
+    function isModuleEnabled(runtime, moduleKey) {
+      const modules = runtime && typeof runtime.modules === 'object' ? runtime.modules : null;
+      if (!modules || !(moduleKey in modules)) return true;
+      return modules[moduleKey] !== false;
+    }
+
+    async function loadRuntime() {
+      const { data, error } = await _supabase.rpc('get_my_erp_runtime');
+      if (error) throw error;
+      return data || null;
+    }
+
+    async function getMyCoopId() {
+      if (currentRuntime?.coop_id) return currentRuntime.coop_id;
+      const { data, error } = await _supabase.rpc('get_my_coop_id');
+      if (error) throw error;
+      return data || null;
+    }
+
+    function scopeByTenant(query) {
+      const safeCoopId = String(currentCoopId || '').trim();
+      return query.eq('coop_id', safeCoopId || '00000000-0000-0000-0000-000000000000');
+    }
+
+    function categoryFromRole(role) {
+      if (role === '대의원') return 'delegate';
+      if (role === '선관위원' || role === '선관위원장') return 'election_comm';
+      return 'executive';
+    }
+
+    function roleLabel(role) {
+      return String(role || '-');
+    }
+
+    function categoryLabel(category) {
+      const safe = String(category || '').toLowerCase();
+      if (safe === 'delegate') return '대의원';
+      if (safe === 'election_comm') return '선거관리';
+      if (safe === 'executive') return '임원';
+      return safe || '-';
+    }
+
+    function normalizeMemberType(value) {
+      const safe = String(value || '').trim();
+      if (safe === '단체' || safe.toLowerCase() === 'group') return '단체';
+      return '개인';
+    }
+
+    function isOrganizationMemberType(value) {
+      return normalizeMemberType(value) === '단체';
+    }
+
+    function buildOfficialIdentitySnapshot(member) {
+      const memberType = normalizeMemberType(member?.member_type);
+      const memberId = String(member?.member_id || '').trim();
+      const corpNumber = String(member?.corp_number || '').trim();
+      const businessNumber = String(member?.business_number || '').trim();
+      if (isOrganizationMemberType(memberType) && corpNumber) {
+        return {
+          official_member_type: memberType,
+          official_identity_code: corpNumber,
+          official_identity_kind: 'corp_number'
+        };
+      }
+      if (isOrganizationMemberType(memberType) && businessNumber) {
+        return {
+          official_member_type: memberType,
+          official_identity_code: businessNumber,
+          official_identity_kind: 'business_number'
+        };
+      }
+      return {
+        official_member_type: memberType,
+        official_identity_code: memberId || null,
+        official_identity_kind: memberId ? 'member_id' : null
+      };
+    }
+
+    function toggleManualOfficialIdentityFields() {
+      const memberType = normalizeMemberType(document.getElementById('manualOfficialMemberType')?.value);
+      const showOrganizationFields = isOrganizationMemberType(memberType);
+      const corpWrap = document.getElementById('manualOfficialCorpNumberWrap');
+      const businessWrap = document.getElementById('manualOfficialBusinessNumberWrap');
+      if (corpWrap) corpWrap.classList.toggle('d-none', !showOrganizationFields);
+      if (businessWrap) businessWrap.classList.toggle('d-none', !showOrganizationFields);
+    }
+
+    function isMemberAdminConnected() {
+      return isModuleEnabled(currentRuntime, 'member_admin');
+    }
+
+    function isVoteConnected() {
+      return isModuleEnabled(currentRuntime, 'vote');
+    }
+
+    function applyMemberSearchMode() {
+      memberSearchEnabled = isMemberAdminConnected();
+      voteImportEnabled = isVoteConnected();
+      const searchPanel = document.getElementById('memberSearchPanel');
+      const input = document.getElementById('memberSearchKeyword');
+      const button = document.getElementById('memberSearchBtn');
+      const helper = document.getElementById('memberSearchHelper');
+      const resultsEl = document.getElementById('memberSearchResults');
+      const voteImportBtn = document.getElementById('loadElectionResultsBtn');
+      if (searchPanel) searchPanel.classList.toggle('d-none', !memberSearchEnabled);
+      if (input) input.disabled = !memberSearchEnabled;
+      if (button) button.disabled = !memberSearchEnabled;
+      if (helper) helper.textContent = '등록된 조합원을 검색해 직책과 바로 연결합니다.';
+      if (voteImportBtn) voteImportBtn.classList.toggle('d-none', !voteImportEnabled);
+      if (!memberSearchEnabled) {
+        document.getElementById('manualOfficialBox')?.classList.remove('d-none');
+        if (resultsEl) resultsEl.innerHTML = '';
+      }
+    }
+
+    function computeAutoTermEndDate(termStartDate) {
+      const raw = String(termStartDate || '').trim();
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return '';
+      const [year, month, day] = raw.split('-').map((v) => Number(v));
+      const endYear = year + 2;
+      const lastDay = new Date(Date.UTC(endYear, month, 0)).getUTCDate();
+      const endDay = Math.min(day, lastDay);
+      return `${endYear}-${String(month).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function sanitizeKeyword(value) {
+      return String(value ?? '').replace(/[,%()]/g, ' ').replace(/["'`]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function showAlert(message, type = 'info') {
+      const el = document.getElementById('pageAlert');
+      if (!el) return;
+      el.className = `alert alert-${type}`;
+      el.textContent = String(message || '');
+      el.classList.remove('d-none');
+    }
+
+    function clearAlert() {
+      const el = document.getElementById('pageAlert');
+      if (!el) return;
+      el.classList.add('d-none');
+      el.textContent = '';
+    }
+
+    function updateSelectedMemberBox() {
+      const box = document.getElementById('selectedMemberBox');
+      if (!box) return;
+      if (!selectedMember) {
+        box.textContent = '선택된 조합원이 없습니다.';
+        return;
+      }
+      const detailParts = [selectedMember.birth_date, selectedMember.phone, selectedMember.email]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+      box.innerHTML = `
+        <div class="fw-bold">${escapeHtml(selectedMember.name || '-')}</div>
+        <div class="text-muted small">${escapeHtml(selectedMember.member_id || '-')} · ${escapeHtml(selectedMember.member_type || '-')} · ${escapeHtml(selectedMember.status || '-')}</div>
+        ${detailParts.length ? `<div class="text-muted small">${escapeHtml(detailParts.join(' · '))}</div>` : ''}
+      `;
+    }
+
+    function resetOfficialForm() {
+      selectedMember = null;
+      updateSelectedMemberBox();
+      document.getElementById('manualOfficialName').value = '';
+      document.getElementById('manualOfficialMemberId').value = '';
+      document.getElementById('manualOfficialMemberType').value = '개인';
+      document.getElementById('manualOfficialBirthDate').value = '';
+      document.getElementById('manualOfficialPhone').value = '';
+      document.getElementById('manualOfficialEmail').value = '';
+      document.getElementById('manualOfficialAddress').value = '';
+      document.getElementById('manualOfficialCorpNumber').value = '';
+      document.getElementById('manualOfficialBusinessNumber').value = '';
+      document.getElementById('officialRole').value = '';
+      document.getElementById('officialCategory').value = '-';
+      document.getElementById('officialTermStart').value = '';
+      document.getElementById('officialTermEnd').value = '';
+      toggleManualOfficialIdentityFields();
+    }
+
+    function toggleManualOfficialInput() {
+      const box = document.getElementById('manualOfficialBox');
+      if (!box) return;
+      box.classList.toggle('d-none');
+    }
+
+    function selectManualOfficial() {
+      clearAlert();
+      const name = String(document.getElementById('manualOfficialName')?.value || '').trim();
+      const memberId = String(document.getElementById('manualOfficialMemberId')?.value || '').trim();
+      const memberType = normalizeMemberType(document.getElementById('manualOfficialMemberType')?.value);
+      const birthDate = String(document.getElementById('manualOfficialBirthDate')?.value || '').trim();
+      const phone = String(document.getElementById('manualOfficialPhone')?.value || '').trim();
+      const email = String(document.getElementById('manualOfficialEmail')?.value || '').trim();
+      const address = String(document.getElementById('manualOfficialAddress')?.value || '').trim();
+      const corpNumber = String(document.getElementById('manualOfficialCorpNumber')?.value || '').trim();
+      const businessNumber = String(document.getElementById('manualOfficialBusinessNumber')?.value || '').trim();
+      const needsBirthDate = !isOrganizationMemberType(memberType);
+      if (!name || !memberId || !phone || !email || (needsBirthDate && !birthDate)) {
+        showAlert(needsBirthDate
+          ? '직접 입력 시 이름, 조합원 번호, 생년월일, 전화번호, 이메일 주소를 모두 입력해주세요.'
+          : '단체 직접 입력 시 이름, 조합원 번호, 전화번호, 이메일 주소를 입력해주세요.', 'warning');
+        return;
+      }
+      if (!email.includes('@')) {
+        showAlert('이메일 주소 형식을 확인해주세요.', 'warning');
+        return;
+      }
+      if (isOrganizationMemberType(memberType) && !corpNumber && !businessNumber) {
+        showAlert('단체 등록 시 법인등록번호 또는 사업자/고유번호 중 하나는 입력해주세요.', 'warning');
+        return;
+      }
+      selectedMember = {
+        id: null,
+        member_id: memberId,
+        name,
+        birth_date: birthDate,
+        phone,
+        email,
+        address,
+        member_type: memberType,
+        corp_number: corpNumber || null,
+        business_number: businessNumber || null,
+        status: '직접 등록'
+      };
+      updateSelectedMemberBox();
+    }
+
+    async function ensureAccess() {
+      const user = readStoredUser();
+      if (!user) {
+        location.href = `index.html?next=${encodeURIComponent(window.location.href)}`;
+        return false;
+      }
+
+      permissionSet = await loadPermissions(user);
+      if (permissionSet.size === 0) permissionSet = readStoredPermissions();
+      currentRuntime = await loadRuntime();
+      currentCoopId = await getMyCoopId();
+      applyMemberSearchMode();
+
+      const hasAdminFallback = user.role === 'admin' || user.role === 'admin_all';
+      const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
+
+      const moduleEnabled =
+        isModuleEnabled(currentRuntime, 'member_admin') ||
+        isModuleEnabled(currentRuntime, 'signature') ||
+        isModuleEnabled(currentRuntime, 'vote');
+      const permissionOk = hasAdminFallback || canMemberAdmin === true;
+
+      if (!moduleEnabled || !permissionOk) {
+        showAlert('임원·대의원 관리는 조합원 관리 권한과 전자서명/선거 운영 범위에서 사용합니다.', 'warning');
+        setTimeout(() => {
+          location.href = 'index.html';
+        }, 900);
+        return false;
+      }
+      return true;
+    }
+
+    async function searchMembers(silent = false) {
+      clearAlert();
+      if (!memberSearchEnabled) {
+        if (!silent) showAlert('조합원 관리 모듈이 연결되지 않아 검색을 사용할 수 없습니다.', 'warning');
+        return;
+      }
+      const keyword = sanitizeKeyword(document.getElementById('memberSearchKeyword')?.value || '');
+      const resultsEl = document.getElementById('memberSearchResults');
+      if (!resultsEl) return;
+      resultsEl.innerHTML = '<div class="text-muted small">검색 중...</div>';
+
+      let query = scopeByTenant(_supabase
+        .from('coop_members')
+        .select('id, member_id, name, member_type, status, birth_date, phone, email, address, corp_number, business_number')
+        .order('name', { ascending: true })
+        .limit(20));
+
+      if (keyword) {
+        query = query.or(`name.ilike.%${keyword}%,member_id.ilike.%${keyword}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        resultsEl.innerHTML = '<div class="text-danger small">조합원 검색 중 오류가 발생했습니다.</div>';
+        showAlert('조합원 검색 실패: ' + error.message, 'danger');
+        return;
+      }
+
+      const rows = Array.isArray(data) ? data.filter((row) => String(row.member_id || '').trim()) : [];
+      if (rows.length === 0) {
+        resultsEl.innerHTML = '<div class="text-muted small">검색 결과가 없습니다.</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = rows.map((row) => `
+        <div class="member-result">
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+              <div class="name">${escapeHtml(row.name || '-')}</div>
+              <div class="meta">${escapeHtml(row.member_id || '-')} · ${escapeHtml(row.member_type || '-')} · ${escapeHtml(row.status || '-')}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-member-id="${escapeHtml(row.id)}">선택</button>
+          </div>
+        </div>
+      `).join('');
+
+      resultsEl.querySelectorAll('button[data-member-id]').forEach((btn, idx) => {
+        btn.addEventListener('click', () => {
+          selectedMember = rows[idx];
+          updateSelectedMemberBox();
+        });
+      });
+    }
+
+    async function getNextTermCount(memberId, role) {
+      const { data, error } = await scopeByTenant(_supabase
+        .from('coop_officials')
+        .select('term_count')
+        .eq('member_id', memberId)
+        .eq('role', role));
+      if (error) throw error;
+      let max = 0;
+      (data || []).forEach((row) => {
+        const n = Number(row.term_count || 0);
+        if (Number.isFinite(n) && n > max) max = n;
+      });
+      return max + 1;
+    }
+
+    async function saveOfficial() {
+      clearAlert();
+      if (!selectedMember || !selectedMember.member_id) {
+        showAlert('먼저 등록할 조합원을 선택해주세요.', 'warning');
+        return;
+      }
+
+      const role = String(document.getElementById('officialRole')?.value || '').trim();
+      const termStartDate = String(document.getElementById('officialTermStart')?.value || '').trim();
+      let termEndDate = String(document.getElementById('officialTermEnd')?.value || '').trim();
+
+      if (!role) {
+        showAlert('직책을 선택해주세요.', 'warning');
+        return;
+      }
+      if (!termStartDate) {
+        showAlert('임기 시작일을 입력해주세요.', 'warning');
+        return;
+      }
+      if (!termEndDate) {
+        termEndDate = computeAutoTermEndDate(termStartDate);
+        document.getElementById('officialTermEnd').value = termEndDate;
+      }
+      if (!termEndDate || termStartDate > termEndDate) {
+        showAlert('임기 종료일을 확인해주세요.', 'warning');
+        return;
+      }
+
+      const category = categoryFromRole(role);
+      document.getElementById('officialCategory').value = categoryLabel(category);
+
+      const { data: existing, error: existingError } = await scopeByTenant(_supabase
+        .from('coop_officials')
+        .select('id')
+        .eq('member_id', selectedMember.member_id)
+        .eq('role', role)
+        .eq('status', 'active'));
+      if (existingError) {
+        showAlert('기존 임원 정보 확인 실패: ' + existingError.message, 'danger');
+        return;
+      }
+      if (Array.isArray(existing) && existing.length > 0) {
+        showAlert('같은 직책의 활성 임원 정보가 이미 등록되어 있습니다. 먼저 종료 처리 후 다시 등록해주세요.', 'warning');
+        return;
+      }
+
+      let targetMember;
+      let nextTermCount;
+      try {
+        targetMember = await ensureSelectedMemberRecord();
+        nextTermCount = await getNextTermCount(targetMember.member_id, role);
+      } catch (error) {
+        showAlert('조합원 정보 준비 실패: ' + (error?.message || 'Unknown error'), 'danger');
+        return;
+      }
+      const snapshot = buildOfficialIdentitySnapshot(targetMember);
+      const payload = {
+        coop_id: currentCoopId,
+        member_id: targetMember.member_id,
+        category,
+        role,
+        term_start_date: termStartDate,
+        term_end_date: termEndDate,
+        term_count: nextTermCount,
+        name: targetMember.name || selectedMember.name || null,
+        official_member_type: snapshot.official_member_type,
+        official_identity_code: snapshot.official_identity_code,
+        official_identity_kind: snapshot.official_identity_kind,
+        status: 'active'
+      };
+
+      const { error } = await _supabase.from('coop_officials').insert(payload);
+      if (error) {
+        showAlert('등록 실패: ' + error.message, 'danger');
+        return;
+      }
+
+      showAlert('직책 정보가 등록되었습니다.', 'success');
+      resetOfficialForm();
+      await loadOfficials();
+      await searchMembers();
+    }
+
+    async function ensureSelectedMemberRecord() {
+      if (selectedMember && selectedMember.id) return selectedMember;
+      if (!selectedMember || !selectedMember.member_id) {
+        throw new Error('선택된 조합원 정보가 없습니다.');
+      }
+
+      const { data: existing, error: existingError } = await scopeByTenant(_supabase
+        .from('coop_members')
+        .select('id, member_id, name, member_type, status, phone, email, address, birth_date, corp_number, business_number')
+        .eq('member_id', selectedMember.member_id)
+        .limit(1)
+        .maybeSingle());
+
+      if (existingError && existingError.code !== 'PGRST116') {
+        throw existingError;
+      }
+
+      if (existing) {
+        selectedMember = existing;
+        updateSelectedMemberBox();
+        return selectedMember;
+      }
+
+      const { data: createdId, error: createError } = await _supabase.rpc('create_member_secure', {
+        p_name: selectedMember.name,
+        p_email: selectedMember.email,
+        p_phone: selectedMember.phone || null,
+        p_birth_date: selectedMember.birth_date || null,
+        p_member_type: normalizeMemberType(selectedMember.member_type),
+        p_status: '정상',
+        p_address: selectedMember.address || null,
+        p_member_id: selectedMember.member_id,
+        p_join_category: '임원/대의원/선관위원',
+        p_admin_memo: null
+      });
+
+      if (createError) throw createError;
+      if (createdId && isOrganizationMemberType(selectedMember.member_type)) {
+        const extraPayload = {
+          corp_number: selectedMember.corp_number || null,
+          business_number: selectedMember.business_number || null
+        };
+        const { error: updateIdentityError } = await scopeByTenant(_supabase
+          .from('coop_members')
+          .update(extraPayload)
+          .eq('id', createdId));
+        if (updateIdentityError) throw updateIdentityError;
+      }
+      const { data: created, error: createdFetchError } = await scopeByTenant(_supabase
+        .from('coop_members')
+        .select('id, member_id, name, member_type, status, phone, email, address, birth_date, corp_number, business_number')
+        .eq('id', createdId)
+        .single());
+      if (createdFetchError) throw createdFetchError;
+      selectedMember = created;
+      updateSelectedMemberBox();
+      return selectedMember;
+    }
+
+    async function deactivateOfficial(id) {
+      if (!id) return;
+      clearAlert();
+      const today = new Date().toISOString().slice(0, 10);
+      const { error } = await scopeByTenant(_supabase
+        .from('coop_officials')
+        .update({ status: 'inactive', real_end_date: today })
+        .eq('id', id));
+      if (error) {
+        showAlert('종료 처리 실패: ' + error.message, 'danger');
+        return;
+      }
+      showAlert('해당 직책을 종료 처리했습니다.', 'success');
+      await loadOfficials();
+    }
+
+    async function loadOfficials() {
+      const body = document.getElementById('officialListBody');
+      if (!body) return;
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">불러오는 중입니다...</td></tr>';
+
+      const { data: officials, error } = await scopeByTenant(_supabase
+        .from('coop_officials')
+        .select('id, member_id, category, role, term_start_date, term_end_date, real_end_date, term_count, status, seal_url, name, official_member_type, official_identity_code, official_identity_kind')
+        .in('category', ['delegate', 'executive', 'election_comm'])
+        .order('status', { ascending: true })
+        .order('term_start_date', { ascending: false }));
+
+      if (error) {
+        body.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">임원 정보를 불러오지 못했습니다.</td></tr>';
+        showAlert('임원 목록 로드 실패: ' + error.message, 'danger');
+        return;
+      }
+
+      const safeOfficials = Array.isArray(officials) ? officials : [];
+      if (safeOfficials.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">등록된 직책 정보가 없습니다.</td></tr>';
+        return;
+      }
+
+      const memberIds = [...new Set(safeOfficials.map((row) => row.member_id).filter(Boolean))];
+      let nameMap = {};
+      if (memberIds.length > 0) {
+        const { data: members } = await scopeByTenant(_supabase
+          .from('coop_members')
+          .select('member_id, name')
+          .in('member_id', memberIds));
+        (members || []).forEach((row) => {
+          nameMap[row.member_id] = row.name;
+        });
+      }
+
+      body.innerHTML = safeOfficials.map((row) => {
+        const active = String(row.status || 'active') === 'active';
+        const stateClass = active ? 'active' : 'inactive';
+        const stateLabel = active ? '활성' : '종료';
+        const signerLabel = row.seal_url ? '등록됨' : '미등록';
+        const signerClass = row.seal_url ? 'text-success' : 'text-muted';
+        const displayName = nameMap[row.member_id] || row.name || row.member_id || '-';
+        const identityLine = [row.official_member_type, row.official_identity_kind && row.official_identity_code ? `${row.official_identity_kind}:${row.official_identity_code}` : null]
+          .filter(Boolean)
+          .join(' · ');
+        return `
+          <tr>
+            <td>
+              <div class="fw-bold">${escapeHtml(displayName)}</div>
+              <div class="text-muted small">${escapeHtml(row.member_id || '-')}</div>
+              ${identityLine ? `<div class="text-muted small">${escapeHtml(identityLine)}</div>` : ''}
+            </td>
+            <td>
+              <div>${escapeHtml(roleLabel(row.role))}</div>
+              <div class="small text-muted">${escapeHtml(categoryLabel(row.category))} · ${Number(row.term_count || 1)}회차</div>
+            </td>
+            <td class="small">
+              ${escapeHtml(row.term_start_date || '-')} ~ ${escapeHtml((row.real_end_date || row.term_end_date || '-'))}
+            </td>
+            <td><span class="status-chip ${stateClass}">${stateLabel}</span></td>
+            <td><span class="${signerClass}">${signerLabel}</span></td>
+            <td class="text-end">
+              ${active ? `<button class="btn btn-sm btn-outline-danger" type="button" data-end-id="${row.id}">종료</button>` : '-'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      body.querySelectorAll('button[data-end-id]').forEach((btn) => {
+        btn.addEventListener('click', () => deactivateOfficial(btn.getAttribute('data-end-id')));
+      });
+    }
+
+    document.getElementById('officialRole')?.addEventListener('change', (event) => {
+      const role = String(event.target.value || '').trim();
+      document.getElementById('officialCategory').value = role ? categoryLabel(categoryFromRole(role)) : '-';
+    });
+
+    document.getElementById('officialTermStart')?.addEventListener('change', (event) => {
+      const start = String(event.target.value || '').trim();
+      const endEl = document.getElementById('officialTermEnd');
+      if (!endEl) return;
+      if (!endEl.value) endEl.value = computeAutoTermEndDate(start);
+    });
+
+    document.getElementById('manualOfficialMemberType')?.addEventListener('change', () => {
+      toggleManualOfficialIdentityFields();
+    });
+
+    async function init() {
+      const ok = await ensureAccess();
+      if (!ok) return;
+      resetOfficialForm();
+      await Promise.all([memberSearchEnabled ? searchMembers(true) : Promise.resolve(), loadOfficials()]);
+    }
+
+    init();
+  </script>
+</body>
+</html>

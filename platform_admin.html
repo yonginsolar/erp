@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.2 -->
+<!-- Version: v1.1.4 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.1.2 | platform_admin.html');</script>
+  <script>console.log('[Version] v1.1.4 | platform_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -168,6 +168,15 @@
     .module-price-badge.included {
       background: #ecfdf5;
       color: #047857;
+    }
+    .module-scope-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #475569;
+      font-size: 12px;
+    }
+    .module-scope-list li + li {
+      margin-top: 4px;
     }
     .billing-summary {
       margin-top: 16px;
@@ -389,7 +398,7 @@
       <div id="pricingOverviewGrid" class="pricing-grid mb-3"></div>
       <div class="panel-card mb-0">
         <div class="section-title mb-2">옵션 모듈</div>
-        <div class="form-hint mb-2">인사·전자결재, 전자서명, 선거/투표 등은 기본형에 추가되는 별도 모듈입니다.</div>
+        <div class="form-hint mb-2">인사·전자결재와 문서 관련 기능은 기본형에 추가되는 옵션입니다. 선거/투표는 조합원 관리 운영 범위에 포함해 안내합니다.</div>
         <div class="table-responsive">
           <table class="table align-middle mb-0 pricing-addon-table">
             <thead>
@@ -525,6 +534,7 @@
                     <div>
                       <div class="section-title mb-1">모듈 설정</div>
                       <div class="form-hint">조합별로 홈 메뉴 노출과 ERP 사용 범위를 조정합니다.</div>
+                      <div class="form-hint mt-1">현재 이 화면은 ERP 런타임 기준 모듈을 저장합니다. 선거/투표는 조합원 관리와 함께, 전자서명은 문서함과 함께 제어됩니다.</div>
                     </div>
                     <div class="d-flex gap-2">
                       <button class="btn btn-outline-secondary btn-sm" type="button" onclick="applyStandardPreset()">표준 모듈 적용</button>
@@ -534,7 +544,7 @@
                   <div id="manageModuleGrid" class="module-grid"></div>
                   <div class="billing-summary" id="moduleBillingSummary">
                     <div class="section-title mb-1">청구 기준</div>
-                    <div class="form-hint mb-2">전자결재, 마이페이지, 직원관리, 권한관리는 운영상 따로 잠글 수 있어도 요금은 한 세트로 계산합니다.</div>
+                    <div class="form-hint mb-2">전자결재, 마이페이지, 직원관리, 권한관리는 운영상 따로 잠글 수 있어도 요금은 한 세트로 계산합니다. 선거/투표는 조합원 관리에 포함하고, 전자서명은 문서함과 함께 안내합니다.</div>
                     <div id="moduleBillingLines"></div>
                     <div class="billing-total" id="moduleBillingTotal"></div>
                   </div>
@@ -560,32 +570,32 @@
     let coopCodeManuallyEdited = false;
     let platformTelegramSettings = null;
     const PLATFORM_PRICING_CATALOG = Object.freeze({
-      vatNotice: '부가세 별도',
+      vatNotice: '현재 요금은 미정입니다.',
       freePlan: {
         name: 'Free Starter',
-        monthlyFee: 0,
-        setupFee: 0,
+        monthlyFee: null,
+        priceLabel: '미정',
+        setupFee: null,
+        setupFeeLabel: '미정',
         scope: '공개 홈페이지 1개, 공지, FAQ, 기본 소개',
         limits: [
           '공용 서브도메인 사용',
           '관리자 1명',
-          '조합원 관리 / 인사·전자결재 / 급여 기초관리 / 문서 옵션 제외'
+          '조합원 관리 / 인사·전자결재 / 문서관리 제외'
         ]
       },
       basePlan: {
         name: 'Lite',
-        monthlyFee: 150000,
-        setupFee: 800000,
-        scope: '홈페이지 관리 + 조합원 관리 + 가족/단체 관리'
+        monthlyFee: null,
+        priceLabel: '미정',
+        setupFee: null,
+        setupFeeLabel: '미정',
+        scope: '홈페이지 관리 + 조합원 관리 + 가족/단체 관리 + 조합원 포털 + 선거/투표'
       },
       modulePricing: [
-        { key: 'workforce', name: '인사·전자결재', monthlyFee: 120000, scope: '직원관리, 결재, 마이페이지, 휴가' },
-        { key: 'payrollBasic', name: '급여 기초관리', monthlyFee: 80000, scope: '급여 항목, 월 급여 확정, 명세 조회' },
-        { key: 'minutes', name: '회의/공문', monthlyFee: 50000, scope: '회의록, 공문 관리' },
-        { key: 'documents', name: '문서함', monthlyFee: 30000, scope: '문서 열람, 자료실 운영' },
-        { key: 'signature', name: '전자서명', monthlyFee: 50000, scope: '서명 요청, 서명 수집' },
-        { key: 'vote', name: '선거/투표', monthlyFee: 100000, scope: '후보 등록, 투표, 개표 관리' },
-        { key: 'support', name: '중앙 운영 대행', monthlyFee: 70000, scope: '가입 승인, 초기 세팅, 운영 보조' },
+        { key: 'workforce', name: '인사·전자결재', monthlyFee: null, priceLabel: '미정', scope: '직원관리, 결재, 마이페이지, 휴가' },
+        { key: 'minutes', name: '회의/공문', monthlyFee: null, priceLabel: '미정', scope: '회의록, 공문 관리' },
+        { key: 'document_bundle', name: '문서함·전자서명', monthlyFee: null, priceLabel: '미정', scope: '문서 열람, 자료실 운영, 서명 요청, 서명 수집' },
         { key: 'kakao', name: '카카오 연동', monthlyFee: null, priceLabel: '별도 협의', scope: '조합별 채널/앱 설정에 따라 별도 협의' }
       ]
     });
@@ -649,6 +659,12 @@
       return formatWon(item?.monthlyFee);
     }
 
+    function getPricingSetupAmountLabel(item) {
+      if (item?.setupFeeLabel) return String(item.setupFeeLabel);
+      if (item?.setupFee === 0) return '무료';
+      return formatWon(item?.setupFee);
+    }
+
     function findPricingModule(key) {
       return (PLATFORM_PRICING_CATALOG.modulePricing || []).find((item) => item.key === key) || null;
     }
@@ -659,32 +675,51 @@
           groupKey: 'workforce_bundle',
           title: '인사·전자결재',
           description: '전자결재, 마이페이지, 직원 및 설정 관리, 권한 관리를 한 세트로 운영합니다.',
-          moduleKeys: ['approval', 'mypage', 'hr', 'permission']
+          moduleKeys: ['approval', 'mypage', 'hr', 'permission'],
+          scopes: ['전자결재: approval.html', '마이페이지: mypage.html', '직원관리: admin_employee.html', '권한 관리: permissions.html']
         },
         {
           groupKey: 'site_admin',
           title: '홈페이지 관리',
           description: '공지사항, 사이트 컨텐츠, FAQ, 협력단체, 임원 서명 관리',
-          moduleKeys: ['site_admin']
+          moduleKeys: ['site_admin'],
+          scopes: ['관리 화면: site_admin.html → admin_member.html', '제어 탭: 공지사항 / 임원 서명 / 홈페이지 관리']
         },
         {
           groupKey: 'member_admin',
           title: '조합원 관리',
-          description: '조합원 명부, 신청 처리, 입금 매칭, 자금/배당 관리',
-          moduleKeys: ['member_admin']
+          description: '조합원 명부, 신청 처리, 입금 매칭, 자금/배당 관리, 선거/투표',
+          moduleKeys: ['member_admin', 'vote'],
+          scopes: ['관리 화면: member_admin.html → admin_member.html', '제어 탭: 조합원 명부 / 자금 관리 / 신청 처리 / 입금 매칭', '연결 기능: 선거 생성 / 선거 관리 / 후보 등록 / 투표 포털']
         },
         {
           groupKey: 'accounting',
           title: '회계관리',
           description: '회계 입력, 장부, 자동연동, 결산 관련 기능',
-          moduleKeys: ['accounting']
+          moduleKeys: ['accounting'],
+          scopes: ['회계 화면: accounting.html']
+        },
+        {
+          groupKey: 'minutes',
+          title: '회의/공문',
+          description: '회의록, 공문, 총회 자료 작성 및 공개 관리',
+          moduleKeys: ['minutes'],
+          scopes: ['의사록: minutes/minutes_admin.html', '공문: minutes/notices_admin.html', '총회 자료: minutes/materials_admin.html', '통합 화면: minutes/admin_minutes.html']
+        },
+        {
+          groupKey: 'documents',
+          title: '문서함·전자서명',
+          description: '공개 문서, 총회 자료, 규정 문서 열람과 임원/대의원 전자서명',
+          moduleKeys: ['documents', 'signature'],
+          scopes: ['문서함 화면: minutes/minutes_view.html', '전자서명 화면: minutes/minutes_sign.html']
         },
         {
           groupKey: 'audit',
           title: '감사 로그',
           description: '중요 작업 기록은 기본 기능으로 유지됩니다.',
           moduleKeys: ['audit'],
-          forceEnabled: true
+          forceEnabled: true,
+          scopes: ['감사 로그: audit_logs.html']
         }
       ];
     }
@@ -724,27 +759,27 @@
         return {
           groupKey: 'workforce_bundle',
           groupName: '인사·전자결재 세트',
-          monthlyFee: Number(workforcePlan.monthlyFee || 0),
-          amountLabel: `${formatWon(workforcePlan.monthlyFee || 0)} / 월`,
-          badgeLabel: `인사·전자결재 세트 · ${formatWon(workforcePlan.monthlyFee || 0)} / 월`,
+          monthlyFee: null,
+          amountLabel: getPricingAmountLabel(workforcePlan),
+          badgeLabel: `인사·전자결재 세트 · ${getPricingAmountLabel(workforcePlan)}`,
           note: '전자결재, 마이페이지, 직원관리, 권한관리는 청구 시 한 세트로 계산합니다.',
-          badgeClass: '',
-          amountClass: '',
-          priced: true
+          badgeClass: 'unpriced',
+          amountClass: 'unpriced',
+          priced: false
         };
       }
 
-      if (['site_admin', 'member_admin', 'member'].includes(normalizedKey)) {
+      if (['site_admin', 'member_admin', 'member', 'vote'].includes(normalizedKey)) {
         return {
           groupKey: 'lite_base',
           groupName: `${basePlan.name || 'Lite'} 기본형`,
-          monthlyFee: Number(basePlan.monthlyFee || 0),
-          amountLabel: `${formatWon(basePlan.monthlyFee || 0)} / 월`,
-          badgeLabel: `${basePlan.name || 'Lite'} 기본형 · ${formatWon(basePlan.monthlyFee || 0)} / 월`,
-          note: '홈페이지 관리와 조합원 관리는 Lite 기본형 범위로 안내합니다.',
-          badgeClass: '',
-          amountClass: '',
-          priced: true
+          monthlyFee: null,
+          amountLabel: getPricingAmountLabel(basePlan),
+          badgeLabel: `${basePlan.name || 'Lite'} 기본형 · ${getPricingAmountLabel(basePlan)}`,
+          note: '홈페이지 관리, 조합원 관리, 조합원 포털, 선거/투표는 Lite 기본형 범위로 안내합니다.',
+          badgeClass: 'unpriced',
+          amountClass: 'unpriced',
+          priced: false
         };
       }
 
@@ -767,9 +802,39 @@
           groupKey: 'accounting_unpriced',
           groupName: '회계관리',
           monthlyFee: 0,
-          amountLabel: '요금표 미연결',
-          badgeLabel: '요금표 미연결',
-          note: '현재 운영 페이지의 회계관리 토글은 판매용 요금표와 아직 연결되지 않았습니다.',
+          amountLabel: '미정',
+          badgeLabel: '미정',
+          note: '회계관리는 판매 정책을 별도로 정리할 예정입니다.',
+          badgeClass: 'unpriced',
+          amountClass: 'unpriced',
+          priced: false
+        };
+      }
+
+      if (normalizedKey === 'minutes') {
+        const optionPlan = findPricingModule('minutes') || {};
+        return {
+          groupKey: normalizedKey,
+          groupName: optionPlan.name || normalizedKey,
+          monthlyFee: null,
+          amountLabel: getPricingAmountLabel(optionPlan),
+          badgeLabel: `${optionPlan.name || normalizedKey} · ${getPricingAmountLabel(optionPlan)}`,
+          note: optionPlan.scope || '옵션 모듈',
+          badgeClass: 'unpriced',
+          amountClass: 'unpriced',
+          priced: false
+        };
+      }
+
+      if (['documents', 'signature'].includes(normalizedKey)) {
+        const optionPlan = findPricingModule('document_bundle') || {};
+        return {
+          groupKey: 'document_bundle',
+          groupName: optionPlan.name || '문서함·전자서명',
+          monthlyFee: null,
+          amountLabel: getPricingAmountLabel(optionPlan),
+          badgeLabel: `${optionPlan.name || '문서함·전자서명'} · ${getPricingAmountLabel(optionPlan)}`,
+          note: optionPlan.scope || '옵션 모듈',
           badgeClass: 'unpriced',
           amountClass: 'unpriced',
           priced: false
@@ -803,8 +868,10 @@
       }
 
       let totalMonthlyFee = 0;
+      let hasPendingPricing = false;
       linesEl.innerHTML = Array.from(billingGroups.values()).map((meta) => {
         if (meta.priced) totalMonthlyFee += Number(meta.monthlyFee || 0);
+        if (!meta.priced && String(meta.amountLabel || '').trim() === '미정') hasPendingPricing = true;
         return `
           <div class="billing-line">
             <div>
@@ -818,7 +885,7 @@
 
       totalEl.innerHTML = `
         <span>예상 월 요금</span>
-        <span>${escapeHtml(formatWon(totalMonthlyFee))}</span>
+        <span>${escapeHtml(hasPendingPricing ? '미정' : formatWon(totalMonthlyFee))}</span>
       `;
     }
 
@@ -834,7 +901,7 @@
         <article class="pricing-card">
           <h3>${escapeHtml(catalog.freePlan.name)}</h3>
           <div class="pricing-amount">${escapeHtml(getPricingAmountLabel(catalog.freePlan))}</div>
-          <div class="small text-muted mb-2">초기 구축 ${escapeHtml(formatWon(catalog.freePlan.setupFee))}</div>
+          <div class="small text-muted mb-2">초기 구축 ${escapeHtml(getPricingSetupAmountLabel(catalog.freePlan))}</div>
           <div class="form-hint mb-2">${escapeHtml(catalog.freePlan.scope)}</div>
           <ul class="pricing-list">
             ${(catalog.freePlan.limits || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
@@ -842,8 +909,8 @@
         </article>
         <article class="pricing-card">
           <h3>${escapeHtml(catalog.basePlan.name)}</h3>
-          <div class="pricing-amount">${escapeHtml(formatWon(catalog.basePlan.monthlyFee))} / 월</div>
-          <div class="small text-muted mb-2">초기 구축 ${escapeHtml(formatWon(catalog.basePlan.setupFee))}</div>
+          <div class="pricing-amount">${escapeHtml(getPricingAmountLabel(catalog.basePlan))}</div>
+          <div class="small text-muted mb-2">초기 구축 ${escapeHtml(getPricingSetupAmountLabel(catalog.basePlan))}</div>
           <div class="form-hint">${escapeHtml(catalog.basePlan.scope)}</div>
         </article>
       `;
@@ -851,7 +918,7 @@
       addonBody.innerHTML = (catalog.modulePricing || []).map((item) => `
         <tr>
           <td class="fw-bold">${escapeHtml(item.name || item.key || '-')}</td>
-          <td>${escapeHtml(getPricingAmountLabel(item))}${item?.monthlyFee || item?.priceLabel ? (item?.monthlyFee === 0 ? '' : (item?.priceLabel ? '' : ' / 월')) : ''}</td>
+          <td>${escapeHtml(getPricingAmountLabel(item))}</td>
           <td>${escapeHtml(item.scope || '-')}</td>
         </tr>
       `).join('');
@@ -1299,6 +1366,11 @@
                   <div class="module-price-badge ${escapeHtml(billingMeta.badgeClass || '')}">${escapeHtml(billingMeta.badgeLabel)}</div>
               ` : ''}
               <div class="form-hint mt-1">${escapeHtml(noteText)}</div>
+              ${Array.isArray(group.scopes) && group.scopes.length ? `
+                <ul class="module-scope-list">
+                  ${group.scopes.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+                </ul>
+              ` : ''}
             </div>
             <div class="form-check form-switch fs-5 mb-0">
               <input class="form-check-input module-toggle" type="checkbox" data-module-group-key="${escapeHtml(group.groupKey)}" ${selection.checked ? 'checked' : ''} ${group.forceEnabled ? 'disabled' : ''}>

@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
-Version: v1.1.0
-Change: 2026-02-21 - Unified ERP/Admin audit feed via secure RPC.
+Version: v1.1.1
+Change: 2026-03-13 - Default to ERP audit feed and separate platform changes label.
 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.0 | audit_logs.html');</script>
+  <script>console.log('[Version] v1.1.1 | audit_logs.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <title>감사 로그</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -29,11 +30,11 @@ Change: 2026-02-21 - Unified ERP/Admin audit feed via secure RPC.
     <div class="card p-3 mb-3">
       <div class="row g-2 align-items-end">
         <div class="col-12 col-md-2">
-          <label class="small text-muted">로그 소스</label>
+          <label class="small text-muted">로그 구분</label>
           <select class="form-select" id="filterSource">
+            <option value="erp">ERP 로그</option>
+            <option value="admin">플랫폼 변경</option>
             <option value="all">전체</option>
-            <option value="erp">ERP</option>
-            <option value="admin">관리자 활동</option>
           </select>
         </div>
         <div class="col-12 col-md-3">
@@ -58,6 +59,7 @@ Change: 2026-02-21 - Unified ERP/Admin audit feed via secure RPC.
         <button class="btn btn-primary btn-sm" onclick="loadLogs(true)">검색</button>
         <button class="btn btn-outline-success btn-sm" onclick="exportCsv()">CSV 다운로드</button>
       </div>
+      <div class="small text-muted mt-2" id="sourceHint"></div>
     </div>
 
     <div class="table-responsive">
@@ -127,6 +129,21 @@ function hasAuditViewerRoleFallback() {
   return role === 'admin' || role === 'admin_all';
 }
 
+function updateSourceHint() {
+  const source = String(document.getElementById('filterSource')?.value || 'erp').toLowerCase();
+  const hint = document.getElementById('sourceHint');
+  if (!hint) return;
+  if (source === 'admin') {
+    hint.textContent = '플랫폼 변경은 전체 관리자가 현재 조합의 모듈, 상태, 대표 관리자 등을 바꾼 이력만 표시합니다.';
+    return;
+  }
+  if (source === 'all') {
+    hint.textContent = '전체는 ERP 사용자 로그와 플랫폼 변경 이력을 함께 표시합니다.';
+    return;
+  }
+  hint.textContent = 'ERP 로그는 현재 조합의 전자결재, 직원관리, 조합원관리 등 일반 업무 이력만 표시합니다.';
+} // End of updateSourceHint
+
 window.onload = async function() {
   alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
   const stored = localStorage.getItem('erp_user');
@@ -147,8 +164,13 @@ window.onload = async function() {
     redirectUrl: 'index.html'
   });
   if (!auditRuntimeGate.ok) return;
+  document.getElementById('filterSource').addEventListener('change', function() {
+    updateSourceHint();
+    loadLogs(true);
+  });
+  updateSourceHint();
   await loadLogs(true);
-};
+}; // End of window.onload
 
 function showAlert(msg) {
   document.getElementById('alertBody').textContent = msg || '';
@@ -158,9 +180,10 @@ function showAlert(msg) {
 async function loadPermissions(user) {
   const result = new Set();
   if (!user) return result;
+  const coopId = String(user.coop_id || '').trim();
   const roleKey = user.role || '';
   const posKey = user.position || '';
-  if (!roleKey && !posKey) return result;
+  if ((!roleKey && !posKey) || !coopId) return result;
 
     const roleKeys = [roleKey, posKey].filter(Boolean);
     if (roleKey === 'admin_all') roleKeys.push('admin');
@@ -168,6 +191,7 @@ async function loadPermissions(user) {
   const { data } = await _supabase
     .from('erp_role_permissions')
     .select('permission_key')
+    .eq('coop_id', coopId)
     .in('scope', ['role','position'])
     .in('role_key', roleKeys)
     .eq('is_enabled', true);
@@ -178,12 +202,13 @@ async function loadPermissions(user) {
 }
 
 function resetFilters() {
-  document.getElementById('filterSource').value = 'all';
+  document.getElementById('filterSource').value = 'erp';
   document.getElementById('filterStart').value = '';
   document.getElementById('filterEnd').value = '';
   document.getElementById('filterAction').value = '';
   document.getElementById('filterActor').value = '';
-}
+  updateSourceHint();
+} // End of resetFilters
 
 async function loadLogs(reset) {
   if (reset) {
@@ -219,7 +244,7 @@ async function loadLogs(reset) {
     if (source === 'admin') {
       return showAlert("통합 감사로그 RPC가 아직 적용되지 않았습니다.\nSQL 패치를 먼저 실행해주세요.");
     }
-    let legacyQuery = _supabase.from('erp_audit_logs').select('*').order('created_at', { ascending: false });
+    let legacyQuery = _supabase.from('erp_audit_logs').select('*').eq('coop_id', String(myInfo?.coop_id || '').trim()).order('created_at', { ascending: false });
     if (start) legacyQuery = legacyQuery.gte('created_at', `${start}T00:00:00`);
     if (end) legacyQuery = legacyQuery.lte('created_at', `${end}T23:59:59`);
     if (safeAction) legacyQuery = legacyQuery.ilike('action', `%${safeAction}%`);
@@ -254,9 +279,9 @@ function renderLogs(list, reset) {
   list.forEach(log => {
     const tr = document.createElement('tr');
     const sourceRaw = String(log.source || '').toUpperCase();
-    const sourceLabel = sourceRaw === 'ADMIN' ? '관리자' : 'ERP';
+    const sourceLabel = sourceRaw === 'ADMIN' ? '플랫폼' : 'ERP';
     const sourceBadge = sourceRaw === 'ADMIN'
-      ? '<span class="badge text-bg-dark">관리자</span>'
+      ? '<span class="badge text-bg-dark">플랫폼</span>'
       : '<span class="badge text-bg-primary">ERP</span>';
     const created = formatAuditKstDateTime(log.created_at, '');
     const actor = String(log.actor || '').trim();

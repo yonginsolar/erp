@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.4 -->
+<!-- Version: v1.0.8 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.4 | index.html');</script>
+  <script>console.log('[Version] v1.0.8 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -31,6 +31,10 @@
     .btn-kakao:hover { background: #f4dc00; color: #3a1d1d; }
     .notif-badge { display: inline-block; min-width: 20px; text-align: center; }
     .guard-hint { display: none; white-space: pre-wrap; }
+    .menu-order-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e9ecef; border-radius: 10px; background: #fff; }
+    .menu-order-item strong { font-size: 0.95rem; }
+    .menu-order-controls { display: flex; gap: 6px; }
+    .menu-order-item.muted { opacity: 0.55; }
   </style>
 </head>
 <body>
@@ -75,19 +79,22 @@
       </div>
 
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <button class="btn btn-outline-secondary btn-sm" onclick="openNotificationModal()">🔔 알림</button>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-outline-secondary btn-sm" onclick="openNotificationModal()">🔔 알림</button>
+          <button class="btn btn-outline-primary btn-sm hidden" id="btnMenuOrder" onclick="openMenuOrderModal()">↕️ 메뉴 순서</button>
+        </div>
         <span class="badge bg-danger notif-badge hidden" id="notifBadge">0</span>
       </div>
       
-      <div class="d-grid gap-2">
+      <div class="d-grid gap-2" id="menuButtons">
         <button class="btn btn-white btn-menu" id="btnApproval" onclick="location.href='approval.html'">
           📝 <strong>전자결재</strong>
-          <span class="d-block small text-muted">기안 작성 및 결재 처리</span>
+          <span class="d-block small text-muted">휴가·품의·공문 기안과 승인/반려</span>
         </button>
 
         <button class="btn btn-white btn-menu" id="btnMypage" onclick="location.href='mypage.html'">
           👤 <strong>마이페이지</strong>
-          <span class="d-block small text-muted">내 정보 및 휴가 관리</span>
+          <span class="d-block small text-muted">내 문서, 급여명세, 연차 확인</span>
         </button>
         
         <button class="btn btn-white btn-menu hidden" id="btnAccounting" onclick="location.href='accounting.html'">
@@ -97,12 +104,52 @@
         
         <button class="btn btn-white btn-menu hidden" id="btnAdmin" onclick="location.href='admin_employee.html'">
           ⚙️ <strong id="btnAdminTitle">직원관리</strong>
-          <span class="d-block small text-muted" id="btnAdminDesc">인사 및 급여 설정</span>
+          <span class="d-block small text-muted" id="btnAdminDesc">직원 등록, 권한, 재직 상태, 연차 조정</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnMemberAdmin" onclick="location.href='admin_member.html'">
-            🌐 <strong id="btnMemberAdminTitle">조합원/홈페이지 관리</strong>
-            <span class="d-block small text-muted" id="btnMemberAdminDesc">조합원 명부, 공지, 사이트 운영</span>
+        <button class="btn btn-white btn-menu hidden" id="btnMemberAdmin" onclick="location.href='member_admin.html'">
+            👥 <strong>조합원 관리</strong>
+            <span class="d-block small text-muted">조합원 명부, 신청 처리, 입금 매칭</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnSiteAdmin" onclick="location.href='site_admin.html'">
+            🌐 <strong>홈페이지 관리</strong>
+            <span class="d-block small text-muted">공지, 사이트 컨텐츠, FAQ 운영</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnOfficialsAdmin" onclick="location.href='officials_admin.html'">
+            🖋️ <strong>임원·대의원·선관위원 관리</strong>
+            <span class="d-block small text-muted">조합원 연동, 직책·임기 관리, 전자서명·선거 공통 원천</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnGovernanceHub" onclick="location.href='governance.html'">
+          🗂️ <strong>문서관리</strong>
+          <span class="d-block small text-muted">의사록, 공문, 총회 자료, 문서함, 전자서명</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnMinutesAdmin" onclick="location.href='../minutes/minutes_admin.html'">
+          🗂️ <strong>의사록 관리</strong>
+          <span class="d-block small text-muted">회의록 작성, 서명자, 공개 처리</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnNoticesAdmin" onclick="location.href='../minutes/notices_admin.html'">
+          📢 <strong>공문 관리</strong>
+          <span class="d-block small text-muted">결재 완료 공문 게시와 문서함 연동</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnMaterialsAdmin" onclick="location.href='../minutes/materials_admin.html'">
+          📦 <strong>총회 자료 관리</strong>
+          <span class="d-block small text-muted">자료집 업로드와 배포 범위 관리</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnDocuments" onclick="location.href='../minutes/minutes_view.html'">
+          📚 <strong>문서함</strong>
+          <span class="d-block small text-muted">공개 문서와 자료집 열람</span>
+        </button>
+
+        <button class="btn btn-white btn-menu hidden" id="btnSignature" onclick="location.href='../minutes/minutes_sign.html'">
+          ✍️ <strong>전자서명</strong>
+          <span class="d-block small text-muted">임원·대의원 서명 요청 확인</span>
         </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnAudit" onclick="location.href='audit_logs.html'">
@@ -125,10 +172,29 @@
     </div>
   </div>
 
-<div class="text-center mt-4 hidden" id="patchNoteArea">
+  <div class="text-center mt-4 hidden" id="patchNoteArea">
     <small class="text-muted" style="cursor: pointer; text-decoration: underline;" onclick="openPatchModal()">
       Ver <span id="currentVersion">Loading...</span> (Release Notes)
     </small>
+  </div>
+
+  <div class="modal fade" id="menuOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">ERP 카드 순서</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-muted mb-3">보이는 카드만 순서를 바꿉니다. 이 브라우저에서 현재 조합 기준으로 저장됩니다.</div>
+          <div class="d-grid gap-2" id="menuOrderList"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="resetMenuOrder()">기본 순서로</button>
+          <button class="btn btn-primary btn-sm" type="button" data-bs-dismiss="modal">닫기</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="modal fade" id="alertModal" tabindex="-1">
@@ -446,9 +512,10 @@ async function loadUserInfo(user) {
 async function loadPermissions(user) {
     const result = new Set();
     if (!user) return result;
+    const coopId = String(user.coop_id || '').trim();
     const roleKey = user.role || '';
     const posKey = user.position || '';
-    if (!roleKey && !posKey) return result;
+    if ((!roleKey && !posKey) || !coopId) return result;
 
     const roleKeys = [roleKey, posKey].filter(Boolean);
     if (roleKey === 'admin_all') roleKeys.push('admin');
@@ -457,6 +524,7 @@ async function loadPermissions(user) {
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
+        .eq('coop_id', coopId)
         .in('scope', ['role', 'position'])
         .in('role_key', roleKeys)
         .eq('is_enabled', true);
@@ -513,42 +581,147 @@ function applyHrMenuLabel(runtime) {
     const titleEl = document.getElementById('btnAdminTitle');
     const descEl = document.getElementById('btnAdminDesc');
     if (titleEl) titleEl.textContent = isLite ? '직원 및 설정 관리' : '직원관리';
-    if (descEl) descEl.textContent = isLite ? '직원 정보와 전자결재 설정 관리' : '인사 및 급여 설정';
+    if (descEl) descEl.textContent = isLite ? '직원 등록, 권한, 전자결재 설정 관리' : '직원 등록, 권한, 재직 상태, 연차 조정';
 }
 
-function applyMemberAdminMenuLabel(siteEnabled, memberAdminEnabled) {
-    const titleEl = document.getElementById('btnMemberAdminTitle');
-    const descEl = document.getElementById('btnMemberAdminDesc');
-    if (!titleEl || !descEl) return;
+function getMenuButtonsContainer() {
+    return document.getElementById('menuButtons');
+}
 
-    if (siteEnabled && memberAdminEnabled) {
-        titleEl.textContent = '조합원/홈페이지 관리';
-        descEl.textContent = '조합원 명부, 공지, 사이트 운영';
-        return;
+function getDefaultMenuOrder() {
+    return ERP_MENU_BUTTON_ORDER_IDS.slice();
+}
+
+function getMenuOrderStorageKey() {
+    const coopId = String(myInfo?.coop_id || 'global').trim() || 'global';
+    return `erp_menu_order:${coopId}`;
+}
+
+function readMenuOrder() {
+    try {
+        const raw = localStorage.getItem(getMenuOrderStorageKey());
+        const parsed = JSON.parse(raw || '[]');
+        if (!Array.isArray(parsed)) return getDefaultMenuOrder();
+        const knownIds = new Set(getDefaultMenuOrder());
+        const filtered = parsed.filter(id => knownIds.has(id));
+        getDefaultMenuOrder().forEach(id => {
+            if (!filtered.includes(id)) filtered.push(id);
+        });
+        return filtered;
+    } catch (err) {
+        console.warn('readMenuOrder failed:', err);
+        return getDefaultMenuOrder();
     }
-    if (memberAdminEnabled) {
-        titleEl.textContent = '조합원 관리';
-        descEl.textContent = '조합원 명부, 신청 처리, 입금 매칭';
-        return;
-    }
-    if (siteEnabled) {
-        titleEl.textContent = '홈페이지 관리';
-        descEl.textContent = '공지, 사이트 컨텐츠, FAQ 운영';
-        return;
-    }
-    titleEl.textContent = '조합원/홈페이지 관리';
-    descEl.textContent = '조합원 명부, 공지, 사이트 운영';
+}
+
+function saveMenuOrder(order) {
+    localStorage.setItem(getMenuOrderStorageKey(), JSON.stringify(order));
+}
+
+function applyMenuOrder() {
+    const container = getMenuButtonsContainer();
+    if (!container) return;
+    const order = readMenuOrder();
+    const buttonMap = new Map();
+    ERP_MENU_BUTTON_ORDER_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) buttonMap.set(id, el);
+    });
+    order.forEach(id => {
+        const el = buttonMap.get(id);
+        if (el) container.appendChild(el);
+    });
+}
+
+function getVisibleMenuButtonIds() {
+    return ERP_MENU_BUTTON_ORDER_IDS.filter(id => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains('hidden');
+    });
+}
+
+function updateMenuOrderButtonVisibility(canCustomize) {
+    const btn = document.getElementById('btnMenuOrder');
+    if (!btn) return;
+    if (canCustomize && getVisibleMenuButtonIds().length > 1) btn.classList.remove('hidden');
+    else btn.classList.add('hidden');
+}
+
+function getMenuButtonLabel(id) {
+    const button = document.getElementById(id);
+    return button?.querySelector('strong')?.textContent?.trim() || button?.textContent?.trim() || id;
+}
+
+function renderMenuOrderList() {
+    const listEl = document.getElementById('menuOrderList');
+    if (!listEl) return;
+    const visibleIds = getVisibleMenuButtonIds();
+    const orderedVisibleIds = readMenuOrder().filter(id => visibleIds.includes(id));
+    listEl.innerHTML = '';
+    orderedVisibleIds.forEach((id, index) => {
+        const row = document.createElement('div');
+        row.className = `menu-order-item${orderedVisibleIds.length <= 1 ? ' muted' : ''}`;
+        row.innerHTML = `
+          <strong>${getMenuButtonLabel(id)}</strong>
+          <div class="menu-order-controls">
+            <button type="button" class="btn btn-outline-secondary btn-sm" ${index === 0 ? 'disabled' : ''} data-dir="-1" data-id="${id}">↑</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" ${index === orderedVisibleIds.length - 1 ? 'disabled' : ''} data-dir="1" data-id="${id}">↓</button>
+          </div>
+        `;
+        listEl.appendChild(row);
+    });
+    listEl.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', () => moveMenuOrderItem(btn.dataset.id, Number(btn.dataset.dir || '0')));
+    });
+}
+
+function moveMenuOrderItem(id, direction) {
+    const order = readMenuOrder();
+    const visibleIds = order.filter(menuId => {
+        const el = document.getElementById(menuId);
+        return el && !el.classList.contains('hidden');
+    });
+    const fromVisibleIndex = visibleIds.indexOf(id);
+    const toVisibleIndex = fromVisibleIndex + direction;
+    if (fromVisibleIndex < 0 || toVisibleIndex < 0 || toVisibleIndex >= visibleIds.length) return;
+    const fromIndex = order.indexOf(visibleIds[fromVisibleIndex]);
+    const toIndex = order.indexOf(visibleIds[toVisibleIndex]);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const next = order.slice();
+    [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+    saveMenuOrder(next);
+    applyMenuOrder();
+    renderMenuOrderList();
+}
+
+function openMenuOrderModal() {
+    applyMenuOrder();
+    renderMenuOrderList();
+    if (menuOrderModalInstance) menuOrderModalInstance.show();
+}
+
+function resetMenuOrder() {
+    saveMenuOrder(getDefaultMenuOrder());
+    applyMenuOrder();
+    renderMenuOrderList();
 }
 
 function applyMenuPermissions(user, platformCtx, runtime) {
     const isAdmin = (user.role === 'admin' || user.role === 'admin_all' || user.position === '국장');
     const isManager = user.role === 'manager' || user.position === '이사';
+    const hasAdminRoleFallback = (user.role === 'admin' || user.role === 'admin_all');
+    const isLiteProfile = String(runtime?.runtime_profile || 'legacy_full') === 'workforce_lite';
     const approvalEnabled = isModuleEnabled(runtime, 'approval');
     const mypageEnabled = isModuleEnabled(runtime, 'mypage');
     const accountingEnabled = isModuleEnabled(runtime, 'accounting');
     const hrEnabled = isModuleEnabled(runtime, 'hr');
-    const siteAdminEnabled = isModuleEnabled(runtime, 'site_admin');
     const memberAdminEnabled = isModuleEnabled(runtime, 'member_admin');
+    const siteAdminEnabled = isModuleEnabled(runtime, 'site_admin');
+    const minutesEnabled = isModuleEnabled(runtime, 'minutes');
+    const documentsEnabled = isModuleEnabled(runtime, 'documents');
+    const signatureEnabled = isModuleEnabled(runtime, 'signature');
+    const voteEnabled = isModuleEnabled(runtime, 'vote');
+    const officialsAdminEnabled = memberAdminEnabled || signatureEnabled || voteEnabled;
     const auditEnabled = isModuleEnabled(runtime, 'audit');
     const permissionEnabled = isModuleEnabled(runtime, 'permission');
 
@@ -557,11 +730,16 @@ function applyMenuPermissions(user, platformCtx, runtime) {
     const canAccounting = hasPermission('accounting.view');
     const canAdmin = hasPermission('hr.admin');
     const canMemberAdmin = hasPermission('member.admin');
+    const canSiteAdmin = (() => {
+        const siteOnly = hasPermission('site.admin');
+        if (siteOnly === null) return null;
+        return siteOnly || hasPermission('member.admin') === true;
+    })();
+    const canOfficialsAdmin = canMemberAdmin;
     const canAudit = hasPermission('audit.view');
     const canPerm = hasPermission('permission.manage');
 
     applyHrMenuLabel(runtime);
-    applyMemberAdminMenuLabel(siteAdminEnabled, memberAdminEnabled);
 
     if (!approvalEnabled || (canApproval !== null && !canApproval)) document.getElementById('btnApproval')?.classList.add('hidden');
     if (!mypageEnabled || (canMypage !== null && !canMypage)) document.getElementById('btnMypage')?.classList.add('hidden');
@@ -582,7 +760,7 @@ function applyMenuPermissions(user, platformCtx, runtime) {
         document.getElementById('btnAdmin')?.classList.remove('hidden');
     }
 
-    if (!siteAdminEnabled && !memberAdminEnabled) {
+    if (!memberAdminEnabled) {
         document.getElementById('btnMemberAdmin')?.classList.add('hidden');
     } else if (canMemberAdmin === null) {
         if (isAdmin) document.getElementById('btnMemberAdmin')?.classList.remove('hidden');
@@ -590,11 +768,81 @@ function applyMenuPermissions(user, platformCtx, runtime) {
         document.getElementById('btnMemberAdmin')?.classList.remove('hidden');
     }
 
-    if (!auditEnabled) document.getElementById('btnAudit')?.classList.add('hidden');
-    if (!permissionEnabled) document.getElementById('btnPerm')?.classList.add('hidden');
-    if (auditEnabled && canAudit !== null && canAudit) document.getElementById('btnAudit')?.classList.remove('hidden');
-    if (permissionEnabled && canPerm !== null && canPerm) document.getElementById('btnPerm')?.classList.remove('hidden');
+    if (!siteAdminEnabled) {
+        document.getElementById('btnSiteAdmin')?.classList.add('hidden');
+    } else if (canSiteAdmin === null) {
+        if (isAdmin) {
+            document.getElementById('btnSiteAdmin')?.classList.remove('hidden');
+        }
+    } else if (canSiteAdmin) {
+        document.getElementById('btnSiteAdmin')?.classList.remove('hidden');
+    }
+
+    if (!officialsAdminEnabled) {
+        document.getElementById('btnOfficialsAdmin')?.classList.add('hidden');
+    } else if (canOfficialsAdmin === null) {
+        if (isAdmin) {
+            document.getElementById('btnOfficialsAdmin')?.classList.remove('hidden');
+        }
+    } else if (canOfficialsAdmin) {
+        document.getElementById('btnOfficialsAdmin')?.classList.remove('hidden');
+    }
+
+    const governanceButtons = [
+        document.getElementById('btnMinutesAdmin'),
+        document.getElementById('btnNoticesAdmin'),
+        document.getElementById('btnMaterialsAdmin'),
+        document.getElementById('btnDocuments'),
+        document.getElementById('btnSignature')
+    ];
+    governanceButtons.forEach(btn => btn?.classList.add('hidden'));
+    document.getElementById('btnGovernanceHub')?.classList.add('hidden');
+
+    const availableGovernanceButtons = [];
+    if (minutesEnabled && (hasAdminRoleFallback || canMemberAdmin === true || canSiteAdmin === true)) {
+        availableGovernanceButtons.push(
+            document.getElementById('btnMinutesAdmin'),
+            document.getElementById('btnNoticesAdmin'),
+            document.getElementById('btnMaterialsAdmin')
+        );
+    }
+    if (documentsEnabled) {
+        availableGovernanceButtons.push(document.getElementById('btnDocuments'));
+    }
+    if (signatureEnabled) {
+        availableGovernanceButtons.push(document.getElementById('btnSignature'));
+    }
+
+    if (availableGovernanceButtons.length > 1) {
+        document.getElementById('btnGovernanceHub')?.classList.remove('hidden');
+    } else {
+        availableGovernanceButtons.forEach(btn => btn?.classList.remove('hidden'));
+    }
+
+    if (!auditEnabled) {
+        document.getElementById('btnAudit')?.classList.add('hidden');
+    } else if (canAudit === null) {
+        if (hasAdminRoleFallback) document.getElementById('btnAudit')?.classList.remove('hidden');
+    } else if (canAudit) {
+        document.getElementById('btnAudit')?.classList.remove('hidden');
+    }
+
+    if (isLiteProfile || !permissionEnabled) {
+        document.getElementById('btnPerm')?.classList.add('hidden');
+    } else if (canPerm === null) {
+        if (hasAdminRoleFallback) document.getElementById('btnPerm')?.classList.remove('hidden');
+    } else if (canPerm) {
+        document.getElementById('btnPerm')?.classList.remove('hidden');
+    }
     if (platformCtx && platformCtx.is_platform_admin === true) document.getElementById('btnPlatform')?.classList.remove('hidden');
+
+    applyMenuOrder();
+    updateMenuOrderButtonVisibility(
+        hasAdminRoleFallback ||
+        canMemberAdmin === true ||
+        canSiteAdmin === true ||
+        platformCtx?.is_platform_admin === true
+    );
 }
 
 function showScreen(id) {
@@ -611,10 +859,31 @@ function showScreen(id) {
 let alertModalInstance = null;
 let confirmModalInstance = null;
 let confirmCallback = null;
+let menuOrderModalInstance = null;
+const ERP_MENU_BUTTON_ORDER_IDS = [
+    'btnApproval',
+    'btnMypage',
+    'btnAccounting',
+    'btnAdmin',
+    'btnMemberAdmin',
+    'btnSiteAdmin',
+    'btnOfficialsAdmin',
+    'btnGovernanceHub',
+    'btnMinutesAdmin',
+    'btnNoticesAdmin',
+    'btnMaterialsAdmin',
+    'btnDocuments',
+    'btnSignature',
+    'btnAudit',
+    'btnPerm',
+    'btnPlatform'
+];
 
 function initCommonModals() {
+    const menuOrderEl = document.getElementById('menuOrderModal');
     const alertEl = document.getElementById('alertModal');
     const confirmEl = document.getElementById('confirmModal');
+    if (menuOrderEl) menuOrderModalInstance = new bootstrap.Modal(menuOrderEl);
     if (alertEl) alertModalInstance = new bootstrap.Modal(alertEl);
     if (confirmEl) confirmModalInstance = new bootstrap.Modal(confirmEl);
     const notifEl = document.getElementById('notifModal');
@@ -665,7 +934,7 @@ async function sendMagicLink() {
         strong.textContent = "📩 전송 완료!";
         msg.appendChild(strong);
         msg.appendChild(document.createElement('br'));
-        msg.appendChild(document.createTextNode("메일함 확인해주세요."));
+        msg.appendChild(document.createTextNode("이메일함에서 로그인 링크를 클릭하면 자동으로 접속됩니다."));
     }
 }
 

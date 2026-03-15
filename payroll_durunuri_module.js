@@ -36,6 +36,16 @@
     return ENTITY_PREFIX + ':' + ym + ':' + eid;
   }
 
+  function getCurrentCoopId() {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    try {
+      var storedUser = JSON.parse(window.localStorage.getItem('erp_user') || 'null');
+      return String(storedUser && storedUser.coop_id || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
   function parseSupportDetail(detail, fallbackEntityId) {
     var safeDetail = detail && typeof detail === 'object' ? detail : {};
     var entityId = String(fallbackEntityId || '');
@@ -90,13 +100,15 @@
     var ym = normalizeMonth(applyMonth);
     if (!ym) return [];
     var likePattern = ENTITY_PREFIX + ':' + ym + ':%';
-    var response = await supabase
+    var coopId = getCurrentCoopId();
+    var query = supabase
       .from('erp_audit_logs')
       .select('id,created_at,entity_id,detail')
       .eq('action', ACTION_KEY)
       .eq('entity_type', 'durunuri_support')
-      .like('entity_id', likePattern)
-      .order('created_at', { ascending: false });
+      .like('entity_id', likePattern);
+    query = query.eq('coop_id', String(coopId || '').trim() || '00000000-0000-0000-0000-000000000000');
+    var response = await query.order('created_at', { ascending: false });
 
     if (response.error) throw response.error;
     return Array.isArray(response.data) ? response.data : [];
@@ -170,6 +182,7 @@
     var sourceMonth = normalizeMonth(input.source_month);
     var actorEmpId = String(input.actor_emp_id || '').trim();
     var actorName = String(input.actor_name || '').trim();
+    var coopId = String(input.coop_id || getCurrentCoopId()).trim();
     var rows = Array.isArray(input.rows) ? input.rows : [];
 
     var currentMap = await getSupportMap(supabase, applyMonth);
@@ -189,6 +202,7 @@
       if (prevEmp === empSupport && prevBiz === bizSupport) return;
 
       inserts.push({
+        coop_id: coopId || null,
         actor_emp_id: actorEmpId || null,
         actor_name: actorName || null,
         action: ACTION_KEY,

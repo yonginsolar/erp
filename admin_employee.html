@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.8
-Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추가.
+Version: v1.0.11
+Change: 2026-03-15 - 부서/직급 저장 분리 및 시간외 근로 정책 안내 문구 정리.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.8 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.11 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <title>임직원 관리 v2.7 (최종)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -32,11 +33,18 @@ Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추�
     .modal-content { border-radius: 16px; border: none; box-shadow: 0 15px 50px rgba(0,0,0,0.1); }
     .form-control, .form-select { border-radius: 8px; padding: 10px; font-size: 0.95rem; }
     .d-none { display: none !important; }
+    .hidden { display: none !important; }
     .section-title { font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 12px; border-left: 4px solid #0d6efd; padding-left: 10px; }
     .info-card { background: #f8f9fa; padding: 20px; border-radius: 12px; height: 100%; position: relative; }
     .view-mode { display: block; } .edit-mode { display: none; }
     .is-editing .view-mode { display: none; } .is-editing .edit-mode { display: block; }
     .adv-table { font-size: 0.85rem; } .adv-table input { border: none; background: #fff; padding: 2px 5px; width: 100%; border-bottom: 1px solid #eee; }
+    .dept-row { border: 1px solid #e9ecef; border-radius: 10px; padding: 12px; background: #fff; margin-bottom: 10px; }
+    .org-tree ul { list-style: none; padding-left: 18px; margin-bottom: 0; }
+    .org-tree li { position: relative; padding-left: 12px; margin-bottom: 10px; }
+    .org-tree li::before { content: ''; position: absolute; left: 0; top: 12px; width: 8px; height: 1px; background: #adb5bd; }
+    .org-tree-node { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 10px 12px; }
+    .org-tree-employee { font-size: 0.82rem; color: #6c757d; }
   </style>
 </head>
 <body>
@@ -46,6 +54,7 @@ Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추�
     <div><h4 class="fw-bold m-0" id="hrPageTitle">👥 임직원 관리</h4><small class="text-muted" id="hrPageSubtitle">직원 정보 및 급여/근태 통합 관리</small></div>
     <div>
       <button class="btn btn-light btn-sm btn-rounded me-1" onclick="location.href='index.html'">🏠 홈으로</button>
+      <button class="btn btn-outline-secondary btn-sm btn-rounded me-1" onclick="openOrgChartModal()">🏢 조직도</button>
       <button class="btn btn-outline-secondary btn-sm btn-rounded me-1" onclick="openSettings()">⚙️ 설정 관리</button>
       <button class="btn btn-outline-dark btn-sm btn-rounded me-1" onclick="openLedgerModal()">📊 급여대장</button>
       <button class="btn btn-outline-primary btn-sm btn-rounded me-1" onclick="openStatsDashboard()">📈 통계 대시보드</button>
@@ -76,7 +85,7 @@ Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추�
           <li class="nav-item">
             <a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
           <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
-<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"><option>사원</option><option>대리</option><option>과장</option><option>차장</option><option>부장</option><option>이사</option><option>국장</option><option>이사장</option></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="mb-3"><label class="small text-muted ms-1">부서</label><input type="text" id="newDept" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
+<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -114,10 +123,12 @@ Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추�
 </div>
             <div class="col-md-3"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
             <div class="col-md-3"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
+            <div class="col-md-3"><label class="small text-muted">직급</label><div class="view-mode fw-bold" id="viewPosition">-</div><select id="editPosition" class="form-select edit-mode"></select></div>
+            <div class="col-md-3"><label class="small text-muted">부서</label><div class="view-mode fw-bold" id="viewDept">-</div><div class="edit-mode"><select id="editDeptSelect" class="form-select mb-2" onchange="syncDetailDepartmentInput()"><option value="">미지정</option></select><input type="text" id="editDeptCustom" class="form-control hidden" placeholder="직접 입력 부서명"></div></div>
             <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
               <div class="edit-mode"><div class="input-group mb-1"><input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly><button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button></div><input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소"></div>
             </div>
-            <div class="col-md-6"><label class="small text-muted">입사일</label><div class="view-mode fw-bold" id="viewHireDate">-</div><input type="date" id="editHireDate" class="form-control edit-mode"></div>
+            <div class="col-md-3"><label class="small text-muted">입사일</label><div class="view-mode fw-bold" id="viewHireDate">-</div><input type="date" id="editHireDate" class="form-control edit-mode"></div>
           </div>
         </div>
       </div>
@@ -257,6 +268,7 @@ Change: 2026-03-09 - 두루누리 직원별 지원금(익월 반영) 연동 추�
 <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content text-center p-4"><div class="spinner-border text-primary mb-3"></div><h6 class="mb-0">처리 중...</h6></div></div></div>
 <div class="modal fade" id="resignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 퇴사 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">퇴사일자 (마지막 근무일)</label><input type="date" id="inputResignDate" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-danger btn-sm w-100" onclick="confirmResign()">퇴사 확정</button></div></div></div></div>
 <div class="modal fade" id="adminCertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📄 재직증명서 발급</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">발급 용도</label><select id="adminCertPurpose" class="form-select form-select-sm" onchange="toggleAdminEtc()"><option value="관공서 제출용">관공서 제출용</option><option value="금융기관 제출용">금융기관 제출용</option><option value="기타">기타 (직접 입력)</option></select><input type="text" id="adminCertEtc" class="form-control form-control-sm mt-2" placeholder="직접 입력" style="display:none;"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="reqIssueCert()">발급 및 인쇄</button></div></div></div></div>
+<div class="modal fade" id="orgChartModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">🏢 조직도</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="small text-muted mb-3">부서/직급 설정을 저장하면 그 구조를 조직도에 반영합니다. 저장된 부서가 없으면 현재 등록된 직원의 부서명을 기준으로 임시 조직도를 구성합니다.</div><div id="orgChartBody" class="org-tree"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-outline-primary btn-sm" type="button" onclick="renderOrgChart()">새로고침</button><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="ledgerModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📊 급여대장 출력</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted mb-1">대상 연월</label><input type="month" id="ledgerMonth" class="form-control"></div><div class="modal-footer p-1 border-0 justify-content-center"><button class="btn btn-primary btn-sm w-100" onclick="printLedger()">대장 출력 (A4 가로)</button></div></div></div></div>
 <div class="modal fade" id="statsModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
@@ -407,7 +419,7 @@ let currentEmpId = null, currentEmpName = null, currentAnnualSalary = 0;
 let currentEmpHireDate = null, currentEmpResignDate = null; 
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
 let currentDurunuriSupport = { emp_support: 0, biz_support: 0, apply_month: '', source_month: '' };
-let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal, resignModal;
+let alertModal, confirmModal, settingsModal, inviteModal, detailModal, adminCertModal, loadingModal, ledgerModal, resignModal, orgChartModal;
 let hasCheckedExpired = false;
 let myInfo = null;
 let permissionSet = new Set();
@@ -416,6 +428,7 @@ const WORKFORCE_LITE_APPROVAL_SETTING_CATALOG = Object.freeze([
     { key: 'approval_doc_general_proposal_enabled', inputId: 'set_approval_doc_general_proposal_enabled', label: '일반품의서', description: '일반 품의 및 내부 결재용 문서', docType: '일반품의', rulePrefix: 'general_proposal', defaultEnabled: true, ruleOptions: ['require_attachment'] },
     { key: 'approval_doc_expense_enabled', inputId: 'set_approval_doc_expense_enabled', label: '지출결의서', description: '지출 집행 결재 문서', docType: '지출결의', rulePrefix: 'expense', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_amount'] },
     { key: 'approval_doc_leave_enabled', inputId: 'set_approval_doc_leave_enabled', label: '휴가신청서', description: '연차, 반차, 병가 등 근태 신청', docType: '휴가', rulePrefix: 'leave', defaultEnabled: true, ruleOptions: ['require_attachment'] },
+    { key: 'approval_doc_overtime_enabled', inputId: 'set_approval_doc_overtime_enabled', label: '시간외 근로 신청서', description: '평일 연장근로와 토·일 근무 기록용 문서', docType: '시간외근로', rulePrefix: 'overtime', defaultEnabled: true, ruleOptions: ['require_attachment'] },
     { key: 'approval_doc_notice_enabled', inputId: 'set_approval_doc_notice_enabled', label: '공문', description: '대외 공문 및 안내문 결재', docType: '공문', rulePrefix: 'notice', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_receiver', 'require_via'] },
     { key: 'approval_doc_business_trip_enabled', inputId: 'set_approval_doc_business_trip_enabled', label: '출장신청서', description: '출장 목적과 일정을 승인받는 문서', docType: '출장신청', rulePrefix: 'business_trip', defaultEnabled: true, ruleOptions: ['require_attachment'] },
     { key: 'approval_doc_purchase_enabled', inputId: 'set_approval_doc_purchase_enabled', label: '구매요청서', description: '구매 필요 물품과 예상금액 요청', docType: '구매요청', rulePrefix: 'purchase', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_amount'], ruleDefaults: { require_amount: true } },
@@ -430,6 +443,9 @@ const HR_WORKFORCE_LITE_APPROVAL_RULE_OPTION_CATALOG = Object.freeze({
     require_via: { label: '경유 필수', description: '공문 경유 항목을 반드시 입력해야 합니다.' }
 });
 const HR_WORKFORCE_LITE_LEAVE_CONFIG_KEY = 'approval_leave_type_catalog_json';
+const HR_DEPARTMENT_CATALOG_KEY = 'hr_department_catalog_json';
+const HR_POSITION_CATALOG_KEY = 'hr_position_catalog_json';
+const HR_OVERTIME_POLICY_KEY = 'approval_overtime_policy_json';
 const HR_WORKFORCE_LITE_LEAVE_DURATION_OPTIONS = Object.freeze([
     { value: 'half_day', label: '반차' },
     { value: 'single_day', label: '1일' },
@@ -440,7 +456,24 @@ const HR_WORKFORCE_LITE_DEFAULT_LEAVE_TYPE_CATALOG = Object.freeze([
     { id: 'half_day', label: '반차', enabled: true, deductible: true, duration_mode: 'half_day', aliases: ['반차'] },
     { id: 'birthday_half', label: '생일반차', enabled: true, deductible: false, duration_mode: 'half_day', aliases: ['생일반차'] }
 ]);
+const HR_DEFAULT_POSITION_CATALOG = Object.freeze([
+    { name: '사원', enabled: true },
+    { name: '대리', enabled: true },
+    { name: '과장', enabled: true },
+    { name: '차장', enabled: true },
+    { name: '부장', enabled: true },
+    { name: '이사', enabled: true },
+    { name: '국장', enabled: true },
+    { name: '이사장', enabled: true }
+]);
+const HR_DEFAULT_OVERTIME_POLICY = Object.freeze({
+    default_mode: 'allowance'
+});
 let hrLeaveTypeCatalog = [];
+let hrDepartmentCatalog = [];
+let hrPositionCatalog = [];
+let hrOvertimePolicy = { ...HR_DEFAULT_OVERTIME_POLICY };
+let employeeCache = [];
 
 function getHrDefaultLeaveTypeCatalog() {
     return HR_WORKFORCE_LITE_DEFAULT_LEAVE_TYPE_CATALOG.map((item) => ({
@@ -625,6 +658,458 @@ function collectWorkforceLiteLeaveTypeCatalogFromUi() {
         originalLabel: row.querySelector('.leave-type-original-label')?.value || ''
     }));
     return sanitizeHrLeaveTypeCatalog(items);
+}
+
+function normalizeHrDepartmentId(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9가-힣]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function sanitizeHrDepartmentCatalog(items) {
+    const rows = Array.isArray(items) ? items : [];
+    const usedIds = new Set();
+    return rows.map((item, index) => {
+        const name = String(item?.name || '').trim();
+        if (!name) return null;
+        let id = normalizeHrDepartmentId(item?.id || name);
+        if (!id || usedIds.has(id)) {
+            const base = normalizeHrDepartmentId(name) || `dept_${index + 1}`;
+            let candidate = base;
+            let seq = 2;
+            while (usedIds.has(candidate)) {
+                candidate = `${base}_${seq}`;
+                seq += 1;
+            }
+            id = candidate;
+        }
+        usedIds.add(id);
+        return {
+            id,
+            name,
+            parent_id: String(item?.parent_id || '').trim(),
+            enabled: item?.enabled !== false
+        };
+    }).filter(Boolean);
+}
+
+function parseHrDepartmentCatalog(rawValue) {
+    if (typeof rawValue !== 'string' || !rawValue.trim()) return [];
+    try {
+        const parsed = JSON.parse(rawValue);
+        return sanitizeHrDepartmentCatalog(parsed);
+    } catch (_) {
+        return [];
+    }
+}
+
+function sanitizeHrPositionCatalog(items) {
+    const rows = Array.isArray(items) ? items : [];
+    const usedNames = new Set();
+    return rows.map((item) => {
+        const name = String(item?.name || item || '').trim();
+        if (!name || usedNames.has(name)) return null;
+        usedNames.add(name);
+        return {
+            name,
+            enabled: item?.enabled !== false
+        };
+    }).filter(Boolean);
+}
+
+function parseHrPositionCatalog(rawValue) {
+    const fallback = HR_DEFAULT_POSITION_CATALOG.map((item) => ({ ...item }));
+    if (typeof rawValue !== 'string' || !rawValue.trim()) return fallback;
+    try {
+        const parsed = sanitizeHrPositionCatalog(JSON.parse(rawValue));
+        return parsed.length > 0 ? parsed : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function buildHrDepartmentOptionsHtml(selectedValue = '', includeCustom = false) {
+    const selected = String(selectedValue || '').trim();
+    const baseOptions = ['<option value="">미지정</option>']
+        .concat(hrDepartmentCatalog.filter(item => item.enabled !== false).map(item => {
+            const isSelected = item.name === selected || item.id === selected ? ' selected' : '';
+            return `<option value="${escapeHtml(item.name)}"${isSelected}>${escapeHtml(item.name)}</option>`;
+        }));
+    if (includeCustom) {
+        const customSelected = selected && !hrDepartmentCatalog.some(item => item.name === selected) ? ' selected' : '';
+        baseOptions.push(`<option value="__custom__"${customSelected}>직접 입력</option>`);
+    }
+    return baseOptions.join('');
+}
+
+function buildHrPositionOptionsHtml(selectedValue = '') {
+    const selected = String(selectedValue || '').trim();
+    const catalog = (Array.isArray(hrPositionCatalog) && hrPositionCatalog.length > 0)
+        ? hrPositionCatalog.filter((item) => item.enabled !== false)
+        : HR_DEFAULT_POSITION_CATALOG;
+    const options = catalog.map((item) => {
+        const isSelected = item.name === selected ? ' selected' : '';
+        return `<option value="${escapeHtml(item.name)}"${isSelected}>${escapeHtml(item.name)}</option>`;
+    });
+    if (selected && !catalog.some((item) => item.name === selected)) {
+        options.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)} (현재값)</option>`);
+    }
+    return options.join('');
+}
+
+function renderHrPositionCatalogRows() {
+    const listEl = document.getElementById('hrPositionCatalogList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!Array.isArray(hrPositionCatalog) || hrPositionCatalog.length === 0) {
+        listEl.innerHTML = '<div class="small text-muted border rounded p-3 text-center">등록된 직급이 없습니다. 아래 버튼으로 추가하세요.</div>';
+        return;
+    }
+    hrPositionCatalog.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'position-row';
+        row.innerHTML = `
+          <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+              <label class="small text-muted fw-bold mb-1">직급명</label>
+              <input type="text" class="form-control form-control-sm position-name" value="${escapeHtml(item.name || '')}" placeholder="예: 팀장">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch mt-4">
+                <input class="form-check-input position-enabled" type="checkbox"${item.enabled !== false ? ' checked' : ''}>
+                <label class="form-check-label small fw-bold">사용</label>
+              </div>
+            </div>
+            <div class="col-md-2 d-grid">
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeHrPositionRow(${index})">삭제</button>
+            </div>
+          </div>
+        `;
+        listEl.appendChild(row);
+    });
+}
+
+function addHrPositionRow() {
+    hrPositionCatalog = Array.isArray(hrPositionCatalog) ? hrPositionCatalog.slice() : [];
+    hrPositionCatalog.push({ name: '', enabled: true });
+    renderHrPositionCatalogRows();
+}
+
+function removeHrPositionRow(index) {
+    if (!Array.isArray(hrPositionCatalog)) return;
+    hrPositionCatalog = hrPositionCatalog.filter((_, currentIndex) => currentIndex !== Number(index));
+    renderHrPositionCatalogRows();
+}
+
+function collectHrPositionCatalogFromUi() {
+    const rows = Array.from(document.querySelectorAll('#hrPositionCatalogList .position-row'));
+    return sanitizeHrPositionCatalog(rows.map((row) => ({
+        name: row.querySelector('.position-name')?.value || '',
+        enabled: !!row.querySelector('.position-enabled')?.checked
+    })));
+}
+
+function renderHrDepartmentCatalogRows() {
+    const listEl = document.getElementById('hrDepartmentCatalogList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!Array.isArray(hrDepartmentCatalog) || hrDepartmentCatalog.length === 0) {
+        listEl.innerHTML = '<div class="small text-muted border rounded p-3 text-center">등록된 부서가 없습니다. 아래 버튼으로 추가하세요.</div>';
+        return;
+    }
+    const parentOptions = ['<option value="">최상위 부서</option>']
+        .concat(hrDepartmentCatalog.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`))
+        .join('');
+    hrDepartmentCatalog.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'dept-row';
+        row.innerHTML = `
+          <input type="hidden" class="dept-id" value="${escapeHtml(item.id || '')}">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="small text-muted fw-bold mb-1">부서명</label>
+              <input type="text" class="form-control form-control-sm dept-name" value="${escapeHtml(item.name || '')}" placeholder="예: 기획팀">
+            </div>
+            <div class="col-md-4">
+              <label class="small text-muted fw-bold mb-1">상위 부서</label>
+              <select class="form-select form-select-sm dept-parent">${parentOptions}</select>
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch mt-4">
+                <input class="form-check-input dept-enabled" type="checkbox"${item.enabled !== false ? ' checked' : ''}>
+                <label class="form-check-label small fw-bold">사용</label>
+              </div>
+            </div>
+            <div class="col-md-1 d-grid">
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeHrDepartmentRow(${index})">삭제</button>
+            </div>
+          </div>
+        `;
+        listEl.appendChild(row);
+        row.querySelector('.dept-parent').value = String(item.parent_id || '');
+    });
+}
+
+function addHrDepartmentRow() {
+    hrDepartmentCatalog = Array.isArray(hrDepartmentCatalog) ? hrDepartmentCatalog.slice() : [];
+    hrDepartmentCatalog.push({ id: '', name: '', parent_id: '', enabled: true });
+    renderHrDepartmentCatalogRows();
+}
+
+function removeHrDepartmentRow(index) {
+    if (!Array.isArray(hrDepartmentCatalog)) return;
+    hrDepartmentCatalog = hrDepartmentCatalog.filter((_, currentIndex) => currentIndex !== Number(index));
+    renderHrDepartmentCatalogRows();
+}
+
+function collectHrDepartmentCatalogFromUi() {
+    const rows = Array.from(document.querySelectorAll('#hrDepartmentCatalogList .dept-row'));
+    return sanitizeHrDepartmentCatalog(rows.map(row => ({
+        id: row.querySelector('.dept-id')?.value || '',
+        name: row.querySelector('.dept-name')?.value || '',
+        parent_id: row.querySelector('.dept-parent')?.value || '',
+        enabled: !!row.querySelector('.dept-enabled')?.checked
+    })));
+}
+
+function parseHrOvertimePolicy(rawValue) {
+    const base = { ...HR_DEFAULT_OVERTIME_POLICY };
+    if (typeof rawValue !== 'string' || !rawValue.trim()) return base;
+    try {
+        const parsed = JSON.parse(rawValue);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return base;
+        return {
+            default_mode: String(parsed.default_mode || base.default_mode).trim() === 'comp_leave' ? 'comp_leave' : 'allowance'
+        };
+    } catch (_) {
+        return base;
+    }
+}
+
+function ensureHrStructureSettingsFields() {
+    const companyPane = document.getElementById('setCompany');
+    const companyRow = companyPane?.querySelector('.row.g-2');
+    if (!companyRow || document.getElementById('hrStructureSettingsCard')) return;
+    const section = document.createElement('div');
+    section.className = 'col-12';
+    section.id = 'hrStructureSettingsCard';
+    section.innerHTML = `
+      <hr class="my-2">
+      <div class="fw-bold mb-1">부서/조직도</div>
+      <div class="small text-muted mb-2">직원 등록과 조직도에 사용할 부서 마스터를 관리합니다. 저장 후 조직도에 반영됩니다.</div>
+      <div id="hrDepartmentCatalogList" class="mb-2"></div>
+      <div class="d-flex justify-content-end gap-2 mb-3">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addHrDepartmentRow()">+ 부서 추가</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveHrStructureSettingsOnly('departments')">부서 저장</button>
+      </div>
+      <div class="fw-bold mb-1">직급 설정</div>
+      <div class="small text-muted mb-2">직원 등록과 상세 수정에서 선택할 직급 목록입니다.</div>
+      <div id="hrPositionCatalogList" class="mb-2"></div>
+      <div class="d-flex justify-content-end gap-2 mb-3">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addHrPositionRow()">+ 직급 추가</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveHrStructureSettingsOnly('positions')">직급 저장</button>
+      </div>
+      <div class="fw-bold mb-1">시간외 근로 정책</div>
+      <div class="small text-muted mb-2">처리 방식과 시간만 기록됩니다. (급여 미반영)</div>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="small text-muted">기본 처리 방식</label>
+          <select id="set_overtime_default_mode" class="form-select form-select-sm">
+            <option value="allowance">수당 지급</option>
+            <option value="comp_leave">보상휴가 적립</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="small text-muted">안내</label>
+          <div class="form-control form-control-sm bg-light">처리 방식과 시간만 기록됩니다. (급여 미반영)</div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveHrStructureSettingsOnly('policy')">정책 저장</button>
+      </div>
+    `;
+    companyRow.appendChild(section);
+}
+
+function syncHrStructureSettingsUi() {
+    ensureHrStructureSettingsFields();
+    hrDepartmentCatalog = parseHrDepartmentCatalog(companyInfo[HR_DEPARTMENT_CATALOG_KEY]);
+    hrPositionCatalog = parseHrPositionCatalog(companyInfo[HR_POSITION_CATALOG_KEY]);
+    hrOvertimePolicy = parseHrOvertimePolicy(companyInfo[HR_OVERTIME_POLICY_KEY]);
+    renderHrDepartmentCatalogRows();
+    renderHrPositionCatalogRows();
+    const modeEl = document.getElementById('set_overtime_default_mode');
+    if (modeEl) modeEl.value = hrOvertimePolicy.default_mode;
+    populateInvitePositionOptions(document.getElementById('newRank')?.value || '사원');
+    const detailPositionValue = String(document.getElementById('editPosition')?.value || document.getElementById('viewPosition')?.textContent || '').trim();
+    populateDetailPositionOptions(detailPositionValue === '-' ? '' : detailPositionValue);
+}
+
+function collectHrOvertimePolicyFromUi() {
+    return {
+        default_mode: String(document.getElementById('set_overtime_default_mode')?.value || 'allowance') === 'comp_leave' ? 'comp_leave' : 'allowance'
+    };
+}
+
+function syncInviteDepartmentInput() {
+    const selectEl = document.getElementById('newDeptSelect');
+    const wrapEl = document.getElementById('newDeptCustomWrap');
+    if (!selectEl || !wrapEl) return;
+    wrapEl.classList.toggle('hidden', selectEl.value !== '__custom__');
+}
+
+function populateInviteDepartmentOptions(selectedValue = '') {
+    const selectEl = document.getElementById('newDeptSelect');
+    const customEl = document.getElementById('newDeptCustom');
+    if (!selectEl) return;
+    selectEl.innerHTML = buildHrDepartmentOptionsHtml(selectedValue, true);
+    const matched = hrDepartmentCatalog.some(item => item.name === String(selectedValue || '').trim());
+    selectEl.value = matched ? String(selectedValue || '').trim() : (selectedValue ? '__custom__' : '');
+    if (customEl) customEl.value = matched ? '' : String(selectedValue || '').trim();
+    syncInviteDepartmentInput();
+}
+
+function getInviteDepartmentValue() {
+    const selectEl = document.getElementById('newDeptSelect');
+    const customEl = document.getElementById('newDeptCustom');
+    if (!selectEl) return '';
+    if (selectEl.value === '__custom__') return String(customEl?.value || '').trim();
+    return String(selectEl.value || '').trim();
+}
+
+function populateInvitePositionOptions(selectedValue = '사원') {
+    const selectEl = document.getElementById('newRank');
+    if (!selectEl) return;
+    selectEl.innerHTML = buildHrPositionOptionsHtml(selectedValue);
+    if (selectEl.options.length === 0) {
+        selectEl.innerHTML = '<option value="사원">사원</option>';
+    }
+    selectEl.value = String(selectedValue || selectEl.value || '사원').trim();
+}
+
+function syncDetailDepartmentInput() {
+    const selectEl = document.getElementById('editDeptSelect');
+    const customEl = document.getElementById('editDeptCustom');
+    if (!selectEl || !customEl) return;
+    customEl.classList.toggle('hidden', selectEl.value !== '__custom__');
+}
+
+function populateDetailDepartmentOptions(selectedValue = '') {
+    const selectEl = document.getElementById('editDeptSelect');
+    const customEl = document.getElementById('editDeptCustom');
+    if (!selectEl) return;
+    selectEl.innerHTML = buildHrDepartmentOptionsHtml(selectedValue, true);
+    const matched = hrDepartmentCatalog.some(item => item.name === String(selectedValue || '').trim());
+    selectEl.value = matched ? String(selectedValue || '').trim() : (selectedValue ? '__custom__' : '');
+    if (customEl) customEl.value = matched ? '' : String(selectedValue || '').trim();
+    syncDetailDepartmentInput();
+}
+
+function getDetailDepartmentValue() {
+    const selectEl = document.getElementById('editDeptSelect');
+    const customEl = document.getElementById('editDeptCustom');
+    if (!selectEl) return '';
+    if (selectEl.value === '__custom__') return String(customEl?.value || '').trim();
+    return String(selectEl.value || '').trim();
+}
+
+function populateDetailPositionOptions(selectedValue = '') {
+    const selectEl = document.getElementById('editPosition');
+    if (!selectEl) return;
+    selectEl.innerHTML = buildHrPositionOptionsHtml(selectedValue);
+    if (selectEl.options.length === 0) {
+        selectEl.innerHTML = '<option value="사원">사원</option>';
+    }
+    if (selectedValue) selectEl.value = String(selectedValue || '').trim();
+}
+
+function buildOrgChartNodes() {
+    const enabledCatalog = hrDepartmentCatalog.filter(item => item.enabled !== false);
+    if (enabledCatalog.length > 0) return enabledCatalog;
+    const uniqueNames = Array.from(new Set(employeeCache.map(item => String(item?.department || '').trim()).filter(Boolean)));
+    return uniqueNames.map((name) => ({ id: normalizeHrDepartmentId(name) || name, name, parent_id: '', enabled: true }));
+}
+
+function buildOrgChartHtml(nodes, employees, parentId = '') {
+    const branch = nodes.filter(node => String(node.parent_id || '') === String(parentId || ''));
+    if (branch.length === 0) return '';
+    return `<ul>${branch.map(node => {
+        const members = employees.filter(emp => String(emp?.department || '').trim() === node.name);
+        const childrenHtml = buildOrgChartHtml(nodes, employees, node.id);
+        const membersHtml = members.length > 0
+            ? `<div class="mt-2">${members.map(emp => `<div class="org-tree-employee">• ${escapeHtml(emp.emp_name || '-')} <span class="text-muted">(${escapeHtml(emp.position || '직원')})</span></div>`).join('')}</div>`
+            : '';
+        return `<li><div class="org-tree-node"><div class="d-flex justify-content-between align-items-center"><div class="fw-bold">${escapeHtml(node.name)}</div><span class="badge bg-light text-dark">${members.length}명</span></div>${membersHtml}</div>${childrenHtml}</li>`;
+    }).join('')}</ul>`;
+}
+
+async function renderOrgChart() {
+    const bodyEl = document.getElementById('orgChartBody');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div class="text-center text-muted py-4">조직도를 불러오는 중...</div>';
+    let employees = Array.isArray(employeeCache) ? employeeCache.slice() : [];
+    if (employees.length === 0) {
+        const { data } = await _supabase.from('ref_employees').select('emp_id,emp_name,position,department,resign_date').order('emp_id');
+        employees = Array.isArray(data) ? data : [];
+    }
+    employees = employees.filter(emp => !emp?.resign_date);
+    const nodes = buildOrgChartNodes();
+    if (nodes.length === 0 && employees.length === 0) {
+        bodyEl.innerHTML = '<div class="text-center text-muted py-4">표시할 부서 또는 직원이 없습니다.</div>';
+        return;
+    }
+    const html = buildOrgChartHtml(nodes, employees) || '';
+    bodyEl.innerHTML = html || '<div class="text-center text-muted py-4">표시할 조직도가 없습니다.</div>';
+}
+
+function openOrgChartModal() {
+    renderOrgChart();
+    orgChartModal?.show();
+}
+
+async function saveHrStructureSettingsOnly(scope = 'all') {
+    const coopId = String(myInfo?.coop_id || '').trim();
+    if (!coopId) return showAlert('조합 정보를 확인할 수 없습니다.');
+    try {
+        const safeScope = String(scope || 'all').trim();
+        const departmentCatalog = collectHrDepartmentCatalogFromUi();
+        const positionCatalog = collectHrPositionCatalogFromUi();
+        const overtimePolicy = collectHrOvertimePolicyFromUi();
+        if ((safeScope === 'positions' || safeScope === 'all') && positionCatalog.length === 0) {
+            throw new Error('직급은 1개 이상 필요합니다.');
+        }
+        const updates = [];
+        if (safeScope === 'departments' || safeScope === 'all') {
+            updates.push({ coop_id: coopId, key: HR_DEPARTMENT_CATALOG_KEY, value: JSON.stringify(departmentCatalog) });
+        }
+        if (safeScope === 'positions' || safeScope === 'all') {
+            updates.push({ coop_id: coopId, key: HR_POSITION_CATALOG_KEY, value: JSON.stringify(positionCatalog) });
+        }
+        if (safeScope === 'policy' || safeScope === 'all') {
+            updates.push({ coop_id: coopId, key: HR_OVERTIME_POLICY_KEY, value: JSON.stringify(overtimePolicy) });
+        }
+        if (updates.length === 0) return;
+        const { error } = await _supabase.from('ref_company_info').upsert(updates, { onConflict: 'coop_id,key' });
+        if (error) throw error;
+        if (safeScope === 'departments' || safeScope === 'all') companyInfo[HR_DEPARTMENT_CATALOG_KEY] = JSON.stringify(departmentCatalog);
+        if (safeScope === 'positions' || safeScope === 'all') companyInfo[HR_POSITION_CATALOG_KEY] = JSON.stringify(positionCatalog);
+        if (safeScope === 'policy' || safeScope === 'all') companyInfo[HR_OVERTIME_POLICY_KEY] = JSON.stringify(overtimePolicy);
+        syncHrStructureSettingsUi();
+        if ((safeScope === 'departments' || safeScope === 'all') && document.getElementById('orgChartModal')?.classList.contains('show')) {
+            await renderOrgChart();
+        }
+        const labelMap = {
+            departments: '부서',
+            positions: '직급',
+            policy: '시간외 근로 정책',
+            all: '부서/직급/정책'
+        };
+        showAlert(`${labelMap[safeScope] || '설정'}이 저장되었습니다.`);
+    } catch (error) {
+        showAlert('저장 실패: ' + error.message);
+    }
 }
 
 function hasHrAdminRoleFallback() {
@@ -978,9 +1463,10 @@ window.onload = async function() {
     loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
     ledgerModal = new bootstrap.Modal(document.getElementById('ledgerModal'));
     resignModal = new bootstrap.Modal(document.getElementById('resignModal'));
+    orgChartModal = new bootstrap.Modal(document.getElementById('orgChartModal'));
 
     // aria-hidden 경고 방지: 모달 숨김 전 포커스 이동
-    const modalIds = ['inviteModal', 'detailModal', 'statsModal', 'settingsModal', 'alertModal', 'confirmModal', 'adminCertModal', 'loadingModal', 'ledgerModal', 'resignModal'];
+    const modalIds = ['inviteModal', 'detailModal', 'statsModal', 'settingsModal', 'alertModal', 'confirmModal', 'adminCertModal', 'loadingModal', 'ledgerModal', 'resignModal', 'orgChartModal'];
     modalIds.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1015,9 +1501,12 @@ window.onload = async function() {
     hrRuntimeProfile = String(hrRuntimeGate.runtime?.runtime_profile || 'legacy_full');
     applyHrRuntimeProfileUi();
 
-    await loadList(); await loadSettings(); await loadCompanyInfo();
+    await loadList();
+    await loadCompanyInfo();
+    await loadSettings();
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
+    syncHrStructureSettingsUi();
 };
 
 function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModal.show(); }
@@ -1102,6 +1591,7 @@ async function getAdjustedSalaryRowWithDurunuri(row, ym) {
 async function logHrAudit(action, summary, detail = null) {
     try {
         await _supabase.from('erp_audit_logs').insert({
+            coop_id: myInfo?.coop_id || null,
             actor_emp_id: myInfo?.emp_id || null,
             actor_name: myInfo?.emp_name || null,
             action,
@@ -1121,9 +1611,10 @@ function openAddressSearch() { new daum.Postcode({ oncomplete: function(data) { 
 async function loadPermissions(user) {
     const result = new Set();
     if (!user) return result;
+    const coopId = String(user.coop_id || '').trim();
     const roleKey = user.role || '';
     const posKey = user.position || '';
-    if (!roleKey && !posKey) return result;
+    if ((!roleKey && !posKey) || !coopId) return result;
 
     const roleKeys = [roleKey, posKey].filter(Boolean);
     if (roleKey === 'admin_all') roleKeys.push('admin');
@@ -1132,6 +1623,7 @@ async function loadPermissions(user) {
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
+        .eq('coop_id', coopId)
         .in('scope', ['role', 'position'])
         .in('role_key', roleKeys)
         .eq('is_enabled', true);
@@ -1152,6 +1644,7 @@ async function loadList() {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
         return;
     }
+    employeeCache = Array.isArray(list) ? list.slice() : [];
     tbody.innerHTML = "";
     const threeYearsAgo = new Date();
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
@@ -1179,12 +1672,20 @@ async function loadList() {
     }
 }
 
-async function loadCompanyInfo() { const { data } = await _supabase.from('ref_company_info').select('*'); if(data) data.forEach(r => { companyInfo[r.key] = r.value; }); companyInfo.chairman_name = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = logoData.publicUrl; } if (companyInfo.seal_url) { let sealPath = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600); if (sealData) companyInfo.seal_url = sealData.signedUrl; } }
-async function loadAdvancedSettings() { const tbody = document.getElementById("advSettingsBody"); tbody.innerHTML = '<tr><td colspan="3">로딩...</td></tr>'; const { data } = await _supabase.from('ref_settings').select('*').order('category'); if(data) { advancedSettingsRaw = data; tbody.innerHTML = data.map((r, i) => `<tr><td><small class="text-muted">${r.item_key}</small></td><td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}"></td><td><small>${r.description||'-'}</small></td></tr>`).join(""); } }
+async function loadCompanyInfo() { companyInfo = {}; const coopId = String(myInfo?.coop_id || '').trim(); if (!coopId) { companyInfo.chairman_name = "이사장"; syncHrStructureSettingsUi(); return; } const { data } = await _supabase.from('ref_company_info').select('*').eq('coop_id', coopId); if(data) data.forEach(r => { companyInfo[r.key] = r.value; }); companyInfo.chairman_name = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = logoData.publicUrl; } if (companyInfo.seal_url) { let sealPath = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600); if (sealData) companyInfo.seal_url = sealData.signedUrl; } syncHrStructureSettingsUi(); }
+async function loadAdvancedSettings() { const tbody = document.getElementById("advSettingsBody"); tbody.innerHTML = '<tr><td colspan="3">로딩...</td></tr>'; const coopId = String(myInfo?.coop_id || '').trim(); if (!coopId) { advancedSettingsRaw = []; tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">조합 정보를 확인할 수 없습니다.</td></tr>'; return; } const { data } = await _supabase.from('ref_settings').select('*').eq('coop_id', coopId).order('category'); if(data) { advancedSettingsRaw = data; tbody.innerHTML = data.map((r, i) => `<tr><td><small class="text-muted">${r.item_key}</small></td><td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}"></td><td><small>${r.description||'-'}</small></td></tr>`).join(""); } }
 
 function calcHalf(type) { document.getElementById(`half_${type}`).innerText = (Number(document.getElementById(`set_${type}_total`).value)/2).toFixed(3); }
 
-function openInviteModal() { inviteModal.show(); }
+function openInviteModal() {
+    document.getElementById("newName").value = "";
+    document.getElementById("newEmail").value = "";
+    populateInvitePositionOptions('사원');
+    document.getElementById("newRole").value = "staff";
+    populateInviteDepartmentOptions('');
+    document.getElementById("newDeptCustom").value = "";
+    inviteModal.show();
+}
 async function runInvite() {
     if (runInvite._inFlight) {
         showAlert("이미 등록 처리 중입니다. 잠시만 기다려주세요.");
@@ -1229,9 +1730,9 @@ async function runInvite() {
                 emp_id: empId,
                 emp_name: name,
                 email: email,
-                position: document.getElementById("newRank").value,
+                position: String(document.getElementById("newRank").value || '사원').trim(),
                 role: document.getElementById("newRole").value,
-                department: document.getElementById("newDept").value,
+                department: getInviteDepartmentValue(),
                 hire_date: formatAdminEmployeeKstDate(new Date())
             });
 
@@ -1349,6 +1850,7 @@ async function loadSettings() {
     document.getElementById("set_address").value = companyInfo['company_address'] || "";
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
+    syncHrStructureSettingsUi();
 }
 
 // 3. 설정 값 저장하기 (테이블 이원화 적용)
@@ -1426,13 +1928,22 @@ async function saveSettings() {
         // 3. 회사 정보 저장 (공통)
         const org = document.getElementById("set_orgName").value;
         const ceo = document.getElementById("set_ceoName").value;
+        const departmentCatalog = collectHrDepartmentCatalogFromUi();
+        const positionCatalog = collectHrPositionCatalogFromUi();
+        const overtimePolicy = collectHrOvertimePolicyFromUi();
+        if (positionCatalog.length === 0) {
+            throw new Error('직급은 1개 이상 필요합니다.');
+        }
         const cUpdates = [
             { coop_id: coopId, key: 'orgName', value: org },
             { coop_id: coopId, key: 'company_name', value: org },
             { coop_id: coopId, key: 'ceoName', value: ceo },
             { coop_id: coopId, key: 'chairman_name', value: ceo },
             { coop_id: coopId, key: 'bizNum', value: document.getElementById("set_bizNum").value },
-            { coop_id: coopId, key: 'company_address', value: document.getElementById("set_address").value }
+            { coop_id: coopId, key: 'company_address', value: document.getElementById("set_address").value },
+            { coop_id: coopId, key: HR_DEPARTMENT_CATALOG_KEY, value: JSON.stringify(departmentCatalog) },
+            { coop_id: coopId, key: HR_POSITION_CATALOG_KEY, value: JSON.stringify(positionCatalog) },
+            { coop_id: coopId, key: HR_OVERTIME_POLICY_KEY, value: JSON.stringify(overtimePolicy) }
         ];
         if (isHrWorkforceLiteProfile()) {
             const leaveTypeCatalog = collectWorkforceLiteLeaveTypeCatalogFromUi();
@@ -1509,10 +2020,12 @@ async function openDetail(u) {
 
     document.getElementById("detailName").innerText = u.emp_name; document.getElementById("viewMemberId").innerText = u.member_id || "-";
     document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = u.emp_id;
-    document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
+    document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewPosition").innerText = u.position || "-"; document.getElementById("viewDept").innerText = u.department || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
     document.getElementById("editAddress").value = u.address || ""; document.getElementById("editAddressDetail").value = ""; 
     document.getElementById("editHireDate").value = u.hire_date || "";
+    populateDetailPositionOptions(u.position || '사원');
+    populateDetailDepartmentOptions(u.department || '');
     document.getElementById("viewSalary").innerText = "******"; document.getElementById("viewSalary").dataset.real = (u.base_salary||0).toLocaleString() + " 원";
     document.getElementById("viewSalaryDate").innerText = u.salary_apply_date || "-"; document.getElementById("editSalary").value = u.base_salary || 0; document.getElementById("salaryApplyDate").value = u.salary_apply_date || "";
 
@@ -1562,6 +2075,8 @@ async function saveBasicInfo() {
     const hireDate = document.getElementById("editHireDate").value; 
     const sal = Number(document.getElementById("editSalary").value); 
     const date = document.getElementById("salaryApplyDate").value; 
+    const position = String(document.getElementById("editPosition")?.value || '').trim();
+    const department = getDetailDepartmentValue();
 
     // 2. 업데이트 객체 생성 (빈 값이면 null 처리)
     const updates = { 
@@ -1569,6 +2084,8 @@ async function saveBasicInfo() {
         member_id: memberId ? Number(memberId) : null, // [추가됨] 숫자 변환
         phone: phone, 
         email: email, 
+        position: position,
+        department: department,
         address: fullAddress, 
         hire_date: hireDate, 
         base_salary: sal, 
@@ -1595,12 +2112,15 @@ async function saveBasicInfo() {
     document.getElementById("viewMemberId").innerText = memberId || "-"; // [위치 이동됨] 안전하게 여기서 변경
     document.getElementById("viewPhone").innerText = phone; 
     document.getElementById("viewEmail").innerText = email; 
+    document.getElementById("viewPosition").innerText = position || "-";
+    document.getElementById("viewDept").innerText = department || "-";
     document.getElementById("viewAddress").innerText = fullAddress; 
     document.getElementById("viewHireDate").innerText = hireDate; 
     document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; 
     document.getElementById("viewSalaryDate").innerText = date; 
 
     toggleEditMode(false); 
+    await loadList();
     showAlert("저장되었습니다."); 
 }
 

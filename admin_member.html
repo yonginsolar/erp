@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.28
-Change: 2026-03-09 - customConfirmModal focus guard added to prevent aria-hidden warning when confirm button retains focus.
+Version: v1.0.29
+Change: 2026-03-15 - member admin migration Excel template/download/upload added.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.28';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.29';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -15,6 +15,7 @@ Change: 2026-03-09 - customConfirmModal focus guard added to prevent aria-hidden
   </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
 <title>☀️ 협동조합 통합 관리자</title>
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -105,6 +106,12 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </a>
 <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
 <i class="bi bi-cash-coin"></i> 입금 매칭
+</a>
+<a class="nav-link hidden" onclick="location.href='../vote/admin_setup.html?mode=create'" id="nav-vote-create" style="cursor:pointer;">
+<i class="bi bi-plus-square"></i> 선거 생성
+</a>
+<a class="nav-link hidden" onclick="location.href='../vote/admin.html'" id="nav-vote-admin" style="cursor:pointer;">
+<i class="bi bi-ui-checks-grid"></i> 선거 관리
 </a>
 
 <div class="menu-category" id="siteOpsCategory">운영 관리</div>
@@ -345,7 +352,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="tab-pane fade" id="tab-members">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 class="fw-bold m-0" style="font-family:'GmarketSans';">조합원 명부</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary" onclick="openCreateMemberModal()">+ 조합원 등록</button>
         </div>
+    </div>
 
     <div class="card p-3 mb-3 border-0 bg-light">
         <div class="row g-2 align-items-center">
@@ -382,7 +392,10 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
             </div>
 
             <div class="col-md-2 text-end">
-                <button class="btn btn-sm btn-outline-success" onclick="openExcelModal()">📥 엑셀</button>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-outline-primary" onclick="openMemberImportModal()">📤 회원등록 엑셀</button>
+                    <button class="btn btn-sm btn-outline-success" onclick="openExcelModal()">📥 엑셀</button>
+                </div>
             </div>
         </div>
     </div>
@@ -640,11 +653,11 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
 <div class="tab-pane fade" id="tab-official-sign">
 <div class="content-header">
-<h3>🖋️ 임원 서명/도장 관리</h3>
+<h3>🖋️ 임원·대의원·선관위원 서명/도장 관리</h3>
 <button class="btn btn-outline-secondary btn-sm" onclick="loadOfficialSignatures()"><i class="bi bi-arrow-clockwise"></i> 새로고침</button>
 </div>
 <div class="alert alert-info small">
-<i class="bi bi-info-circle-fill"></i> 임원/대의원 서명 이미지는 이곳에서 관리합니다. 업로드된 이미지는 의사록 서명에 재사용됩니다.
+<i class="bi bi-info-circle-fill"></i> 임원/대의원/선관위원 서명 이미지는 이곳에서 관리합니다. 업로드된 이미지는 문서 전자서명에 재사용됩니다.
 </div>
 <div class="card border-0 shadow-sm">
 <div class="table-responsive">
@@ -938,6 +951,89 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </div>
 </div>
 </div>
+
+<div class="modal fade" id="memberCreateModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">조합원 등록</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<div class="mb-3"><label class="form-label small">이름</label><input type="text" id="create-name" class="form-control"></div>
+<div class="mb-3"><label class="form-label small">이메일</label><input type="email" id="create-email" class="form-control" placeholder="로그인/연락에 사용할 이메일"></div>
+<div class="row g-2">
+<div class="col-md-6 mb-3"><label class="form-label small">연락처</label><input type="text" id="create-phone" class="form-control"></div>
+<div class="col-md-6 mb-3"><label class="form-label small">생년월일</label><input type="date" id="create-birth-date" class="form-control"></div>
+</div>
+<div class="row g-2">
+<div class="col-md-6 mb-3"><label class="form-label small">유형</label><select id="create-member-type" class="form-select"><option value="개인">개인</option><option value="단체">단체</option></select></div>
+<div class="col-md-6 mb-3"><label class="form-label small">상태</label><select id="create-status" class="form-select"><option value="정상">정상</option><option value="승인대기">승인대기</option></select></div>
+</div>
+<div class="mb-3"><label class="form-label small">주소</label><input type="text" id="create-address" class="form-control"></div>
+<div class="row g-2">
+<div class="col-md-6 mb-3"><label class="form-label small">조합원번호(선택)</label><input type="text" id="create-member-id" class="form-control" placeholder="비워두면 자동 생성"></div>
+<div class="col-md-6 mb-3"><label class="form-label small">가입 구분</label><input type="text" id="create-join-category" class="form-control" value="일반"></div>
+</div>
+<div class="mb-0"><label class="form-label small">관리 메모</label><textarea id="create-admin-memo" class="form-control" rows="3"></textarea></div>
+</div>
+<div class="modal-footer"><button class="btn btn-primary" onclick="saveNewMember()">등록</button></div>
+</div>
+</div>
+</div>
+
+<div class="modal fade" id="memberImportModal" tabindex="-1">
+<div class="modal-dialog modal-lg modal-dialog-scrollable">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">회원등록 엑셀 업로드</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+<div class="small text-muted">양식에 맞는 엑셀을 업로드하면 조합원을 순차 등록합니다.</div>
+<button class="btn btn-sm btn-outline-success" onclick="downloadMemberImportTemplate()">양식 다운로드</button>
+</div>
+<div class="mb-3">
+<label class="form-label small fw-bold">엑셀 파일 선택</label>
+<input type="file" id="member-import-file" class="form-control" accept=".xlsx,.xls" onchange="readMemberImportExcel(this)">
+</div>
+<div id="member-import-preview" style="display:none;">
+<div class="d-flex justify-content-between align-items-center mb-2">
+<div class="small text-muted" id="member-import-count"></div>
+<div class="d-flex align-items-center gap-2 flex-wrap">
+<select id="member-import-filter" class="form-select form-select-sm" style="width:auto;" onchange="renderMemberImportPreview()">
+<option value="all">전체</option>
+<option value="valid">등록 가능</option>
+<option value="invalid">오류·중복</option>
+</select>
+<button class="btn btn-sm btn-outline-secondary" onclick="downloadMemberImportFailedRows()">실패 행 다운로드</button>
+<div class="small text-muted">미리보기 최대 10건</div>
+</div>
+</div>
+<div class="small text-muted mb-2" id="member-import-summary"></div>
+<div class="table-responsive border rounded">
+<table class="table table-sm align-middle mb-0 text-center">
+<thead class="table-light">
+<tr>
+<th>행</th>
+<th>이름</th>
+<th>이메일</th>
+<th>유형</th>
+<th>상태</th>
+<th>가입일</th>
+<th>검증</th>
+</tr>
+</thead>
+<tbody id="member-import-tbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+<button class="btn btn-primary" onclick="submitMemberImportBatch()">업로드 적용</button>
+</div>
+</div>
+</div>
+</div>
     <div class="modal fade" id="noticeModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -1155,7 +1251,17 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <input type="text" id="doc-version" class="form-control" placeholder="예: 2026.01 개정">
 </div>
 </div>
-<div class="form-text mb-2">제목에 <strong>정관/규약</strong>이 포함되면 전체 공개, <strong>규정</strong>이 포함되면 조합원 공개로 표시됩니다.</div>
+<div class="row g-3 mb-3">
+<div class="col-md-6">
+<label class="form-label small fw-bold text-muted">공개 범위</label>
+<select id="doc-access-scope" class="form-select">
+<option value="PUBLIC">전체 공개</option>
+<option value="MEMBERS">조합원 공개</option>
+<option value="OFFICIALS">대의원·임원 공개</option>
+</select>
+</div>
+</div>
+<div class="form-text mb-2">총회 자료집처럼 대의원·이사·감사에게만 배포할 문서는 <strong>대의원·임원 공개</strong>를 선택하세요.</div>
 
 <div class="mb-3">
 <label class="form-label small fw-bold text-muted">시행일</label>
@@ -1937,6 +2043,15 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let permissionSet = new Set();
 let g_adminMemberRuntime = null;
+const ADMIN_MEMBER_PAGE_SCOPE = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const scope = String(params.get('scope') || '').trim();
+    return scope === 'member_admin' || scope === 'site_admin' ? scope : '';
+  } catch (_) {
+    return '';
+  }
+})();
 const ADMIN_MEMBER_TABS = Object.freeze({
     member_admin: ['members', 'funds-manage', 'applications', 'deposit'],
     site_admin: ['notices', 'official-sign', 'site']
@@ -1961,6 +2076,76 @@ const formatAdminMemberKstDateTimeSeconds = (value, fallback = '-') => {
     return new Intl.DateTimeFormat('sv-SE', { timeZone: KST_TZ_ADMIN_MEMBER, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
 };
 const getAdminMemberKstDateString = () => formatAdminMemberKstDate(new Date(), '');
+
+async function loadAdminMemberPermissions(user) {
+    const result = new Set();
+    if (!user) return result;
+    let storedUser = null;
+    try {
+        storedUser = JSON.parse(localStorage.getItem('erp_user') || 'null');
+    } catch (_) {
+        storedUser = null;
+    }
+    if (!storedUser?.coop_id || (!storedUser?.role && !storedUser?.position)) {
+        try {
+            const { data: employeeRow } = await _supabase
+                .from('ref_employees')
+                .select('emp_id, emp_name, email, role, position, coop_id, auth_user_id')
+                .eq('auth_user_id', user.id)
+                .single();
+            if (employeeRow) {
+                storedUser = { ...(storedUser || {}), ...employeeRow };
+                localStorage.setItem('erp_user', JSON.stringify(storedUser));
+            }
+        } catch (_) { void 0; }
+    }
+    const coopId = String(storedUser?.coop_id || await getAdminMemberCoopId() || '').trim();
+    const roleKey = String(storedUser?.role || '').trim();
+    const posKey = String(storedUser?.position || '').trim();
+    if ((!roleKey && !posKey) || !coopId) return result;
+
+    const roleKeys = [roleKey, posKey].filter(Boolean);
+    if (roleKey === 'admin_all') roleKeys.push('admin');
+    if (roleKey === 'admin') roleKeys.push('admin_all');
+
+    const { data, error } = await _supabase
+        .from('erp_role_permissions')
+        .select('permission_key')
+        .eq('coop_id', coopId)
+        .in('scope', ['role', 'position'])
+        .in('role_key', roleKeys)
+        .eq('is_enabled', true);
+
+    if (error) throw error;
+    (data || []).forEach((row) => {
+        if (row.permission_key) result.add(row.permission_key);
+    });
+    return result;
+}
+
+async function getAdminMemberCoopId() {
+    if (g_adminMemberRuntime?.coop_id) return g_adminMemberRuntime.coop_id;
+    try {
+        const { data, error } = await _supabase.rpc('get_my_coop_id');
+        if (error) throw error;
+        return data || null;
+    } catch (e) {
+        console.warn('getAdminMemberCoopId failed:', e);
+        return null;
+    }
+}
+
+function scopeAdminTenant(query) {
+    const coopId = g_adminMemberRuntime?.coop_id || null;
+    const safeCoopId = String(coopId || '').trim();
+    return query.eq('coop_id', safeCoopId || '00000000-0000-0000-0000-000000000000');
+}
+
+async function withAdminTenantPayload(payload) {
+    const coopId = await getAdminMemberCoopId();
+    if (!coopId || Object.prototype.hasOwnProperty.call(payload, 'coop_id')) return payload;
+    return { ...payload, coop_id: coopId };
+}
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -2134,6 +2319,7 @@ async function ensureCertGeneratorReady() {
 
 // 전역 변수
 let g_members = [];
+let g_member_import_rows = [];
 // 전역 변수
 let g_plants = []; // [추가] 발전소 목록 기억용
 
@@ -2232,7 +2418,31 @@ showLoading(false);
     }
 
 // 4. 권한 분기 처리
-if (role === 'admin') {
+if ((!permissionSet || permissionSet.size === 0) && user) {
+    try {
+        permissionSet = await loadAdminMemberPermissions(user);
+        if (permissionSet.size > 0) {
+            localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+        }
+    } catch (_) { void 0; }
+}
+let cachedRole = '';
+try {
+    cachedRole = String(JSON.parse(localStorage.getItem('erp_user') || 'null')?.role || '').toLowerCase();
+} catch (_) { cachedRole = ''; }
+const cachedRoleIsAdmin = cachedRole === 'admin' || cachedRole === 'admin_all';
+let hasScopedPermission = false;
+if (permissionSet && permissionSet.size > 0) {
+    if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin') {
+        hasScopedPermission = permissionSet.has('member.admin');
+    } else if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin') {
+        hasScopedPermission = permissionSet.has('site.admin') || permissionSet.has('member.admin');
+    } else {
+        hasScopedPermission = permissionSet.has('member.admin') || permissionSet.has('site.admin');
+    }
+}
+
+if (role === 'admin' || role === 'admin_all' || cachedRoleIsAdmin || hasScopedPermission) {
 // (1) 로그인 게이트 숨김 (Null 체크 추가로 안전성 확보)
 const loginGate = document.getElementById('login-gate');
 if (loginGate) loginGate.classList.add('hidden');
@@ -2256,7 +2466,6 @@ profileEl.innerText = user.email;
 } else {
 // 권한 없음 처리
     myAlert(`⛔ 접근 거부: 관리자 권한이 없습니다. (계정: ${user.email})`, 'error');
-await _supabase.auth.signOut();
 location.href = 'index.html';
 }
 }
@@ -2321,6 +2530,397 @@ fetchMembers();
 // 엑셀 다운로드 (보안/일반)
 function togglePwd(show) { document.getElementById('pwdArea').style.display = show ? 'block' : 'none'; }
 function openExcelModal() { new bootstrap.Modal(document.getElementById('excelModal')).show(); }
+
+function openCreateMemberModal() {
+const defaults = {
+    'create-name': '',
+    'create-email': '',
+    'create-phone': '',
+    'create-birth-date': '',
+    'create-member-type': '개인',
+    'create-status': '정상',
+    'create-address': '',
+    'create-member-id': '',
+    'create-join-category': '일반',
+    'create-admin-memo': ''
+};
+Object.entries(defaults).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+});
+new bootstrap.Modal(document.getElementById('memberCreateModal')).show();
+}
+
+function openMemberImportModal() {
+g_member_import_rows = [];
+const fileInput = document.getElementById('member-import-file');
+if (fileInput) fileInput.value = '';
+const filter = document.getElementById('member-import-filter');
+if (filter) filter.value = 'all';
+const preview = document.getElementById('member-import-preview');
+if (preview) preview.style.display = 'none';
+const tbody = document.getElementById('member-import-tbody');
+if (tbody) tbody.innerHTML = '';
+const count = document.getElementById('member-import-count');
+if (count) count.textContent = '';
+const summary = document.getElementById('member-import-summary');
+if (summary) summary.textContent = '';
+new bootstrap.Modal(document.getElementById('memberImportModal')).show();
+}
+
+async function saveNewMember() {
+const payload = {
+    p_name: (document.getElementById('create-name')?.value || '').trim(),
+    p_email: (document.getElementById('create-email')?.value || '').trim(),
+    p_phone: (document.getElementById('create-phone')?.value || '').trim() || null,
+    p_birth_date: (document.getElementById('create-birth-date')?.value || '').trim() || null,
+    p_member_type: document.getElementById('create-member-type')?.value || '개인',
+    p_status: document.getElementById('create-status')?.value || '정상',
+    p_address: (document.getElementById('create-address')?.value || '').trim() || null,
+    p_member_id: (document.getElementById('create-member-id')?.value || '').trim() || null,
+    p_join_category: (document.getElementById('create-join-category')?.value || '').trim() || '일반',
+    p_admin_memo: (document.getElementById('create-admin-memo')?.value || '').trim() || null
+};
+
+if (!payload.p_name) return myAlert('이름을 입력하세요.', 'warning');
+if (!payload.p_email) return myAlert('이메일을 입력하세요.', 'warning');
+if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(payload.p_email)) {
+    return myAlert('올바른 이메일 형식을 입력하세요.', 'warning');
+}
+
+showLoading(true);
+const { error } = await _supabase.rpc('create_member_secure', payload);
+showLoading(false);
+
+if (error) {
+    console.error(error);
+    return myAlert('조합원 등록 실패: ' + error.message, 'error');
+}
+
+myAlert('조합원이 등록되었습니다.');
+bootstrap.Modal.getInstance(document.getElementById('memberCreateModal'))?.hide();
+fetchMembers();
+}
+
+function downloadMemberImportTemplate() {
+const wsData = [
+  ['이름', '이메일', '연락처', '생년월일', '유형', '상태', '주소', '조합원번호', '가입구분', '가입일', '관리메모'],
+  ['홍길동', 'hong@example.com', '01012345678', '1980-01-01', '개인', '정상', '경기도 용인시 처인구 예시로 1', 'M-2026-0001', '일반', '2026-03-15', '초기 이관'],
+  ['햇빛상회', 'corp@example.com', '01023456789', '', '단체', '승인대기', '경기도 용인시 수지구 예시로 2', '', '일반', '', '법인 조합원']
+];
+const ws = XLSX.utils.aoa_to_sheet(wsData);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, '조합원등록');
+XLSX.writeFile(wb, '조합원_등록_양식.xlsx');
+}
+
+function normalizeMemberImportDate(value) {
+if (value === null || value === undefined || value === '') return null;
+
+if (typeof value === 'number' && window.XLSX?.SSF?.parse_date_code) {
+  const parsed = XLSX.SSF.parse_date_code(value);
+  if (parsed && parsed.y && parsed.m && parsed.d) {
+    return `${String(parsed.y).padStart(4, '0')}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+  }
+}
+
+if (value instanceof Date && !isNaN(value.getTime())) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+const raw = String(value).trim();
+if (!raw) return null;
+const normalized = raw.replace(/\./g, '-').replace(/\//g, '-');
+if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+const parsed = new Date(normalized);
+if (!isNaN(parsed.getTime())) {
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+return null;
+}
+
+function normalizeMemberImportPhone(value) {
+const digits = String(value ?? '').replace(/\D/g, '');
+if (!digits) return '';
+const fixed = digits.length === 10 && !digits.startsWith('0') ? `0${digits}` : digits;
+if (fixed.length === 11) return `${fixed.slice(0,3)}-${fixed.slice(3,7)}-${fixed.slice(7)}`;
+if (fixed.length === 10) return `${fixed.slice(0,3)}-${fixed.slice(3,6)}-${fixed.slice(6)}`;
+return fixed;
+}
+
+function normalizeMemberImportRow(row, index) {
+const pick = (...keys) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+      return row[key];
+    }
+  }
+  return '';
+};
+
+const joinDateRaw = pick('가입일', 'join_date');
+const birthDateRaw = pick('생년월일', 'birth_date');
+const memberType = String(pick('유형', 'member_type') || '개인').trim() || '개인';
+const status = String(pick('상태', 'status') || '정상').trim() || '정상';
+const normalized = {
+  rowNo: index + 2,
+  source_row: { ...row },
+  name: String(pick('이름', '성명', 'name')).trim(),
+  email: String(pick('이메일', 'email')).trim(),
+  phone: normalizeMemberImportPhone(pick('연락처', '전화번호', 'phone')),
+  birth_date: normalizeMemberImportDate(birthDateRaw),
+  member_type: memberType,
+  status,
+  address: String(pick('주소', 'address')).trim(),
+  member_id: String(pick('조합원번호', 'member_id')).trim(),
+  join_category: String(pick('가입구분', 'join_category') || '일반').trim() || '일반',
+  join_date: normalizeMemberImportDate(joinDateRaw),
+  admin_memo: String(pick('관리메모', '비고', 'admin_memo')).trim()
+};
+
+const errors = [];
+if (!normalized.name) errors.push('이름 누락');
+if (!normalized.email) errors.push('이메일 누락');
+if (normalized.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email)) errors.push('이메일 형식 오류');
+if (!['개인', '단체'].includes(normalized.member_type)) errors.push('유형 오류');
+if (!['정상', '승인대기', '탈퇴', '제명'].includes(normalized.status)) errors.push('상태 오류');
+if (joinDateRaw && !normalized.join_date) errors.push('가입일 형식 오류');
+if (birthDateRaw && !normalized.birth_date) errors.push('생년월일 형식 오류');
+
+normalized.errors = errors;
+normalized.valid = errors.length === 0;
+return normalized;
+}
+
+async function applyMemberImportDuplicateChecks(rows) {
+rows.forEach((row) => {
+  row.errors = Array.isArray(row.errors) ? row.errors.filter((msg) => !String(msg).startsWith('중복')) : [];
+  row.valid = row.errors.length === 0;
+});
+
+const baseValidRows = rows.filter((row) => row.valid);
+const emailCounts = new Map();
+const memberIdCounts = new Map();
+
+baseValidRows.forEach((row) => {
+  const emailKey = String(row.email || '').trim().toLowerCase();
+  const memberIdKey = String(row.member_id || '').trim();
+  if (emailKey) emailCounts.set(emailKey, (emailCounts.get(emailKey) || 0) + 1);
+  if (memberIdKey) memberIdCounts.set(memberIdKey, (memberIdCounts.get(memberIdKey) || 0) + 1);
+});
+
+baseValidRows.forEach((row) => {
+  const emailKey = String(row.email || '').trim().toLowerCase();
+  const memberIdKey = String(row.member_id || '').trim();
+  if (emailKey && (emailCounts.get(emailKey) || 0) > 1) row.errors.push('중복 이메일(파일)');
+  if (memberIdKey && (memberIdCounts.get(memberIdKey) || 0) > 1) row.errors.push('중복 조합원번호(파일)');
+  row.valid = row.errors.length === 0;
+});
+
+const emails = [...new Set(baseValidRows.map((row) => String(row.email || '').trim()).filter(Boolean))];
+const memberIds = [...new Set(baseValidRows.map((row) => String(row.member_id || '').trim()).filter(Boolean))];
+
+if (emails.length > 0) {
+  const { data, error } = await scopeAdminTenant(
+    _supabase.from('coop_members').select('email').in('email', emails)
+  );
+  if (error) throw error;
+  const existingEmails = new Set((data || []).map((item) => String(item.email || '').trim().toLowerCase()).filter(Boolean));
+  rows.forEach((row) => {
+    const emailKey = String(row.email || '').trim().toLowerCase();
+    if (emailKey && existingEmails.has(emailKey)) row.errors.push('중복 이메일(DB)');
+    row.valid = row.errors.length === 0;
+  });
+}
+
+if (memberIds.length > 0) {
+  const { data, error } = await scopeAdminTenant(
+    _supabase.from('coop_members').select('member_id').in('member_id', memberIds)
+  );
+  if (error) throw error;
+  const existingMemberIds = new Set((data || []).map((item) => String(item.member_id || '').trim()).filter(Boolean));
+  rows.forEach((row) => {
+    const memberIdKey = String(row.member_id || '').trim();
+    if (memberIdKey && existingMemberIds.has(memberIdKey)) row.errors.push('중복 조합원번호(DB)');
+    row.valid = row.errors.length === 0;
+  });
+}
+}
+
+function renderMemberImportPreview() {
+const preview = document.getElementById('member-import-preview');
+const tbody = document.getElementById('member-import-tbody');
+const count = document.getElementById('member-import-count');
+const summary = document.getElementById('member-import-summary');
+const filter = document.getElementById('member-import-filter');
+if (!tbody || !preview || !count || !summary || !filter) return;
+
+const filteredRows = g_member_import_rows.filter((row) => {
+  if (filter.value === 'valid') return row.valid;
+  if (filter.value === 'invalid') return !row.valid;
+  return true;
+});
+
+const getMemberImportErrorBadgeClass = (message) => {
+  const text = String(message || '');
+  if (text.includes('누락')) return 'bg-warning text-dark';
+  if (text.includes('(파일)')) return 'bg-info text-dark';
+  if (text.includes('(DB)')) return 'bg-secondary';
+  if (text.includes('형식 오류')) return 'bg-danger';
+  if (text.includes('유형 오류') || text.includes('상태 오류')) return 'bg-danger';
+  return 'bg-danger';
+};
+
+tbody.innerHTML = '';
+filteredRows.slice(0, 10).forEach((row) => {
+  const errorBadges = row.errors.map((message) => `<span class="badge ${getMemberImportErrorBadgeClass(message)} me-1 mb-1">${escapeHtml(message)}</span>`).join('');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${row.rowNo}</td>
+    <td>${escapeHtml(row.name || '-')}</td>
+    <td>${escapeHtml(row.email || '-')}</td>
+    <td>${escapeHtml(row.member_type || '-')}</td>
+    <td>${escapeHtml(row.status || '-')}</td>
+    <td>${escapeHtml(row.join_date || '-')}</td>
+    <td>${row.valid ? '<span class="badge bg-success">정상</span>' : errorBadges}</td>
+  `;
+  tbody.appendChild(tr);
+});
+
+const validCount = g_member_import_rows.filter((row) => row.valid).length;
+const invalidCount = g_member_import_rows.filter((row) => !row.valid).length;
+const requiredMissingCount = g_member_import_rows.filter((row) => row.errors.some((msg) => String(msg).includes('누락'))).length;
+const formatErrorCount = g_member_import_rows.filter((row) => row.errors.some((msg) => String(msg).includes('형식 오류') || String(msg).includes('유형 오류') || String(msg).includes('상태 오류'))).length;
+const fileDupCount = g_member_import_rows.filter((row) => row.errors.some((msg) => String(msg).includes('(파일)'))).length;
+const dbDupCount = g_member_import_rows.filter((row) => row.errors.some((msg) => String(msg).includes('(DB)'))).length;
+count.textContent = `총 ${g_member_import_rows.length}건 / 등록 가능 ${validCount}건`;
+summary.textContent = `검사 요약: 필수 누락 ${requiredMissingCount}건 / 형식 오류 ${formatErrorCount}건 / 파일 중복 ${fileDupCount}건 / 기존 조합원 ${dbDupCount}건 / 오류·중복 ${invalidCount}건`;
+preview.style.display = 'block';
+}
+
+function downloadMemberImportFailedRows() {
+const failedRows = g_member_import_rows.filter((row) => !row.valid);
+if (failedRows.length === 0) {
+  return myAlert('내려받을 실패 행이 없습니다.', 'warning');
+}
+
+const rows = failedRows.map((row) => ({
+  이름: row.source_row?.['이름'] ?? row.name ?? '',
+  이메일: row.source_row?.['이메일'] ?? row.email ?? '',
+  연락처: row.source_row?.['연락처'] ?? row.phone ?? '',
+  생년월일: row.source_row?.['생년월일'] ?? row.birth_date ?? '',
+  유형: row.source_row?.['유형'] ?? row.member_type ?? '',
+  상태: row.source_row?.['상태'] ?? row.status ?? '',
+  주소: row.source_row?.['주소'] ?? row.address ?? '',
+  조합원번호: row.source_row?.['조합원번호'] ?? row.member_id ?? '',
+  가입구분: row.source_row?.['가입구분'] ?? row.join_category ?? '',
+  가입일: row.source_row?.['가입일'] ?? row.join_date ?? '',
+  관리메모: row.source_row?.['관리메모'] ?? row.admin_memo ?? '',
+  오류사유: row.errors.join(', ')
+}));
+
+const ws = XLSX.utils.json_to_sheet(rows);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, '실패행');
+XLSX.writeFile(wb, '조합원_등록_실패행.xlsx');
+}
+
+function readMemberImportExcel(input) {
+const file = input.files[0];
+if (!file) return;
+
+const reader = new FileReader();
+reader.onload = async function(e) {
+  const data = new Uint8Array(e.target.result);
+  const workbook = XLSX.read(data, { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+  if (!json.length) {
+    myAlert('데이터가 없는 엑셀입니다.', 'warning');
+    return;
+  }
+
+  g_member_import_rows = json.map((row, index) => normalizeMemberImportRow(row, index));
+  try {
+    await applyMemberImportDuplicateChecks(g_member_import_rows);
+  } catch (error) {
+    console.error('member import precheck failed', error);
+    myAlert(`업로드 사전 검증에 실패했습니다.\n${error.message || error}`, 'warning');
+    g_member_import_rows = [];
+    return;
+  }
+  renderMemberImportPreview();
+};
+reader.readAsArrayBuffer(file);
+}
+
+async function submitMemberImportBatch() {
+if (g_member_import_rows.length === 0) {
+  return myAlert('업로드된 데이터가 없습니다.', 'warning');
+}
+
+try {
+  await applyMemberImportDuplicateChecks(g_member_import_rows);
+  renderMemberImportPreview();
+} catch (error) {
+  console.error('member import pre-submit check failed', error);
+  return myAlert(`저장 전 중복 검사에 실패했습니다.\n${error.message || error}`, 'warning');
+}
+
+const validRows = g_member_import_rows.filter((row) => row.valid);
+if (validRows.length === 0) {
+  return myAlert('등록 가능한 행이 없습니다.', 'warning');
+}
+
+myConfirm(`총 ${g_member_import_rows.length}건 중 ${validRows.length}건을 등록하시겠습니까?`, async () => {
+  showLoading(true);
+  let successCnt = 0;
+  let failCnt = 0;
+  const failLogs = [];
+
+  for (const row of g_member_import_rows) {
+    if (!row.valid) {
+      failCnt++;
+      failLogs.push(`${row.rowNo}행: ${row.errors.join(', ')}`);
+      continue;
+    }
+
+    const { error } = await _supabase.rpc('create_member_import_secure', {
+      p_name: row.name,
+      p_email: row.email,
+      p_phone: row.phone || null,
+      p_birth_date: row.birth_date || null,
+      p_member_type: row.member_type,
+      p_status: row.status,
+      p_address: row.address || null,
+      p_member_id: row.member_id || null,
+      p_join_category: row.join_category || '일반',
+      p_admin_memo: row.admin_memo || null,
+      p_join_date: row.join_date || null
+    });
+
+    if (error) {
+      console.error('member import failed', row, error);
+      failCnt++;
+      failLogs.push(`${row.rowNo}행: ${error.message}`);
+    } else {
+      successCnt++;
+    }
+  }
+
+  showLoading(false);
+  const summary = [`등록 완료`, `성공: ${successCnt}건`, `실패: ${failCnt}건`];
+  if (failLogs.length) summary.push('', failLogs.slice(0, 5).join('\n'));
+  myAlert(summary.join('\n'));
+
+  if (successCnt > 0) {
+    bootstrap.Modal.getInstance(document.getElementById('memberImportModal'))?.hide();
+    fetchMembers();
+  }
+  g_member_import_rows = [];
+});
+}
 
 // [수정] 엑셀 다운로드 (보안 모드 RPC 연동 및 로그 기록)
 async function downloadExcel() {
@@ -2469,7 +3069,7 @@ reader.readAsArrayBuffer(file);
 // [수정] 공지사항 목록 불러오기 (삭제 버튼 추가됨)
 async function fetchNotices() {
     // 읽기는 public 정책이 있어서 바로 select 가능
-    const { data } = await _supabase.from('coop_notices').select('*').order('created_at', {ascending:false});
+    const { data } = await scopeAdminTenant(_supabase.from('coop_notices').select('*')).order('created_at', {ascending:false});
     const tbody = document.getElementById('noticeListBody');
     tbody.innerHTML = '';
 
@@ -2596,7 +3196,7 @@ async function openNoticeModal(id) {
     setNoticeFileState([], []);
 
     if(id) {
-        const { data } = await _supabase.from('coop_notices').select('*').eq('id', id).single();
+        const { data } = await scopeAdminTenant(_supabase.from('coop_notices').select('*')).eq('id', id).single();
         if(data) {
             document.getElementById('notice-title').value = data.title;
             document.getElementById('notice-content').value = data.content || '';
@@ -2634,9 +3234,9 @@ async function openNoticeModal(id) {
 async function generateNoticeDocNo() {
     const year = new Date().getFullYear();
     const prefix = `제${year}-`;
-    const { data } = await _supabase
+    const { data } = await scopeAdminTenant(_supabase
         .from('coop_notices')
-        .select('doc_no')
+        .select('doc_no'))
         .like('doc_no', `${prefix}%`)
         .not('doc_no', 'is', null)
         .order('doc_no', { ascending: false })
@@ -2657,9 +3257,9 @@ async function generateNoticeDocNo() {
 async function applyNoticeVisibilityByIdOrDocNo(noticeId, docNo, isMembersOnly) {
     const parsedId = Number(noticeId);
     if (Number.isFinite(parsedId) && parsedId > 0) {
-        const { error: updateError } = await _supabase
+        const { error: updateError } = await scopeAdminTenant(_supabase
             .from('coop_notices')
-            .update({ is_members_only: isMembersOnly })
+            .update({ is_members_only: isMembersOnly }))
             .eq('id', parsedId);
         if (updateError) throw updateError;
         return;
@@ -2669,17 +3269,17 @@ async function applyNoticeVisibilityByIdOrDocNo(noticeId, docNo, isMembersOnly) 
         throw new Error('공지 ID/문서번호를 찾을 수 없어 공개범위를 저장할 수 없습니다.');
     }
 
-    const { data: savedNotice, error: findError } = await _supabase
+    const { data: savedNotice, error: findError } = await scopeAdminTenant(_supabase
         .from('coop_notices')
-        .select('id')
+        .select('id'))
         .eq('doc_no', docNo)
         .maybeSingle();
     if (findError) throw findError;
     if (!savedNotice?.id) throw new Error('문서번호로 저장된 공지를 찾을 수 없습니다.');
 
-    const { error: updateError } = await _supabase
+    const { error: updateError } = await scopeAdminTenant(_supabase
         .from('coop_notices')
-        .update({ is_members_only: isMembersOnly })
+        .update({ is_members_only: isMembersOnly }))
         .eq('id', savedNotice.id);
     if (updateError) throw updateError;
 }
@@ -2804,7 +3404,7 @@ async function saveNotice() {
 // --- 발전소 ---
 // [수정] 발전소 목록 불러오기 (삭제 버튼 추가 + 전역변수 저장)
 async function fetchPlants() {
-const { data } = await _supabase.from('site_power_plants').select('*').order('display_order');
+const { data } = await scopeAdminTenant(_supabase.from('site_power_plants').select('*')).order('display_order');
 const tbody = document.getElementById('plantListBody');
 tbody.innerHTML = '';
 
@@ -2838,7 +3438,7 @@ tbody.innerHTML += `<tr>
 // --- 연혁 ---
 // 연혁 목록 불러오기 (삭제 버튼 추가됨)
 async function fetchHistory() {
-const { data } = await _supabase.from('site_documents').select('*').eq('category','history').order('event_date', {ascending:false});
+const { data } = await scopeAdminTenant(_supabase.from('site_documents').select('*')).eq('category','history').order('event_date', {ascending:false});
 const tbody = document.getElementById('historyListBody');
 tbody.innerHTML = '';
 if(!data) return;
@@ -2985,7 +3585,7 @@ async function openSiteHistoryModal(id) {
     document.getElementById('hist-id').value = currentHistoryEditId || '';
 
     if (currentHistoryEditId) {
-        const { data } = await _supabase.from('site_documents').select('*').eq('id', currentHistoryEditId).single();
+        const { data } = await scopeAdminTenant(_supabase.from('site_documents').select('*')).eq('id', currentHistoryEditId).single();
         if (data) {
             document.getElementById('hist-date').value = data.event_date;
             document.getElementById('hist-title').value = data.title;
@@ -3054,9 +3654,9 @@ async function saveSiteHistory() {
             let saved = null;
             let verifyError = null;
             for (let i = 0; i < 3; i += 1) {
-                const result = await _supabase
+                const result = await scopeAdminTenant(_supabase
                     .from('site_documents')
-                    .select('id, event_date, title, content')
+                    .select('id, event_date, title, content'))
                     .eq('id', effectiveId)
                     .eq('category', 'history')
                     .maybeSingle();
@@ -3145,9 +3745,9 @@ btn.classList.toggle('hidden', !isMissingGameHall);
 // 1. 섹션 목록 불러오기
 async function fetchSections() {
 // DB에서 순서대로 가져옴
-const { data, error } = await _supabase
+const { data, error } = await scopeAdminTenant(_supabase
 .from('site_sections')
-.select('*')
+.select('*'))
 .order('display_order');
 
 if (error) {
@@ -3221,19 +3821,19 @@ const btn = document.getElementById('btnSeedGameHallSection');
 if (btn) btn.disabled = true;
 
 try {
-const payload = {
+const payload = await withAdminTenantPayload({
 id: REQUIRED_SECTION_GAME_HALL.id,
 name: REQUIRED_SECTION_GAME_HALL.name,
 display_order: REQUIRED_SECTION_GAME_HALL.display_order,
 is_visible: REQUIRED_SECTION_GAME_HALL.is_visible
-};
+});
 
 const { error } = await _supabase
 .from('site_sections')
-.upsert(payload, { onConflict: 'id' });
+.upsert(payload, { onConflict: 'coop_id,id' });
 
 if (error) {
-renderSectionSeedHint('자동 등록에 실패했습니다. reles/UPSERT_SITE_SECTION_GAME_HALL_2026-02-12.sql 을 1회 실행해 주세요.', true);
+renderSectionSeedHint('자동 등록에 실패했습니다. reles/UPSERT_SITE_SECTION_GAME_HALL_TENANT_2026-03-14.sql 을 1회 실행해 주세요.', true);
 myAlert('game-hall 섹션 자동 등록 실패: ' + error.message, 'warning');
 return;
 }
@@ -3241,7 +3841,7 @@ return;
 renderSectionSeedHint('game-hall 섹션이 등록되었습니다. 이제 ON/OFF 스위치를 사용할 수 있습니다.', false);
 await fetchSections();
 } catch (e) {
-renderSectionSeedHint('자동 등록에 실패했습니다. reles/UPSERT_SITE_SECTION_GAME_HALL_2026-02-12.sql 을 1회 실행해 주세요.', true);
+renderSectionSeedHint('자동 등록에 실패했습니다. reles/UPSERT_SITE_SECTION_GAME_HALL_TENANT_2026-03-14.sql 을 1회 실행해 주세요.', true);
 myAlert('game-hall 섹션 등록 중 오류가 발생했습니다.', 'warning');
 } finally {
 if (btn) btn.disabled = false;
@@ -3322,7 +3922,7 @@ fetchHistory(); // 목록 갱신
 // [기능 6] About(소개) 관리
 // ================================================================
 async function fetchAboutSettings() {
-const { data, error } = await _supabase.from('site_about').select('*').limit(1);
+const { data, error } = await scopeAdminTenant(_supabase.from('site_about').select('*')).limit(1);
 if(error) { console.error(error); return; }
 const row = Array.isArray(data) ? data[0] : data;
 if(row) {
@@ -3499,7 +4099,7 @@ document.getElementById('plant-file').value = '';
 
 if(id) {
 // 수정 모드
-const { data } = await _supabase.from('site_power_plants').select('*').eq('id', id).single();
+const { data } = await scopeAdminTenant(_supabase.from('site_power_plants').select('*')).eq('id', id).single();
 if(data) {
 document.getElementById('plant-name').value = data.name;
 document.getElementById('plant-capacity').value = data.capacity;
@@ -3646,10 +4246,36 @@ badgeClass: 'bg-primary-subtle text-primary border border-primary-subtle'
 };
 }
 
+function getDocVisibilityMeta(scope, title) {
+const normalizedScope = String(scope || '').toUpperCase();
+if (normalizedScope === 'PUBLIC') {
+return {
+scope: 'PUBLIC',
+label: '전체 공개',
+badgeClass: 'bg-success-subtle text-success border border-success-subtle'
+};
+}
+if (normalizedScope === 'OFFICIALS') {
+return {
+scope: 'OFFICIALS',
+label: '대의원·임원 공개',
+badgeClass: 'bg-warning-subtle text-warning border border-warning-subtle'
+};
+}
+if (normalizedScope === 'MEMBERS') {
+return {
+scope: 'MEMBERS',
+label: '조합원 공개',
+badgeClass: 'bg-primary-subtle text-primary border border-primary-subtle'
+};
+}
+return getDocVisibilityMetaByTitle(title);
+}
+
 // 1. 문서 목록 불러오기
 async function fetchDocs() {
 // category가 'doc'인 것만 가져옴
-const { data } = await _supabase.from('site_documents').select('*').eq('category', 'doc').order('event_date', {ascending:false});
+const { data } = await scopeAdminTenant(_supabase.from('site_documents').select('*')).eq('category', 'doc').order('event_date', {ascending:false});
 const tbody = document.getElementById('docListBody');
 tbody.innerHTML = '';
 
@@ -3659,7 +4285,7 @@ return;
 }
 
 data.forEach(d => {
-const visibilityMeta = getDocVisibilityMetaByTitle(d.title);
+const visibilityMeta = getDocVisibilityMeta(d.access_scope, d.title);
 const visibilityBadge = `<span class="badge ${visibilityMeta.badgeClass}">${visibilityMeta.label}</span>`;
 const summaryPreview = escapeHtml(toPlainSummaryPreview(d.content, 120));
 const versionText = escapeHtml(d.version || '-');
@@ -3694,13 +4320,14 @@ async function openDocModal(id) {
 document.getElementById('doc-id').value = id || '';
 
 if(id) {
-const { data } = await _supabase.from('site_documents').select('*').eq('id', id).single();
+const { data } = await scopeAdminTenant(_supabase.from('site_documents').select('*')).eq('id', id).single();
 if(data) {
 document.getElementById('doc-title').value = data.title;
 document.getElementById('doc-version').value = data.version || '';
 document.getElementById('doc-date').value = data.event_date;
 document.getElementById('doc-content').value = data.content || '';
 document.getElementById('doc-current').checked = data.is_current;
+document.getElementById('doc-access-scope').value = getDocVisibilityMeta(data.access_scope, data.title).scope;
 }
 } else {
 // 신규
@@ -3709,6 +4336,7 @@ document.getElementById('doc-version').value = '';
 document.getElementById('doc-date').value = getAdminMemberKstDateString();
 document.getElementById('doc-content').value = '';
 document.getElementById('doc-current').checked = true;
+document.getElementById('doc-access-scope').value = 'PUBLIC';
 }
 new bootstrap.Modal(document.getElementById('docModal')).show();
 }
@@ -3730,7 +4358,8 @@ p_date: document.getElementById('doc-date').value,
 p_content: document.getElementById('doc-content').value,
 p_version: document.getElementById('doc-version').value,
 p_file_url: null, // 파일 없음
-p_is_current: document.getElementById('doc-current').checked
+p_is_current: document.getElementById('doc-current').checked,
+p_access_scope: document.getElementById('doc-access-scope').value
 };
 
 const { error } = await _supabase.rpc('upsert_document_secure', updates);
@@ -3752,7 +4381,7 @@ new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
 }
 // [수정] 파트너 목록 불러오기 (badges.js 활용)
 async function fetchPartners() {
-    const { data: list, error } = await _supabase.from('site_partners').select('*').order('display_order');
+    const { data: list, error } = await scopeAdminTenant(_supabase.from('site_partners').select('*')).order('display_order');
     if(error) { console.error(error); return; }
 
     // 1. 뱃지 데이터 로드 (Badges 모듈 사용)
@@ -3822,7 +4451,7 @@ async function openPartnerModal(id) {
 
     // 2. 수정 모드
     if(id) {
-        const { data } = await _supabase.from('site_partners').select('*').eq('id', id).single();
+        const { data } = await scopeAdminTenant(_supabase.from('site_partners').select('*')).eq('id', id).single();
 
         if(data) {
             // ★ [핵심 로직] 수정 대기중(pending)이고, 변경 내역(pending_changes)이 있으면 그것을 불러옴
@@ -4069,7 +4698,7 @@ async function fetchFaqs() {
 const keyword = document.getElementById('search-faq').value;
 
 // DB 조회 (순서대로)
-let query = _supabase.from('site_faqs').select('*').order('display_order', { ascending: true });
+let query = scopeAdminTenant(_supabase.from('site_faqs').select('*')).order('display_order', { ascending: true });
 
 // 검색어가 있으면 필터링
 if (keyword) {
@@ -4121,7 +4750,7 @@ document.getElementById('faq-id').value = id || '';
 
 if (id) {
 // 수정 모드
-const { data } = await _supabase.from('site_faqs').select('*').eq('id', id).single();
+const { data } = await scopeAdminTenant(_supabase.from('site_faqs').select('*')).eq('id', id).single();
 if (data) {
 document.getElementById('faq-category').value = data.category || '기타';
 document.getElementById('faq-order').value = data.display_order;
@@ -4249,24 +4878,47 @@ if (!modules || !(moduleKey in modules)) return true;
 return modules[moduleKey] !== false;
 }
 
+function hasAdminMemberScopePermission(scopeKey) {
+const safeScope = String(scopeKey || '').trim();
+let cachedRole = '';
+try {
+    const userStored = localStorage.getItem('erp_user');
+    if (userStored) cachedRole = String(JSON.parse(userStored)?.role || '').toLowerCase();
+} catch (_) { cachedRole = ''; }
+const cachedRoleIsAdmin = cachedRole === 'admin' || cachedRole === 'admin_all';
+if (!permissionSet || permissionSet.size === 0) return cachedRoleIsAdmin;
+if (safeScope === 'member_admin') return permissionSet.has('member.admin');
+if (safeScope === 'site_admin') return permissionSet.has('site.admin') || permissionSet.has('member.admin');
+return cachedRoleIsAdmin;
+}
+
 function canAccessAdminMemberTab(tabName) {
 const safeTab = String(tabName || '').trim();
-if (!safeTab || safeTab === 'dashboard') return true;
-if (ADMIN_MEMBER_TABS.member_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('member_admin');
-if (ADMIN_MEMBER_TABS.site_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('site_admin');
+if (!safeTab) return true;
+if (ADMIN_MEMBER_PAGE_SCOPE && safeTab === 'dashboard') return false;
+if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin' && ADMIN_MEMBER_TABS.site_admin.includes(safeTab)) return false;
+if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin' && ADMIN_MEMBER_TABS.member_admin.includes(safeTab)) return false;
+if (safeTab === 'dashboard') return true;
+if (ADMIN_MEMBER_TABS.member_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin');
+if (ADMIN_MEMBER_TABS.site_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin');
 return true;
 }
 
 function applyAdminMemberRuntimeUi(runtime) {
 g_adminMemberRuntime = runtime && typeof runtime === 'object' ? runtime : null;
-const memberAdminEnabled = isAdminMemberRuntimeModuleEnabled('member_admin');
-const siteAdminEnabled = isAdminMemberRuntimeModuleEnabled('site_admin');
+const memberAdminEnabled = isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
+const siteAdminEnabled = isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'member_admin';
+const voteEnabled = isAdminMemberRuntimeModuleEnabled('vote') && memberAdminEnabled;
+const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
 [
+['nav-dashboard', dashboardEnabled],
 ['memberAdminCategory', memberAdminEnabled],
 ['nav-members', memberAdminEnabled],
 ['nav-funds-manage', memberAdminEnabled],
 ['nav-applications', memberAdminEnabled],
 ['nav-deposit', memberAdminEnabled],
+['nav-vote-create', voteEnabled],
+['nav-vote-admin', voteEnabled],
 ['siteOpsCategory', siteAdminEnabled],
 ['nav-notices', siteAdminEnabled],
 ['nav-official-sign', siteAdminEnabled],
@@ -4277,6 +4929,17 @@ const el = document.getElementById(id);
 if (!el) return;
 el.classList.toggle('hidden', !enabled);
 });
+}
+
+function getInitialAdminMemberTab() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const requested = String(params.get('tab') || '').trim();
+    if (requested && canAccessAdminMemberTab(requested)) return requested;
+  } catch (_) { void 0; }
+  if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin') return 'members';
+  if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin') return 'site';
+  return 'dashboard';
 }
 
 
@@ -4466,9 +5129,9 @@ const { count: newPendingCount } = await _supabase
 
     // 3. [변경] 파트너 신청 대기 건수 조회 (consult_logs 대체)
     // site_partners 테이블에서 status가 'pending'인 것만 카운트
-    const { count: pendingPartners } = await _supabase
+    const { count: pendingPartners } = await scopeAdminTenant(_supabase
         .from('site_partners')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }))
         .eq('status', 'pending');
 
     let totalCapital = 0;
@@ -4624,7 +5287,7 @@ async function fetchMembers() {
         if (typeof showLoading === 'function') showLoading(true);
 
         // 2. coop_members 기본 조회 (필터링)
-        let q = _supabase
+        let q = scopeAdminTenant(_supabase
             .from('coop_members')
             .select([
                 'id',               // UUID (매칭용)
@@ -4648,7 +5311,7 @@ async function fetchMembers() {
                 'naver_id',
                 'join_category',
                 'manager_id'
-            ].join(','));
+            ].join(',')));
 
         // 2-1. 필터 및 정렬 적용
         if (status && status !== 'all') q = q.eq('status', status);
@@ -4709,9 +5372,11 @@ async function fetchMembers() {
 
         // 5. 화면 렌더링
         if (!g_members.length) {
-             // 검색 결과 없음 or 초기 상태
-             if (typeof renderMemberTable === 'function') renderMemberTable([]);
-             // 또는 renderEmptyState(); 사용 가능
+             if (!keyword && status === 'all' && type === 'all') {
+                 renderNoMembersState();
+             } else if (typeof renderMemberTable === 'function') {
+                 renderMemberTable([]);
+             }
              return;
         }
 
@@ -4792,6 +5457,24 @@ function renderMemberTable(list) {
       </tr>
     `;
   });
+}
+
+function renderNoMembersState() {
+  const tbody = document.getElementById('memberListBody');
+  if (!tbody) return;
+
+  g_members = [];
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="7" class="text-center text-muted py-5">
+        <div class="mb-2">등록된 조합원이 없습니다.</div>
+        <div class="d-flex gap-2 justify-content-center">
+          <button class="btn btn-sm btn-primary" onclick="openCreateMemberModal()">첫 조합원 등록</button>
+          <button class="btn btn-sm btn-outline-primary" onclick="openMemberImportModal()">엑셀 등록</button>
+        </div>
+      </td>
+    </tr>
+  `;
 }
 
 
@@ -5071,11 +5754,11 @@ async function fetchDonationRowsForReceipt(memberRow, periodFrom, periodTo) {
 }
 
 async function fetchChairmanName() {
-    const { data, error } = await _supabase
+    const { data, error } = await scopeAdminTenant(_supabase
         .from('ref_company_info')
         .select('value')
         .eq('key', 'chairman_name')
-        .single();
+        .single());
     if (error || !data?.value) return '이사장';
     return data.value;
 }
@@ -6047,7 +6730,6 @@ async function saveChildMember() {
 // ================================================================
 window.onload = async function() {
 
-    const permStored = localStorage.getItem('erp_permissions');
     const userStored = localStorage.getItem('erp_user');
     let cachedRole = '';
     if (userStored) {
@@ -6056,21 +6738,38 @@ window.onload = async function() {
         } catch (_) { cachedRole = ''; }
     }
     const cachedRoleIsAdmin = cachedRole === 'admin' || cachedRole === 'admin_all';
-    if (permStored) {
-        try {
-            permissionSet = new Set(JSON.parse(permStored));
-            if (permissionSet.size > 0 ? !permissionSet.has('member.admin') : !cachedRoleIsAdmin) {
-                myAlert('⛔ 접근 권한이 없습니다.', 'error');
-                location.href = 'index.html';
-                return;
-            }
-        } catch (e) { void 0; }
-    }
-
-    // 1. 세션 확인 및 관리자 권한 체크
-    // (user 정보를 checkAdmin에 확실하게 넘겨주기 위함)
     const { data: { session } } = await _supabase.auth.getSession();
     const user = session ? session.user : null;
+    const permStored = localStorage.getItem('erp_permissions');
+
+    if (user) {
+        try {
+            permissionSet = await loadAdminMemberPermissions(user);
+            if (permissionSet.size > 0) {
+                localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
+            }
+        } catch (_) { void 0; }
+    }
+    if ((!permissionSet || permissionSet.size === 0) && permStored) {
+        try {
+            permissionSet = new Set(JSON.parse(permStored));
+        } catch (_) { permissionSet = new Set(); }
+    }
+    if (permissionSet && permissionSet.size > 0) {
+        let hasAdminAccess = cachedRoleIsAdmin;
+        if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin') {
+            hasAdminAccess = permissionSet.has('member.admin');
+        } else if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin') {
+            hasAdminAccess = permissionSet.has('site.admin') || permissionSet.has('member.admin');
+        } else {
+            hasAdminAccess = permissionSet.has('member.admin') || permissionSet.has('site.admin');
+        }
+        if (!hasAdminAccess) {
+            myAlert('⛔ 접근 권한이 없습니다.', 'error');
+            location.href = 'index.html';
+            return;
+        }
+    }
 
     // checkAdmin 내부에서 권한 확인 및 페이지 리다이렉트 처리
     await checkAdmin(user);
@@ -6078,9 +6777,14 @@ window.onload = async function() {
     if (mainSystem && mainSystem.classList.contains('hidden')) {
         return;
     }
+    const runtimeModuleKeys = ADMIN_MEMBER_PAGE_SCOPE === 'member_admin'
+        ? ['member_admin']
+        : (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin' ? ['site_admin'] : ['site_admin', 'member_admin']);
     const memberRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
-        moduleKeysAny: ['site_admin', 'member_admin'],
-        moduleLabel: '조합원/홈페이지 관리',
+        moduleKeysAny: runtimeModuleKeys,
+        moduleLabel: ADMIN_MEMBER_PAGE_SCOPE === 'member_admin'
+            ? '조합원 관리'
+            : (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin' ? '홈페이지 관리' : '조합원/홈페이지 관리'),
         alertFn: function(msg) { myAlert(msg, 'error'); },
         redirectUrl: 'index.html'
     });
@@ -6102,9 +6806,8 @@ window.onload = async function() {
         if(parentItem) parentItem.classList.add('active');
     }
 
-    // 3. 초기 탭 로드 (대시보드)
-    // 이 함수 안에서 loadDashboard()가 호출됨
-    switchTab('dashboard');
+    // 3. 초기 탭 로드
+    switchTab(getInitialAdminMemberTab());
 
     // 4. 자금 내역 테이블 무한 스크롤 이벤트 연결
     // 요소가 존재할 때만 이벤트 리스너 추가 (에러 방지)
@@ -6904,9 +7607,9 @@ async function loadOfficialSignatures() {
     if (!body) return;
     body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">로딩 중...</td></tr>';
 
-    const { data: officials, error } = await _supabase
+    const { data: officials, error } = await scopeAdminTenant(_supabase
         .from('coop_officials')
-        .select('id, member_id, role, category, seal_url, status');
+        .select('id, member_id, role, category, seal_url, status'));
 
     if (error || !Array.isArray(officials)) {
         body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">임원 정보를 불러오지 못했습니다.</td></tr>';
@@ -6920,10 +7623,10 @@ async function loadOfficialSignatures() {
     const memberIds = [...new Set(filtered.map(o => o.member_id).filter(Boolean))];
     let nameMap = {};
     if (memberIds.length > 0) {
-        const { data: members } = await _supabase
+        const { data: members } = await scopeAdminTenant(_supabase
             .from('coop_members')
             .select('member_id, name')
-            .in('member_id', memberIds);
+            .in('member_id', memberIds));
         if (Array.isArray(members)) {
             members.forEach(m => { nameMap[m.member_id] = m.name; });
         }
@@ -6963,8 +7666,13 @@ async function loadOfficialSignatures() {
 
         const categories = Array.from(g.categories);
         const hasDelegate = categories.some(c => String(c).toLowerCase() === 'delegate');
-        const hasExec = categories.some(c => String(c).toLowerCase() !== 'delegate');
-        const categoryLabel = hasDelegate && hasExec ? '임원/대의원' : (hasDelegate ? '대의원' : '임원');
+        const hasExec = categories.some(c => String(c).toLowerCase() === 'executive');
+        const hasElection = categories.some(c => String(c).toLowerCase() === 'election_comm');
+        const categoryParts = [];
+        if (hasExec) categoryParts.push('임원');
+        if (hasDelegate) categoryParts.push('대의원');
+        if (hasElection) categoryParts.push('선거관리');
+        const categoryLabel = categoryParts.length ? categoryParts.join('/') : '임원';
 
         const role = escapeHtml(Array.from(g.roles).filter(Boolean).join(', '));
         const sealStatus = g.seal_url ? '<span class="badge bg-success">등록됨</span>' : '<span class="badge bg-secondary">없음</span>';
@@ -7022,15 +7730,15 @@ async function uploadOfficialSeal(groupKey) {
 
     let updateError = null;
     if (group.member_id) {
-        ({ error: updateError } = await _supabase
+        ({ error: updateError } = await scopeAdminTenant(_supabase
             .from('coop_officials')
             .update({ seal_url: fileName })
-            .eq('member_id', group.member_id));
+            .eq('member_id', group.member_id)));
     } else if (Array.isArray(group.officialIds) && group.officialIds.length > 0) {
-        ({ error: updateError } = await _supabase
+        ({ error: updateError } = await scopeAdminTenant(_supabase
             .from('coop_officials')
             .update({ seal_url: fileName })
-            .in('id', group.officialIds));
+            .in('id', group.officialIds)));
     } else {
         updateError = { message: 'missing official ids' };
     }

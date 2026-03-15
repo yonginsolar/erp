@@ -8,6 +8,7 @@ Change: 2026-02-04 - Render permissions table with safe DOM nodes.
   <script>console.log('[Version] v1.0.3 | permissions.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <title>권한 관리</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -102,7 +103,8 @@ const PERMISSION_KEYS = [
   { key: 'accounting.view', label: '회계 조회' },
   { key: 'accounting.edit', label: '회계 등록/수정' },
   { key: 'hr.admin', label: '직원관리' },
-  { key: 'member.admin', label: '홈페이지 관리' },
+  { key: 'member.admin', label: '조합원 관리' },
+  { key: 'site.admin', label: '홈페이지 관리' },
   { key: 'audit.view', label: '감사 로그 조회' },
   { key: 'permission.manage', label: '권한 관리' }
 ];
@@ -137,6 +139,11 @@ window.onload = async function() {
     redirectUrl: 'index.html'
   });
   if (!permissionRuntimeGate.ok) return;
+  if (String(permissionRuntimeGate.runtime?.runtime_profile || 'legacy_full') === 'workforce_lite') {
+    showAlert("간소화 프로필에서는 권한 관리를 사용하지 않습니다.");
+    setTimeout(() => location.href = 'index.html', 1200);
+    return;
+  }
 
   initPermissionKeys();
   await loadPermissionList();
@@ -150,6 +157,7 @@ function showAlert(msg) {
 async function logAudit(action, summary, detail = null) {
   try {
     await _supabase.from('erp_audit_logs').insert({
+      coop_id: myInfo?.coop_id || null,
       actor_emp_id: myInfo?.emp_id || null,
       actor_name: myInfo?.emp_name || null,
       action,
@@ -175,9 +183,10 @@ function initPermissionKeys() {
 async function loadPermissions(user) {
   const result = new Set();
   if (!user) return result;
+  const coopId = String(user.coop_id || '').trim();
   const roleKey = user.role || '';
   const posKey = user.position || '';
-  if (!roleKey && !posKey) return result;
+  if ((!roleKey && !posKey) || !coopId) return result;
 
     const roleKeys = [roleKey, posKey].filter(Boolean);
     if (roleKey === 'admin_all') roleKeys.push('admin');
@@ -185,6 +194,7 @@ async function loadPermissions(user) {
   const { data } = await _supabase
     .from('erp_role_permissions')
     .select('permission_key')
+    .eq('coop_id', coopId)
     .in('scope', ['role','position'])
     .in('role_key', roleKeys)
     .eq('is_enabled', true);
@@ -238,6 +248,7 @@ async function loadPermissionList() {
   const { data, error } = await _supabase
     .from('erp_role_permissions')
     .select('*')
+    .eq('coop_id', myInfo?.coop_id || null)
     .order('scope', { ascending: true })
     .order('role_key', { ascending: true })
     .order('permission_key', { ascending: true });
@@ -291,14 +302,14 @@ async function loadPermissionList() {
 }
 
 async function togglePermission(id, current) {
-  const { error } = await _supabase.from('erp_role_permissions').update({ is_enabled: !current, updated_at: new Date() }).eq('id', id);
+  const { error } = await _supabase.from('erp_role_permissions').update({ is_enabled: !current, updated_at: new Date() }).eq('coop_id', myInfo?.coop_id || null).eq('id', id);
   if (error) return showAlert("수정 실패: " + error.message);
   await logAudit('permission.toggle', '권한 토글', { id, is_enabled: !current });
   await loadPermissionList();
 }
 
 async function deletePermission(id) {
-  const { error } = await _supabase.from('erp_role_permissions').delete().eq('id', id);
+  const { error } = await _supabase.from('erp_role_permissions').delete().eq('coop_id', myInfo?.coop_id || null).eq('id', id);
   if (error) return showAlert("삭제 실패: " + error.message);
   await logAudit('permission.delete', '권한 삭제', { id });
   await loadPermissionList();

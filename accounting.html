@@ -5,6 +5,7 @@
   <script>console.log('[Version] v1.0.50 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <title>회계 관리</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1021,6 +1022,7 @@ function escapeHtml(value) {
 async function logAudit(action, entityId, summary, detail = null) {
     try {
         await _supabase.from('erp_audit_logs').insert({
+            coop_id: myInfo?.coop_id || null,
             actor_emp_id: myInfo?.emp_id || null,
             actor_name: myInfo?.emp_name || null,
             action,
@@ -1034,13 +1036,15 @@ async function logAudit(action, entityId, summary, detail = null) {
 async function loadPermissions(user) {
     const result = new Set();
     if (!user) return result;
+    const coopId = String(user.coop_id || '').trim();
     const roleKey = user.role || '';
     const posKey = user.position || '';
-    if (!roleKey && !posKey) return result;
+    if ((!roleKey && !posKey) || !coopId) return result;
 
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
+        .eq('coop_id', coopId)
         .in('scope', ['role', 'position'])
         .in('role_key', [roleKey, posKey])
         .eq('is_enabled', true);
@@ -4877,7 +4881,8 @@ async function confAdd() {
 
 // 정보 모달
 async function openInfoModal() {
-    const { data } = await _supabase.from('ref_company_info').select('*');
+    const coopId = String(myInfo?.coop_id || '').trim();
+    const { data } = await _supabase.from('ref_company_info').select('*').eq('coop_id', coopId);
     const map = {}; if(data) data.forEach(i=>map[i.key]=i.value);
     document.getElementById("orgName").value = map['orgName']||"";
     document.getElementById("ceoName").value = map['ceoName']||""; 
@@ -5110,7 +5115,7 @@ async function printReport() {
     ] = await Promise.all([
         _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate),
         _supabase.from('ac_journal').select('*').lte('Date', endDate),
-        _supabase.from('ref_company_info').select('*'),
+        _supabase.from('ref_company_info').select('*').eq('coop_id', String(myInfo?.coop_id || '').trim()),
         _supabase.from('ac_master').select('Type, Standard, Item, Code'),
         _supabase.from('hr_salary').select('year_month,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total').lte('year_month', endYm),
         _supabase.from('ref_members').select('*', { count: 'exact', head: true })

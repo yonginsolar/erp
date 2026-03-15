@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!-- Version: v1.0.1 -->
+<html lang="ko">
+<head>
+  <script>console.log('[Version] v1.0.1 | site_admin.html');</script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>홈페이지 관리</title>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search || '');
+      params.set('scope', 'site_admin');
+      if (!params.get('tab')) params.set('tab', 'site');
+      window.location.replace('admin_member.html?' + params.toString());
+    })();
+  </script>
+</head>
+<body></body>
+</html>

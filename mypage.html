@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.11 | Change: 2026-03-09 - 두루누리 익월 지원금 급여 표시/출력 반영. -->
+<!-- Version: v1.0.13 | Change: 2026-03-15 - 시간외 근로 요약을 기록 중심으로 정리. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.11 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.13 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
 <title>마이페이지</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -40,6 +41,10 @@ body{background-color:#f0f2f5;padding:20px;font-family:'Malgun Gothic',sans-seri
 .leave-section h6{font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:8px;margin-bottom:10px;font-size:0.95rem}
 .leave-list{list-style:none;padding:0;margin:0;font-size:0.85rem}
 .leave-list li{margin-bottom:6px}
+.overtime-summary-card{background:#f8f9fa;border:1px solid #e9ecef;border-radius:12px;padding:14px}
+.overtime-summary-metric{background:#fff;border:1px solid #e9ecef;border-radius:10px;padding:12px}
+.overtime-summary-metric .label{font-size:.78rem;color:#6c757d}
+.overtime-summary-metric .value{font-size:1.1rem;font-weight:700}
 .fc-day-other .fc-event { opacity: 0.5; filter: grayscale(100%); }
 </style>
 </head>
@@ -326,6 +331,33 @@ tabInfo.appendChild(section);
 }
 } // End of ensureTelegramConnectUi
 
+function ensureMypageOvertimeSummarySection(){
+const tabInfo=document.getElementById('tabInfo');
+if(!tabInfo||document.getElementById('mypageOvertimeSummarySection')) return;
+const section=document.createElement('div');
+section.id='mypageOvertimeSummarySection';
+section.className='mt-4 pt-3 border-top';
+section.innerHTML=`<div class="d-flex justify-content-between align-items-center mb-3"><h6 class="fw-bold m-0">⏱️ 이번 달 시간외 근로</h6><span class="small text-muted" id="mypageOvertimeSummaryMonth">${formatMypageKstMonth()}</span></div><div class="overtime-summary-card"><div class="row g-2"><div class="col-md-4"><div class="overtime-summary-metric"><div class="label">승인 시간</div><div class="value" id="mypageOvertimeHours">0시간</div></div></div><div class="col-md-4"><div class="overtime-summary-metric"><div class="label">수당 지급 기록</div><div class="value text-primary" id="mypageOvertimeAllowance">0시간</div></div></div><div class="col-md-4"><div class="overtime-summary-metric"><div class="label">보상휴가 적립 기록</div><div class="value text-success" id="mypageOvertimeCompLeave">0시간</div></div></div></div><div class="small text-muted mt-2" id="mypageOvertimeSummaryHelp">승인 완료된 시간외 근로 문서를 기준으로 요약합니다.</div></div>`;
+const emergencySection=tabInfo.querySelector('.mt-5.pt-3.border-top');
+if(emergencySection&&emergencySection.parentNode){
+emergencySection.parentNode.insertBefore(section, emergencySection);
+}else{
+tabInfo.appendChild(section);
+}
+}
+
+function renderMypageOvertimeSummary(summary){
+ensureMypageOvertimeSummarySection();
+const hoursEl=document.getElementById('mypageOvertimeHours');
+const allowanceEl=document.getElementById('mypageOvertimeAllowance');
+const compLeaveEl=document.getElementById('mypageOvertimeCompLeave');
+const helpEl=document.getElementById('mypageOvertimeSummaryHelp');
+if(hoursEl) hoursEl.textContent=`${Number(summary?.hours||0)}시간`;
+if(allowanceEl) allowanceEl.textContent=`${Number(summary?.allowance||0)}시간`;
+if(compLeaveEl) compLeaveEl.textContent=`${Number(summary?.compLeaveDays||0)}시간`;
+if(helpEl) helpEl.textContent=summary?.count>0?`승인 완료 문서 ${summary.count}건을 기준으로 집계했습니다.`:'이번 달 승인 완료된 시간외 근로 문서가 없습니다.';
+}
+
 function renderMypageTelegramLinkStatus(statusData){
 ensureTelegramConnectUi();
 const badge=document.getElementById('telegramConnectStatusBadge');
@@ -566,7 +598,7 @@ applyMypageRuntimeProfileUi();
 document.getElementById("salaryMonth").value=formatMypageKstMonth();
 document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
 await loadCompanyInfo();
-await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave(),loadMypageTelegramLinkStatus()]);
+await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave(),loadMypageTelegramLinkStatus(),loadMypageOvertimeSummary()]);
 applyMypageRuntimeProfileUi();
 };
 function showAlert(m){document.getElementById("alertBody").textContent=m||"";alertModal.show()}
@@ -579,9 +611,10 @@ function openAddressSearch(){new daum.Postcode({oncomplete:function(d){let a=d.u
 async function loadPermissions(user) {
     const result = new Set();
     if (!user) return result;
+    const coopId = String(user.coop_id || '').trim();
     const roleKey = user.role || '';
     const posKey = user.position || '';
-    if (!roleKey && !posKey) return result;
+    if ((!roleKey && !posKey) || !coopId) return result;
 
     const roleKeys = [roleKey, posKey].filter(Boolean);
     if (roleKey === 'admin_all') roleKeys.push('admin');
@@ -589,6 +622,7 @@ async function loadPermissions(user) {
     const { data } = await _supabase
         .from('erp_role_permissions')
         .select('permission_key')
+        .eq('coop_id', coopId)
         .in('scope', ['role', 'position'])
         .in('role_key', roleKeys)
         .eq('is_enabled', true);
@@ -599,7 +633,7 @@ async function loadPermissions(user) {
     }
     return result;
 }
-async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();const{data}=await _supabase.from('ref_company_info').select('*');if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
+async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();companyInfo={};const coopId=String(myInfo?.coop_id||'').trim();if(!coopId){syncMypageLeaveTypeRuntime();companyInfo.chairman="이사장";return}const{data}=await _supabase.from('ref_company_info').select('*').eq('coop_id',coopId);if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
 async function loadProfile() {
     const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
     if (data) {
@@ -644,6 +678,32 @@ async function loadProfile() {
             btn.onclick = () => window.viewContract();
         }
     }
+}
+async function loadMypageOvertimeSummary(){
+try{
+ensureMypageOvertimeSummarySection();
+const currentMonth=formatMypageKstMonth();
+const coopId=String(myInfo?.coop_id||'').trim();
+let query=_supabase.from('ref_approval').select('id, doc_type, created_at, status, attendance_snapshot').eq('drafter_id', myInfo.emp_id).in('status', ['완료','실물결재완료']).in('doc_type', ['시간외근로','야근','휴일근로']);
+if(coopId) query=query.eq('coop_id', coopId);
+const { data, error } = await query;
+if(error) throw error;
+const summary=(data||[]).reduce((acc, doc) => {
+const snapshot = typeof doc?.attendance_snapshot === 'string' ? (() => { try { return JSON.parse(doc.attendance_snapshot); } catch (_) { return null; } })() : doc?.attendance_snapshot;
+if(!snapshot || typeof snapshot !== 'object') return acc;
+const yearMonth=/^\d{4}-\d{2}/.test(String(snapshot.work_date||'')) ? String(snapshot.work_date).slice(0,7) : formatMypageKstMonth(doc.created_at || new Date());
+if(yearMonth !== currentMonth) return acc;
+acc.count += 1;
+acc.hours = Math.round((acc.hours + Math.max(0, Number(snapshot.total_hours||0))) * 100) / 100;
+if(String(snapshot.compensation_mode||'') === 'comp_leave') acc.compLeaveDays = Math.round((acc.compLeaveDays + Math.max(0, Number(snapshot.total_hours||0))) * 100) / 100;
+else acc.allowance = Math.round((acc.allowance + Math.max(0, Number(snapshot.total_hours||0))) * 100) / 100;
+return acc;
+},{ count:0, hours:0, allowance:0, compLeaveDays:0 });
+renderMypageOvertimeSummary(summary);
+}catch(error){
+console.warn('loadMypageOvertimeSummary failed:', error?.message || error);
+renderMypageOvertimeSummary({ count:0, hours:0, allowance:0, compLeaveDays:0 });
+}
 }
 function toggleEditMode(e){const f=document.querySelectorAll('.readonly-field');f.forEach(x=>{if(e){x.classList.remove('readonly-field');x.classList.add('editable-field');x.readOnly=false}else{x.classList.add('readonly-field');x.classList.remove('editable-field');x.readOnly=true}});document.getElementById("btnEditInfo").classList.toggle('hidden',e);document.getElementById("btnCancelInfo").classList.toggle('hidden',!e);document.getElementById("btnSaveInfo").classList.toggle('hidden',!e);document.getElementById("btnAddrSearch").classList.toggle('hidden',!e);document.getElementById("btnAddEm").classList.toggle('hidden',!e);if(!e){loadProfile();loadEmergencyList()}}
 async function updateInfo() {
