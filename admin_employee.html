@@ -2077,6 +2077,8 @@ async function saveBasicInfo() {
     const date = document.getElementById("salaryApplyDate").value; 
     const position = String(document.getElementById("editPosition")?.value || '').trim();
     const department = getDetailDepartmentValue();
+    const normalizedHireDate = hireDate ? hireDate : null;
+    const normalizedSalaryApplyDate = date ? date : null;
 
     // 2. 업데이트 객체 생성 (빈 값이면 null 처리)
     const updates = { 
@@ -2087,9 +2089,9 @@ async function saveBasicInfo() {
         position: position,
         department: department,
         address: fullAddress, 
-        hire_date: hireDate, 
+        hire_date: normalizedHireDate, 
         base_salary: sal, 
-        salary_apply_date: date 
+        salary_apply_date: normalizedSalaryApplyDate 
     }; 
 
     // 3. DB 업데이트 시도
@@ -2099,13 +2101,13 @@ async function saveBasicInfo() {
     if(error) return showAlert("저장 실패: " + error.message); 
 
     // 4. 연봉 이력 관리 (변경 시에만)
-    if (sal !== currentAnnualSalary) { 
-        await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: date }); 
+    if (sal !== currentAnnualSalary && normalizedSalaryApplyDate) { 
+        await _supabase.from('hr_salary_contracts').insert({ emp_id: currentEmpId, amount: sal, apply_date: normalizedSalaryApplyDate }); 
     } 
 
     // 5. 전역 변수 업데이트
     currentAnnualSalary = sal; 
-    currentEmpHireDate = hireDate;
+    currentEmpHireDate = normalizedHireDate;
 
     // 6. [UI 업데이트] DB 저장이 성공했으므로 이제 화면을 갱신함
     document.getElementById("viewName").innerText = name; 
@@ -2115,9 +2117,9 @@ async function saveBasicInfo() {
     document.getElementById("viewPosition").innerText = position || "-";
     document.getElementById("viewDept").innerText = department || "-";
     document.getElementById("viewAddress").innerText = fullAddress; 
-    document.getElementById("viewHireDate").innerText = hireDate; 
+    document.getElementById("viewHireDate").innerText = normalizedHireDate || "-"; 
     document.getElementById("viewSalary").dataset.real = sal.toLocaleString() + " 원"; 
-    document.getElementById("viewSalaryDate").innerText = date; 
+    document.getElementById("viewSalaryDate").innerText = normalizedSalaryApplyDate || "-"; 
 
     toggleEditMode(false); 
     await loadList();
