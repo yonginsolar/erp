@@ -694,6 +694,8 @@ let approvalLastCategory = '';
 const APPROVAL_LEAVE_TYPE_CONFIG_KEY = 'approval_leave_type_catalog_json';
 const APPROVAL_DOC_RULE_CONFIG_KEY = 'approval_doc_rule_catalog_json';
 const APPROVAL_OVERTIME_POLICY_KEY = 'approval_overtime_policy_json';
+const APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY = 'approval_default_middle_approver_emp_id';
+const APPROVAL_DEFAULT_FINAL_APPROVER_KEY = 'approval_default_final_approver_emp_id';
 const APPROVAL_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT = 'id,created_at,doc_type,title,content,amount,status,drafter_id,leave_snapshot';
 const APPROVAL_DEFAULT_OVERTIME_POLICY = Object.freeze({
     default_mode: 'allowance'
@@ -1562,11 +1564,12 @@ function getPrimaryApproverByPosition(positionKeyword) {
 
 function toApproverObject(user) {
     if (!user) return null;
+    const authLevel = Number(user.auth_level);
     return {
         emp_id: user.emp_id,
         emp_name: user.emp_name,
         position: user.position,
-        auth_level: Number(user.auth_level)
+        auth_level: Number.isFinite(authLevel) ? authLevel : 99
     };
 }
 
@@ -1603,7 +1606,40 @@ function getTeamLeaderApproverForTarget(targetUser) {
     return toApproverObject(teamLeader);
 }
 
+function getConfiguredApprovalLineEmpId(key) {
+    return String(approvalCompanyInfo?.[key] || '').trim();
+}
+
+function getConfiguredApproverByEmpId(empId) {
+    const safeEmpId = String(empId || '').trim();
+    if (!safeEmpId) return null;
+    const user = (allUsers || []).find((item) => String(item?.emp_id || '').trim() === safeEmpId) || null;
+    return toApproverObject(user);
+}
+
+function buildConfiguredApprovalLineTemplate() {
+    const targetUser = getApprovalLineTargetEmpInfo();
+    const targetEmpId = String(targetUser?.emp_id || '').trim();
+    const candidates = [
+        getConfiguredApproverByEmpId(getConfiguredApprovalLineEmpId(APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY)),
+        getConfiguredApproverByEmpId(getConfiguredApprovalLineEmpId(APPROVAL_DEFAULT_FINAL_APPROVER_KEY))
+    ];
+    const unique = [];
+    const seen = new Set();
+    candidates.forEach((candidate) => {
+        const safeEmpId = String(candidate?.emp_id || '').trim();
+        if (!safeEmpId || safeEmpId === targetEmpId || seen.has(safeEmpId)) return;
+        seen.add(safeEmpId);
+        unique.push(candidate);
+    });
+    return unique;
+}
+
 function buildDefaultApprovalLineTemplate() {
+    const configuredLine = buildConfiguredApprovalLineTemplate();
+    if (configuredLine.length > 0) return configuredLine;
+    if (!isApprovalWorkforceLiteProfile()) return [];
+
     const targetUser = getApprovalLineTargetEmpInfo();
     const targetEmpId = String(targetUser?.emp_id || '').trim();
     const candidates = [
@@ -1623,7 +1659,6 @@ function buildDefaultApprovalLineTemplate() {
 }
 
 function applyDefaultApprovalLineTemplate(force = false) {
-    if (!isApprovalWorkforceLiteProfile()) return false;
     if (jeongyeolLineLocked) return false;
     if (!force && finalApprovers.length > 0 && !approvalLineTemplateAutoApplied) return false;
 

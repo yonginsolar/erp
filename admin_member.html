@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.29
-Change: 2026-03-15 - member admin migration Excel template/download/upload added.
+Version: v1.0.30
+Change: 2026-03-16 - member_admin 사이드바에서 선거 관리자 메뉴 제거.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.29';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.30';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -106,12 +106,6 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </a>
 <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
 <i class="bi bi-cash-coin"></i> 입금 매칭
-</a>
-<a class="nav-link hidden" onclick="location.href='../vote/admin_setup.html?mode=create'" id="nav-vote-create" style="cursor:pointer;">
-<i class="bi bi-plus-square"></i> 선거 생성
-</a>
-<a class="nav-link hidden" onclick="location.href='../vote/admin.html'" id="nav-vote-admin" style="cursor:pointer;">
-<i class="bi bi-ui-checks-grid"></i> 선거 관리
 </a>
 
 <div class="menu-category" id="siteOpsCategory">운영 관리</div>
@@ -4908,7 +4902,6 @@ function applyAdminMemberRuntimeUi(runtime) {
 g_adminMemberRuntime = runtime && typeof runtime === 'object' ? runtime : null;
 const memberAdminEnabled = isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
 const siteAdminEnabled = isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'member_admin';
-const voteEnabled = isAdminMemberRuntimeModuleEnabled('vote') && memberAdminEnabled;
 const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
 [
 ['nav-dashboard', dashboardEnabled],
@@ -4917,8 +4910,6 @@ const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
 ['nav-funds-manage', memberAdminEnabled],
 ['nav-applications', memberAdminEnabled],
 ['nav-deposit', memberAdminEnabled],
-['nav-vote-create', voteEnabled],
-['nav-vote-admin', voteEnabled],
 ['siteOpsCategory', siteAdminEnabled],
 ['nav-notices', siteAdminEnabled],
 ['nav-official-sign', siteAdminEnabled],

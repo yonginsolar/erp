@@ -446,6 +446,8 @@ const HR_WORKFORCE_LITE_LEAVE_CONFIG_KEY = 'approval_leave_type_catalog_json';
 const HR_DEPARTMENT_CATALOG_KEY = 'hr_department_catalog_json';
 const HR_POSITION_CATALOG_KEY = 'hr_position_catalog_json';
 const HR_OVERTIME_POLICY_KEY = 'approval_overtime_policy_json';
+const HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY = 'approval_default_middle_approver_emp_id';
+const HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY = 'approval_default_final_approver_emp_id';
 const HR_WORKFORCE_LITE_LEAVE_DURATION_OPTIONS = Object.freeze([
     { value: 'half_day', label: '반차' },
     { value: 'single_day', label: '1일' },
@@ -1248,6 +1250,70 @@ function buildWorkforceLiteApprovalSettingsMarkup() {
     `;
 }
 
+function buildApprovalLineEmployeeOptionsHtml(selectedEmpId = '') {
+    const selected = String(selectedEmpId || '').trim();
+    const activeEmployees = (Array.isArray(employeeCache) ? employeeCache : [])
+        .filter((item) => !item?.resign_date)
+        .slice()
+        .sort((a, b) => {
+            const aLevel = Number(a?.auth_level);
+            const bLevel = Number(b?.auth_level);
+            const safeALevel = Number.isFinite(aLevel) ? aLevel : 99;
+            const safeBLevel = Number.isFinite(bLevel) ? bLevel : 99;
+            if (safeALevel !== safeBLevel) return safeALevel - safeBLevel;
+            return String(a?.emp_id || '').localeCompare(String(b?.emp_id || ''));
+        });
+    const options = ['<option value="">미설정</option>'];
+    activeEmployees.forEach((item) => {
+        const empId = String(item?.emp_id || '').trim();
+        if (!empId) return;
+        const isSelected = empId === selected ? ' selected' : '';
+        const label = `${item.emp_name || empId} (${item.position || '-'} / ${item.department || '미지정'})`;
+        options.push(`<option value="${escapeHtml(empId)}"${isSelected}>${escapeHtml(label)}</option>`);
+    });
+    if (selected && !activeEmployees.some((item) => String(item?.emp_id || '').trim() === selected)) {
+        options.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)} (현재값)</option>`);
+    }
+    return options.join('');
+} // End of buildApprovalLineEmployeeOptionsHtml
+
+function ensureApprovalLineSettingsFields() {
+    const companyPane = document.getElementById('setCompany');
+    const companyRow = companyPane?.querySelector('.row.g-2');
+    if (!companyRow) return;
+
+    let section = document.getElementById('approvalLineSettingsCard');
+    if (!section) {
+        section = document.createElement('div');
+        section.className = 'col-12';
+        section.id = 'approvalLineSettingsCard';
+        companyRow.appendChild(section);
+    }
+
+    section.innerHTML = `
+        <hr class="my-2">
+        <div class="fw-bold mb-1">기본 결재선</div>
+        <div class="small text-muted mb-2">전자결재 기안 시 기본으로 채울 중간결재자와 최종결재자를 지정합니다. 사용자는 기안 화면에서 직접 수정할 수 있습니다.</div>
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="small text-muted">중간결재</label>
+            <select id="set_approval_default_middle_approver" class="form-select form-select-sm">
+              ${buildApprovalLineEmployeeOptionsHtml(companyInfo[HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY])}
+            </select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="small text-muted">최종결재</label>
+            <select id="set_approval_default_final_approver" class="form-select form-select-sm">
+              ${buildApprovalLineEmployeeOptionsHtml(companyInfo[HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY])}
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="small text-muted">설정하지 않으면 기존 자동 규칙 또는 수동 결재자 선택을 그대로 사용합니다.</div>
+          </div>
+        </div>
+    `;
+} // End of ensureApprovalLineSettingsFields
+
 function ensureWorkforceLiteSettingsFields() {
     const tabList = document.getElementById('settingTab');
     const tabContent = document.querySelector('#settingsModal .tab-content');
@@ -1323,6 +1389,21 @@ function collectTelegramApprovalSettingsFromUi() {
     };
 } // End of collectTelegramApprovalSettingsFromUi
 
+function syncApprovalLineSettingsUi() {
+    ensureApprovalLineSettingsFields();
+    const middleSelect = document.getElementById('set_approval_default_middle_approver');
+    const finalSelect = document.getElementById('set_approval_default_final_approver');
+    if (middleSelect) middleSelect.value = String(companyInfo[HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY] || '').trim();
+    if (finalSelect) finalSelect.value = String(companyInfo[HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY] || '').trim();
+} // End of syncApprovalLineSettingsUi
+
+function collectApprovalLineSettingsFromUi() {
+    return {
+        middleApproverEmpId: String(document.getElementById('set_approval_default_middle_approver')?.value || '').trim(),
+        finalApproverEmpId: String(document.getElementById('set_approval_default_final_approver')?.value || '').trim()
+    };
+} // End of collectApprovalLineSettingsFromUi
+
 function syncHrProfileCompanySettingsUi() {
     WORKFORCE_LITE_APPROVAL_SETTING_CATALOG.forEach((item) => {
         const checkbox = document.getElementById(item.inputId);
@@ -1350,6 +1431,7 @@ function syncHrProfileCompanySettingsUi() {
     renderWorkforceLiteLeaveTypeRows();
     syncWorkforceLiteApprovalRuleFieldState();
     syncSecretaryJeongyeolFieldState();
+    syncApprovalLineSettingsUi();
     syncTelegramApprovalSettingsUi();
 } // End of syncHrProfileCompanySettingsUi
 
@@ -1861,6 +1943,7 @@ async function saveSettings() {
         const updates = [];
         const coopId = myInfo?.coop_id || null;
         const telegramApprovalConfig = collectTelegramApprovalSettingsFromUi();
+        const approvalLineConfig = collectApprovalLineSettingsFromUi();
 
         if (!coopId) throw new Error("조합 정보가 없어 저장할 수 없습니다. 다시 로그인해 주세요.");
 
@@ -1934,6 +2017,13 @@ async function saveSettings() {
         if (positionCatalog.length === 0) {
             throw new Error('직급은 1개 이상 필요합니다.');
         }
+        if (
+            approvalLineConfig.middleApproverEmpId
+            && approvalLineConfig.finalApproverEmpId
+            && approvalLineConfig.middleApproverEmpId === approvalLineConfig.finalApproverEmpId
+        ) {
+            throw new Error('중간결재와 최종결재는 서로 다른 직원으로 지정해주세요.');
+        }
         const cUpdates = [
             { coop_id: coopId, key: 'orgName', value: org },
             { coop_id: coopId, key: 'company_name', value: org },
@@ -1943,7 +2033,9 @@ async function saveSettings() {
             { coop_id: coopId, key: 'company_address', value: document.getElementById("set_address").value },
             { coop_id: coopId, key: HR_DEPARTMENT_CATALOG_KEY, value: JSON.stringify(departmentCatalog) },
             { coop_id: coopId, key: HR_POSITION_CATALOG_KEY, value: JSON.stringify(positionCatalog) },
-            { coop_id: coopId, key: HR_OVERTIME_POLICY_KEY, value: JSON.stringify(overtimePolicy) }
+            { coop_id: coopId, key: HR_OVERTIME_POLICY_KEY, value: JSON.stringify(overtimePolicy) },
+            { coop_id: coopId, key: HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY, value: approvalLineConfig.middleApproverEmpId },
+            { coop_id: coopId, key: HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY, value: approvalLineConfig.finalApproverEmpId }
         ];
         if (isHrWorkforceLiteProfile()) {
             const leaveTypeCatalog = collectWorkforceLiteLeaveTypeCatalogFromUi();
