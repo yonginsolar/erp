@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.3 -->
+<!-- Version: v1.0.5 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.3 | officials_admin.html');</script>
+  <script>console.log('[Version] v1.0.5 | officials_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -36,7 +36,7 @@
         </div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='index.html'">ERP 메인</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='admin_member.html?scope=site_admin&tab=official-sign'">기존 서명 업로드 화면</button>
+          <button class="btn btn-outline-secondary btn-sm d-none" id="signatureManageBtn" type="button" onclick="openSignatureManagement()">서명 관리</button>
         </div>
       </div>
 
@@ -202,6 +202,7 @@
     let currentCoopId = '';
     let memberSearchEnabled = true;
     let voteImportEnabled = false;
+    let currentUser = null;
 
     function readStoredUser() {
       try { return JSON.parse(localStorage.getItem('erp_user') || 'null'); } catch (_) { return null; }
@@ -363,6 +364,55 @@
       }
     }
 
+    function isAdminFallbackUser() {
+      return !!currentUser && (currentUser.role === 'admin' || currentUser.role === 'admin_all');
+    }
+
+    function canUseStandaloneSignatureAdmin() {
+      if (!isModuleEnabled(currentRuntime, 'signature')) return false;
+      const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
+      const canSiteAdmin = hasPermission(permissionSet, 'site.admin');
+      return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
+    }
+
+    function canUseIntegratedSignatureAdmin() {
+      if (!isModuleEnabled(currentRuntime, 'site_admin')) return false;
+      const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
+      const canSiteAdmin = hasPermission(permissionSet, 'site.admin');
+      return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
+    }
+
+    function updateSignatureManagementButton() {
+      const button = document.getElementById('signatureManageBtn');
+      if (!button) return;
+      const enabled = canUseStandaloneSignatureAdmin() || canUseIntegratedSignatureAdmin();
+      button.classList.toggle('d-none', !enabled);
+      if (!enabled) return;
+      if (canUseIntegratedSignatureAdmin()) {
+        button.textContent = '서명 관리';
+        button.classList.remove('btn-outline-primary');
+        button.classList.add('btn-outline-secondary');
+        button.title = '조합원/홈페이지 관리에 연결된 통합 서명 관리 화면을 엽니다.';
+      } else {
+        button.textContent = '서명 관리';
+        button.classList.remove('btn-outline-secondary');
+        button.classList.add('btn-outline-primary');
+        button.title = '조합원 관리와 분리된 전용 서명 관리 화면을 엽니다.';
+      }
+    }
+
+    function openSignatureManagement() {
+      if (canUseIntegratedSignatureAdmin()) {
+        location.href = 'admin_member.html?scope=site_admin&tab=official-sign';
+        return;
+      }
+      if (canUseStandaloneSignatureAdmin()) {
+        location.href = 'officials_signature_admin.html';
+        return;
+      }
+      showAlert('현재 조합에서는 서명 관리 화면을 사용할 수 없습니다.', 'warning');
+    }
+
     function computeAutoTermEndDate(termStartDate) {
       const raw = String(termStartDate || '').trim();
       if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return '';
@@ -491,24 +541,25 @@
         location.href = `index.html?next=${encodeURIComponent(window.location.href)}`;
         return false;
       }
+      currentUser = user;
 
       permissionSet = await loadPermissions(user);
       if (permissionSet.size === 0) permissionSet = readStoredPermissions();
       currentRuntime = await loadRuntime();
       currentCoopId = await getMyCoopId();
       applyMemberSearchMode();
+      updateSignatureManagementButton();
 
       const hasAdminFallback = user.role === 'admin' || user.role === 'admin_all';
       const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
 
       const moduleEnabled =
         isModuleEnabled(currentRuntime, 'member_admin') ||
-        isModuleEnabled(currentRuntime, 'signature') ||
-        isModuleEnabled(currentRuntime, 'vote');
+        isModuleEnabled(currentRuntime, 'signature');
       const permissionOk = hasAdminFallback || canMemberAdmin === true;
 
       if (!moduleEnabled || !permissionOk) {
-        showAlert('임원·대의원 관리는 조합원 관리 권한과 전자서명/선거 운영 범위에서 사용합니다.', 'warning');
+        showAlert('임원·대의원 관리는 조합원 관리 권한과 전자서명 운영 범위에서 사용합니다.', 'warning');
         setTimeout(() => {
           location.href = 'index.html';
         }, 900);
