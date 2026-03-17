@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.44 | Change: 2026-03-17 - 제목 공통 수정과 제목/내용 검색 확대 적용. -->
+<!-- Version: v1.1.45 | Change: 2026-03-17 - 이사장 탭 순서를 결재 중심으로 재배치. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.44 | approval.html');</script>
+  <script>console.log('[Version] v1.1.45 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -211,8 +211,9 @@
       margin-bottom: 12px;
     }
   </style>
+  <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
-<body>
+<body class="erp-unified">
 
 <div class="main-container">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -1612,16 +1613,64 @@ function getApprovalLineTargetEmpInfo() {
     return allUsers.find((user) => String(user?.emp_id || '') === targetId) || null;
 }
 
-function getTeamLeaderApproverForTarget(targetUser) {
+function getApprovalAuthLevelNumber(value, fallback = 99) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getApprovalPositionPriority(position) {
+    const safePosition = String(position || '').trim();
+    if (!safePosition) return 0;
+    if (safePosition.includes('이사장')) return 100;
+    if (safePosition.includes('사무국장')) return 90;
+    if (safePosition.includes('국장')) return 80;
+    if (safePosition.includes('부장')) return 70;
+    if (safePosition.includes('팀장')) return 60;
+    if (safePosition.includes('차장')) return 50;
+    if (safePosition.includes('과장')) return 40;
+    if (safePosition.includes('대리')) return 30;
+    if (safePosition.includes('사원')) return 20;
+    return 10;
+}
+
+function getDepartmentLeadApproverForTarget(targetUser) {
     const targetEmpId = String(targetUser?.emp_id || '').trim();
     const targetDept = String(targetUser?.department || '').trim();
-    if (!targetEmpId || !targetDept) return null;
-    const teamLeader = (allUsers || []).find((user) => (
-        String(user?.emp_id || '').trim() !== targetEmpId
-        && String(user?.department || '').trim() === targetDept
-        && String(user?.position || '').includes('팀장')
-    )) || null;
-    return toApproverObject(teamLeader);
+    const targetLevel = getApprovalAuthLevelNumber(targetUser?.auth_level);
+    if (!targetEmpId || !targetDept || !Number.isFinite(targetLevel)) return null;
+    const candidates = (allUsers || []).filter((user) => {
+        const safeEmpId = String(user?.emp_id || '').trim();
+        const safeDept = String(user?.department || '').trim();
+        const authLevel = getApprovalAuthLevelNumber(user?.auth_level);
+        return safeEmpId
+            && safeEmpId !== targetEmpId
+            && safeDept === targetDept
+            && authLevel < targetLevel;
+    });
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => {
+        const aLevel = getApprovalAuthLevelNumber(a?.auth_level);
+        const bLevel = getApprovalAuthLevelNumber(b?.auth_level);
+        if (aLevel !== bLevel) return bLevel - aLevel;
+        const aPriority = getApprovalPositionPriority(a?.position);
+        const bPriority = getApprovalPositionPriority(b?.position);
+        if (aPriority !== bPriority) return bPriority - aPriority;
+        return String(a?.emp_name || '').localeCompare(String(b?.emp_name || ''), 'ko');
+    });
+    return toApproverObject(candidates[0] || null);
+}
+
+function mergeUniqueApproverCandidates(candidates, excludedEmpId = '') {
+    const safeExcludedEmpId = String(excludedEmpId || '').trim();
+    const unique = [];
+    const seen = new Set();
+    (Array.isArray(candidates) ? candidates : []).forEach((candidate) => {
+        const safeEmpId = String(candidate?.emp_id || '').trim();
+        if (!safeEmpId || safeEmpId === safeExcludedEmpId || seen.has(safeEmpId)) return;
+        seen.add(safeEmpId);
+        unique.push(candidate);
+    });
+    return unique;
 }
 
 function getConfiguredApprovalLineEmpId(key) {
@@ -1642,15 +1691,7 @@ function buildConfiguredApprovalLineTemplate() {
         getConfiguredApproverByEmpId(getConfiguredApprovalLineEmpId(APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY)),
         getConfiguredApproverByEmpId(getConfiguredApprovalLineEmpId(APPROVAL_DEFAULT_FINAL_APPROVER_KEY))
     ];
-    const unique = [];
-    const seen = new Set();
-    candidates.forEach((candidate) => {
-        const safeEmpId = String(candidate?.emp_id || '').trim();
-        if (!safeEmpId || safeEmpId === targetEmpId || seen.has(safeEmpId)) return;
-        seen.add(safeEmpId);
-        unique.push(candidate);
-    });
-    return unique;
+    return mergeUniqueApproverCandidates(candidates, targetEmpId);
 }
 
 function isApprovalMoneyRelatedType(type) {
@@ -1674,26 +1715,20 @@ function buildDefaultApprovalLineTemplate() {
         return [];
     }
 
-    const configuredLine = buildConfiguredApprovalLineTemplate();
-    if (configuredLine.length > 0) return configuredLine;
-    if (!isApprovalWorkforceLiteProfile()) return [];
-
     const targetUser = getApprovalLineTargetEmpInfo();
     const targetEmpId = String(targetUser?.emp_id || '').trim();
-    const candidates = [
-        getTeamLeaderApproverForTarget(targetUser),
+    const configuredLine = buildConfiguredApprovalLineTemplate();
+    const departmentLead = getDepartmentLeadApproverForTarget(targetUser);
+    const fallbackExecutives = [
         getSecretaryApprover(),
         getChairmanApprover()
     ];
-    const unique = [];
-    const seen = new Set();
-    candidates.forEach((candidate) => {
-        const safeEmpId = String(candidate?.emp_id || '').trim();
-        if (!safeEmpId || safeEmpId === targetEmpId || seen.has(safeEmpId)) return;
-        seen.add(safeEmpId);
-        unique.push(candidate);
-    });
-    return unique;
+    if (!isApprovalWorkforceLiteProfile() && configuredLine.length === 0 && !departmentLead) return [];
+    return mergeUniqueApproverCandidates([
+        departmentLead,
+        ...configuredLine,
+        ...fallbackExecutives
+    ], targetEmpId);
 }
 
 function applyDefaultApprovalLineTemplate(force = false) {
@@ -3630,6 +3665,10 @@ window.onload = async function() {
     if (isApprovalWorkforceLiteProfile()) {
         await loadDelegationContext({ refreshTodo: false });
     }
+    applyChairmanApprovalTabLayout();
+    if (getApprovalInitialTab() === 'todo') {
+        switchTab('todo');
+    }
 
     const payrollMonthInput = document.getElementById("payrollMonth");
     if (payrollMonthInput) payrollMonthInput.value = formatApprovalKstMonth();
@@ -3736,6 +3775,33 @@ function canPerform(permissionKey) {
     if (permissionSet && permissionSet.size > 0) return permissionSet.has(permissionKey);
     return hasApprovalRoleFallback(permissionKey);
 }
+
+function isChairmanApprovalUser() {
+    return String(myInfo?.position || '').trim().includes('이사장');
+} // End of isChairmanApprovalUser
+
+function applyChairmanApprovalTabLayout() {
+    if (!isChairmanApprovalUser()) return false;
+
+    const navEl = document.querySelector('.nav.nav-pills.nav-fill.mb-4');
+    const draftItem = document.getElementById('tab1')?.closest('.nav-item');
+    const todoItem = document.getElementById('tab2')?.closest('.nav-item');
+    const historyItem = document.getElementById('tab3')?.closest('.nav-item');
+
+    if (!navEl || !draftItem || !todoItem || !historyItem) return false;
+
+    navEl.appendChild(todoItem);
+    navEl.appendChild(historyItem);
+    navEl.appendChild(draftItem);
+    return true;
+} // End of applyChairmanApprovalTabLayout
+
+function getApprovalInitialTab() {
+    if (isChairmanApprovalUser() && canPerform('approval.process')) {
+        return 'todo';
+    }
+    return 'draft';
+} // End of getApprovalInitialTab
 
 function canUseSalaryExpense() {
     const role = String(myInfo?.role || '').toLowerCase();
@@ -4038,6 +4104,42 @@ function canDeleteCanceledDoc(doc) {
     const canManageAll = canPerform('approval.process');
     return isDrafter || canManageAll;
 }
+
+function normalizeApprovalEmpId(value) {
+    return String(value || '').trim();
+} // End of normalizeApprovalEmpId
+
+function hasPendingApprovalLineForEmpIds(doc, approverIds) {
+    const safeIds = Array.isArray(approverIds)
+        ? approverIds.map((item) => normalizeApprovalEmpId(item)).filter(Boolean)
+        : [];
+    if (!doc || safeIds.length === 0) return false;
+    const line = Array.isArray(doc.approval_line) ? doc.approval_line : [];
+    return line.some((step) => {
+        const empId = normalizeApprovalEmpId(step?.emp_id);
+        const status = String(step?.status || '').trim();
+        return empId && safeIds.includes(empId) && status === '대기';
+    });
+} // End of hasPendingApprovalLineForEmpIds
+
+function isApprovalParticipantDoc(doc, empId) {
+    const safeEmpId = normalizeApprovalEmpId(empId);
+    if (!doc || !safeEmpId) return false;
+    if (normalizeApprovalEmpId(doc?.drafter_id) === safeEmpId) return true;
+    const line = Array.isArray(doc?.approval_line) ? doc.approval_line : [];
+    return line.some((step) => normalizeApprovalEmpId(step?.emp_id) === safeEmpId);
+} // End of isApprovalParticipantDoc
+
+function decorateTodoDelegation(doc) {
+    const curApprover = normalizeApprovalEmpId(doc?.current_approver);
+    if (curApprover && curApprover !== normalizeApprovalEmpId(myInfo?.emp_id) && delegationIncomingMap.has(curApprover)) {
+        return {
+            ...doc,
+            _delegated_from: delegationIncomingMap.get(curApprover)
+        };
+    }
+    return doc;
+} // End of decorateTodoDelegation
 
 function switchTab(tab) {
     document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
@@ -5904,21 +6006,34 @@ async function loadTodoList() {
         renderDocs(el, [], true);
         return;
     }
-    // 승인 대상: 진행중 or 증빙확인중(관리자가 최종승인 해야함)
-    const { data } = await _supabase.from('ref_approval').select('*')
-        .in('status', ['진행중', '증빙확인중'])
-        .in('current_approver', approverIds)
-        .order('created_at', {ascending: false});
-    const list = (Array.isArray(data) ? data : []).map((doc) => {
-        const curApprover = String(doc?.current_approver || '').trim();
-        if (curApprover && curApprover !== String(myInfo?.emp_id || '').trim() && delegationIncomingMap.has(curApprover)) {
-            return {
-                ...doc,
-                _delegated_from: delegationIncomingMap.get(curApprover)
-            };
-        }
-        return doc;
+    const coopId = String(myInfo?.coop_id || '').trim();
+    const [approvalRes, physicalRes] = await Promise.all([
+        _supabase.from('ref_approval').select('*')
+            .eq('coop_id', coopId)
+            .in('status', ['진행중', '증빙확인중'])
+            .in('current_approver', approverIds)
+            .order('created_at', {ascending: false}),
+        _supabase.from('ref_approval').select('*')
+            .eq('coop_id', coopId)
+            .eq('status', '실물결재대기')
+            .order('created_at', {ascending: false})
+    ]);
+    const todoMap = new Map();
+    (Array.isArray(approvalRes.data) ? approvalRes.data : []).forEach((doc) => {
+        todoMap.set(String(doc.id), decorateTodoDelegation(doc));
     });
+    (Array.isArray(physicalRes.data) ? physicalRes.data : [])
+        .filter((doc) => hasPendingApprovalLineForEmpIds(doc, approverIds))
+        .forEach((doc) => {
+            const key = String(doc.id);
+            if (!todoMap.has(key)) {
+                todoMap.set(key, {
+                    ...doc,
+                    _physical_pending: true
+                });
+            }
+        });
+    const list = Array.from(todoMap.values()).sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
     renderDocs(el, list, true);
 }
 
@@ -5960,8 +6075,22 @@ async function loadCancelReasonMap(docIds) {
 async function loadHistoryList() {
     const el = document.getElementById("historyList");
     el.innerHTML = 'loading...';
-    const { data } = await _supabase.from('ref_approval').select('*').eq('drafter_id', myInfo.emp_id).order('created_at', {ascending: false});
-    const rawList = data || [];
+    const coopId = String(myInfo?.coop_id || '').trim();
+    const safeEmpId = normalizeApprovalEmpId(myInfo?.emp_id);
+    const [draftRes, coopRes] = await Promise.all([
+        _supabase.from('ref_approval').select('*').eq('drafter_id', myInfo.emp_id).order('created_at', {ascending: false}),
+        _supabase.from('ref_approval').select('*').eq('coop_id', coopId).order('created_at', {ascending: false})
+    ]);
+    const rawMap = new Map();
+    (Array.isArray(draftRes.data) ? draftRes.data : []).forEach((doc) => {
+        rawMap.set(String(doc.id), doc);
+    });
+    (Array.isArray(coopRes.data) ? coopRes.data : [])
+        .filter((doc) => isApprovalParticipantDoc(doc, safeEmpId))
+        .forEach((doc) => {
+            rawMap.set(String(doc.id), doc);
+        });
+    const rawList = Array.from(rawMap.values()).sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
     const cancelDocIds = rawList.filter(doc => String(doc?.status || '') === '결재취소').map(doc => doc.id);
     const cancelReasonMap = await loadCancelReasonMap(cancelDocIds);
     historyCache = rawList.map(doc => ({
@@ -6224,7 +6353,11 @@ function renderDocs(target, list, isTodo) {
             if (titleDocId) {
                 todoActions.push(`<button class="btn btn-sm btn-outline-primary me-1" onclick="openRelView(${titleDocId})">👁️ 바로보기</button>`);
             }
-            btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>`;
+            if (String(doc?.status || '') === '실물결재대기' || doc?._physical_pending) {
+                btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<span class="badge bg-warning text-dark">실물결재 대기</span><div class="small text-muted mt-2">실물 서명 후 사무국장이 서명본을 첨부하면 완료됩니다.</div></div>`;
+            } else {
+                btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>`;
+            }
         } else {
             const actions = [];
             const isSecretary = (myInfo?.position === '사무국장' || (myInfo?.role === 'admin' || myInfo?.role === 'admin_all'));

@@ -36,8 +36,9 @@
     .menu-order-controls { display: flex; gap: 6px; }
     .menu-order-item.muted { opacity: 0.55; }
   </style>
+  <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
-<body>
+<body class="erp-unified">
 
   <div class="main-card">
     <h3 class="fw-bold mb-4">⚡ 협동조합 ERP</h3>
@@ -127,27 +128,27 @@
           <span class="d-block small text-muted">의사록, 공문, 총회 자료, 문서함, 전자서명</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnMinutesAdmin" onclick="location.href='../minutes/minutes_admin.html'">
+        <button class="btn btn-white btn-menu hidden" id="btnMinutesAdmin" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_admin'">
           🗂️ <strong>의사록 관리</strong>
           <span class="d-block small text-muted">회의록 작성, 서명자, 공개 처리</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnNoticesAdmin" onclick="location.href='../minutes/notices_admin.html'">
+        <button class="btn btn-white btn-menu hidden" id="btnNoticesAdmin" onclick="location.href='https://www.yonginsolar.kr/minutes/notices_admin'">
           📢 <strong>공문 관리</strong>
           <span class="d-block small text-muted">결재 완료 공문 게시와 문서함 연동</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnMaterialsAdmin" onclick="location.href='../minutes/materials_admin.html'">
+        <button class="btn btn-white btn-menu hidden" id="btnMaterialsAdmin" onclick="location.href='https://www.yonginsolar.kr/minutes/materials_admin'">
           📦 <strong>총회 자료 관리</strong>
           <span class="d-block small text-muted">자료집 업로드와 배포 범위 관리</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnDocuments" onclick="location.href='../minutes/minutes_view.html'">
+        <button class="btn btn-white btn-menu hidden" id="btnDocuments" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_view'">
           📚 <strong>문서함</strong>
           <span class="d-block small text-muted">공개 문서와 자료집 열람</span>
         </button>
 
-        <button class="btn btn-white btn-menu hidden" id="btnSignature" onclick="location.href='../minutes/minutes_sign.html'">
+        <button class="btn btn-white btn-menu hidden" id="btnSignature" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_sign'">
           ✍️ <strong>전자서명</strong>
           <span class="d-block small text-muted">임원·대의원 서명 요청 확인</span>
         </button>
@@ -913,8 +914,19 @@ function handleConfirm() {
     if (confirmModalInstance) confirmModalInstance.hide();
 }
 
+async function findRegisteredEmployeeByEmail(email) {
+    const safeEmail = String(email || '').trim().toLowerCase();
+    if (!safeEmail) return { rows: [], error: null };
+    const { data, error } = await _supabase
+        .from('ref_employees')
+        .select('emp_id, emp_name, email')
+        .eq('email', safeEmail)
+        .limit(2);
+    return { rows: Array.isArray(data) ? data : [], error };
+} // End of findRegisteredEmployeeByEmail
+
 async function sendMagicLink() {
-    const email = document.getElementById('emailInput').value;
+    const email = String(document.getElementById('emailInput').value || '').trim().toLowerCase();
     const btn = document.getElementById('btnSend');
     const msg = document.getElementById('statusMsg');
     const guard = evaluateMagicLinkGuard(email);
@@ -925,11 +937,27 @@ async function sendMagicLink() {
 
     updateLoginGuardHint('');
     btn.disabled = true; btn.innerText = "전송 중...";
-    const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
-    if (error) {
-        recordMagicLinkAttempt(email, false);
-        showAlert("전송 실패: " + error.message);
-    } else {
+    try {
+        const { rows, error: employeeError } = await findRegisteredEmployeeByEmail(email);
+        if (employeeError) throw employeeError;
+        if (rows.length === 0) {
+            recordMagicLinkAttempt(email, false);
+            showAlert("직원으로 등록된 이메일만 로그인 메일을 받을 수 있습니다.");
+            return;
+        }
+        if (rows.length > 1) {
+            recordMagicLinkAttempt(email, false);
+            showAlert("같은 이메일이 여러 직원에 연결되어 있습니다. 관리자에게 이메일 정리를 요청해 주세요.");
+            return;
+        }
+
+        const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
+        if (error) {
+            recordMagicLinkAttempt(email, false);
+            showAlert("전송 실패: " + error.message);
+            return;
+        }
+
         recordMagicLinkAttempt(email, true);
         btn.classList.add("hidden");
         msg.style.display = "block";
@@ -939,8 +967,16 @@ async function sendMagicLink() {
         msg.appendChild(strong);
         msg.appendChild(document.createElement('br'));
         msg.appendChild(document.createTextNode("이메일함에서 로그인 링크를 클릭하면 자동으로 접속됩니다."));
+    } catch (error) {
+        recordMagicLinkAttempt(email, false);
+        showAlert("전송 실패: " + (error?.message || error));
+    } finally {
+        if (!btn.classList.contains('hidden')) {
+            btn.disabled = false;
+            btn.innerText = "로그인 메일 전송";
+        }
     }
-}
+} // End of sendMagicLink
 
 async function startKakaoLogin() {
     if (kakaoLoginInFlight) return;

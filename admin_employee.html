@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.11
-Change: 2026-03-15 - 부서/직급 저장 분리 및 시간외 근로 정책 안내 문구 정리.
+Version: v1.0.12
+Change: 2026-03-17 - 조합원/임원 값 불러오기, 결재레벨(auth_level) 편집, ref_settings category 저장 보강.
 -->
 <html>
 <head>
@@ -46,8 +46,9 @@ Change: 2026-03-15 - 부서/직급 저장 분리 및 시간외 근로 정책 안
     .org-tree-node { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 10px 12px; }
     .org-tree-employee { font-size: 0.82rem; color: #6c757d; }
   </style>
+  <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
-<body>
+<body class="erp-unified">
 
 <div class="main-card">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -85,7 +86,7 @@ Change: 2026-03-15 - 부서/직급 저장 분리 및 시간외 근로 정책 안
           <li class="nav-item">
             <a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
           <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
-<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
+<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">결재 레벨</label><select id="newAuthLevel" class="form-select"></select><div class="form-text">1이 최상위, 숫자가 클수록 하위 결재선입니다.</div></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -119,11 +120,16 @@ Change: 2026-03-15 - 부서/직급 저장 분리 및 시간외 근로 정책 안
 <div class="col-md-3">
     <label class="small text-muted fw-bold text-primary">조합원 번호</label>
     <div class="view-mode" id="viewMemberId">-</div>
-    <input type="text" id="editMemberId" class="form-control edit-mode" placeholder="2025-00-0000" oninput="autoHyphenMemberId(this)">
+    <div class="edit-mode">
+      <input type="text" id="editMemberId" class="form-control mb-2" placeholder="2025-00-0000" oninput="autoHyphenMemberId(this)">
+      <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="pullMemberOfficialValues()">🔄 조합원/임원 값 불러오기</button>
+      <div class="form-text" id="memberPullStatus">조합원 번호, 이메일, 이름 순으로 일치 대상을 찾아 값을 채웁니다.</div>
+    </div>
 </div>
             <div class="col-md-3"><label class="small text-muted">전화번호</label><div class="view-mode fw-bold" id="viewPhone">-</div><input type="text" id="editPhone" class="form-control edit-mode" placeholder="010-0000-0000" maxlength="13" oninput="autoHyphen(this)"></div>
             <div class="col-md-3"><label class="small text-muted">이메일</label><div class="view-mode fw-bold" id="viewEmail">-</div><input type="email" id="editEmail" class="form-control edit-mode"></div>
             <div class="col-md-3"><label class="small text-muted">직급</label><div class="view-mode fw-bold" id="viewPosition">-</div><select id="editPosition" class="form-select edit-mode"></select></div>
+            <div class="col-md-3"><label class="small text-muted">결재 레벨</label><div class="view-mode fw-bold" id="viewAuthLevel">-</div><select id="editAuthLevel" class="form-select edit-mode"></select></div>
             <div class="col-md-3"><label class="small text-muted">부서</label><div class="view-mode fw-bold" id="viewDept">-</div><div class="edit-mode"><select id="editDeptSelect" class="form-select mb-2" onchange="syncDetailDepartmentInput()"><option value="">미지정</option></select><input type="text" id="editDeptCustom" class="form-control hidden" placeholder="직접 입력 부서명"></div></div>
             <div class="col-12"><label class="small text-muted">주소</label><div class="view-mode fw-bold" id="viewAddress">-</div>
               <div class="edit-mode"><div class="input-group mb-1"><input type="text" id="editAddress" class="form-control" placeholder="기본 주소 (검색)" onclick="openAddressSearch()" readonly><button class="btn btn-outline-secondary" type="button" onclick="openAddressSearch()">🔍 주소 검색</button></div><input type="text" id="editAddressDetail" class="form-control" placeholder="상세주소"></div>
@@ -476,6 +482,26 @@ let hrDepartmentCatalog = [];
 let hrPositionCatalog = [];
 let hrOvertimePolicy = { ...HR_DEFAULT_OVERTIME_POLICY };
 let employeeCache = [];
+const HR_AUTH_LEVEL_OPTIONS = Object.freeze([
+    { value: 1, label: '1 · 최종결재권자' },
+    { value: 2, label: '2 · 본부장/실장급' },
+    { value: 3, label: '3 · 부서장급' },
+    { value: 4, label: '4 · 팀장급' },
+    { value: 5, label: '5 · 책임자' },
+    { value: 6, label: '6 · 담당자 상위' },
+    { value: 7, label: '7 · 일반직 상위' },
+    { value: 8, label: '8 · 일반직' },
+    { value: 9, label: '9 · 최하위' }
+]);
+const HR_SETTING_CATEGORY_BY_KEY = Object.freeze({
+    pension_rate_emp: '인사_급여',
+    pension_rate_biz: '인사_급여',
+    health_rate_emp: '인사_급여',
+    health_rate_biz: '인사_급여',
+    limit_meal: '인사_급여',
+    limit_car: '인사_급여',
+    limit_child: '인사_급여'
+});
 
 function getHrDefaultLeaveTypeCatalog() {
     return HR_WORKFORCE_LITE_DEFAULT_LEAVE_TYPE_CATALOG.map((item) => ({
@@ -990,6 +1016,34 @@ function populateInvitePositionOptions(selectedValue = '사원') {
     }
     selectEl.value = String(selectedValue || selectEl.value || '사원').trim();
 }
+
+function getDefaultAuthLevelForPosition(position) {
+    const safePosition = String(position || '').trim();
+    if (!safePosition) return null;
+    if (safePosition.includes('이사장')) return 1;
+    if (safePosition.includes('사무국장') || safePosition.includes('국장') || safePosition.includes('이사')) return 2;
+    if (safePosition.includes('부장')) return 3;
+    if (safePosition.includes('팀장')) return 4;
+    if (safePosition.includes('차장')) return 5;
+    if (safePosition.includes('과장')) return 6;
+    if (safePosition.includes('대리')) return 7;
+    if (safePosition.includes('사원') || safePosition.includes('주임')) return 9;
+    return null;
+} // End of getDefaultAuthLevelForPosition
+
+function syncInviteAuthLevelFromPosition() {
+    const position = document.getElementById('newRank')?.value || '';
+    const defaultLevel = getDefaultAuthLevelForPosition(position);
+    if (!defaultLevel) return;
+    populateInviteAuthLevelOptions(defaultLevel);
+} // End of syncInviteAuthLevelFromPosition
+
+function syncDetailAuthLevelFromPosition() {
+    const position = document.getElementById('editPosition')?.value || '';
+    const defaultLevel = getDefaultAuthLevelForPosition(position);
+    if (!defaultLevel) return;
+    populateDetailAuthLevelOptions(defaultLevel);
+} // End of syncDetailAuthLevelFromPosition
 
 function syncDetailDepartmentInput() {
     const selectEl = document.getElementById('editDeptSelect');
@@ -1552,6 +1606,16 @@ window.onload = async function() {
     document.getElementById("btnConfirmYes").onclick = function() { if(confirmCallback) confirmCallback(); confirmModal.hide(); };
     document.getElementById("salaryMonth").value = formatAdminEmployeeKstMonth();
     document.getElementById("ledgerMonth").value = formatAdminEmployeeKstMonth();
+    const invitePositionSelect = document.getElementById('newRank');
+    if (invitePositionSelect && !invitePositionSelect.dataset.boundAuthLevelSync) {
+        invitePositionSelect.dataset.boundAuthLevelSync = '1';
+        invitePositionSelect.addEventListener('change', syncInviteAuthLevelFromPosition);
+    }
+    const detailPositionSelect = document.getElementById('editPosition');
+    if (detailPositionSelect && !detailPositionSelect.dataset.boundAuthLevelSync) {
+        detailPositionSelect.dataset.boundAuthLevelSync = '1';
+        detailPositionSelect.addEventListener('change', syncDetailAuthLevelFromPosition);
+    }
 
     const stored = localStorage.getItem('erp_user');
     if (!stored) { location.href = 'index.html'; return; }
@@ -1750,10 +1814,177 @@ async function loadAdvancedSettings() { const tbody = document.getElementById("a
 
 function calcHalf(type) { document.getElementById(`half_${type}`).innerText = (Number(document.getElementById(`set_${type}_total`).value)/2).toFixed(3); }
 
+function buildHrAuthLevelOptionsHtml(selectedValue) {
+    const normalizedSelected = normalizeHrAuthLevelValue(selectedValue);
+    return HR_AUTH_LEVEL_OPTIONS.map((item) => {
+        const selected = normalizedSelected === item.value ? 'selected' : '';
+        return `<option value="${item.value}" ${selected}>${item.label}</option>`;
+    }).join('');
+} // End of buildHrAuthLevelOptionsHtml
+
+function normalizeHrAuthLevelValue(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    if (parsed < 1 || parsed > 9) return null;
+    return Math.trunc(parsed);
+} // End of normalizeHrAuthLevelValue
+
+function formatHrAuthLevelLabel(value) {
+    const normalized = normalizeHrAuthLevelValue(value);
+    if (!normalized) return '-';
+    const matched = HR_AUTH_LEVEL_OPTIONS.find((item) => item.value === normalized);
+    return matched ? matched.label : String(normalized);
+} // End of formatHrAuthLevelLabel
+
+function populateInviteAuthLevelOptions(selectedValue) {
+    const select = document.getElementById('newAuthLevel');
+    if (!select) return;
+    select.innerHTML = buildHrAuthLevelOptionsHtml(selectedValue || 9);
+} // End of populateInviteAuthLevelOptions
+
+function populateDetailAuthLevelOptions(selectedValue) {
+    const select = document.getElementById('editAuthLevel');
+    if (!select) return;
+    select.innerHTML = `<option value="">미지정</option>${buildHrAuthLevelOptionsHtml(selectedValue)}`;
+    const normalized = normalizeHrAuthLevelValue(selectedValue);
+    select.value = normalized ? String(normalized) : '';
+} // End of populateDetailAuthLevelOptions
+
+function updateMemberPullStatus(message, tone = 'muted') {
+    const el = document.getElementById('memberPullStatus');
+    if (!el) return;
+    const classMap = {
+        muted: 'form-text',
+        success: 'form-text text-success',
+        danger: 'form-text text-danger',
+        info: 'form-text text-primary'
+    };
+    el.className = classMap[tone] || classMap.muted;
+    el.textContent = message || '조합원 번호, 이메일, 이름 순으로 일치 대상을 찾아 값을 채웁니다.';
+} // End of updateMemberPullStatus
+
+function resolveRefSettingCategory(itemKey, rawMap) {
+    const safeKey = String(itemKey || '').trim();
+    if (!safeKey) return null;
+    const matched = rawMap instanceof Map ? rawMap.get(safeKey) : null;
+    if (matched?.category) return String(matched.category);
+    return HR_SETTING_CATEGORY_BY_KEY[safeKey] || null;
+} // End of resolveRefSettingCategory
+
+function resolvePreferredOfficialForEmployeeLink(rows) {
+    const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if (safeRows.length === 0) return null;
+    const rolePriority = {
+        '이사장': 100,
+        '감사': 80,
+        '이사': 70,
+        '선관위원장': 60,
+        '선관위원': 50,
+        '대의원': 10
+    };
+    return safeRows.slice().sort((a, b) => {
+        const aPriority = rolePriority[String(a?.role || '').trim()] || 0;
+        const bPriority = rolePriority[String(b?.role || '').trim()] || 0;
+        if (aPriority !== bPriority) return bPriority - aPriority;
+        const aCategory = String(a?.category || '').trim();
+        const bCategory = String(b?.category || '').trim();
+        if (aCategory !== bCategory) {
+            if (aCategory === 'executive') return -1;
+            if (bCategory === 'executive') return 1;
+            if (aCategory === 'delegate') return -1;
+            if (bCategory === 'delegate') return 1;
+        }
+        return String(a?.role || '').localeCompare(String(b?.role || ''));
+    })[0] || null;
+} // End of resolvePreferredOfficialForEmployeeLink
+
+async function findMemberForEmployeeLink(criteria) {
+    const coopId = String(myInfo?.coop_id || '').trim();
+    if (!coopId) throw new Error('조합 정보를 확인할 수 없습니다.');
+
+    const safeMemberId = String(criteria?.memberId || '').trim();
+    const safeEmail = String(criteria?.email || '').trim().toLowerCase();
+    const safeName = String(criteria?.name || '').trim();
+    const attempts = [];
+
+    if (safeMemberId) {
+        attempts.push({
+            label: '조합원 번호',
+            query: () => _supabase.from('coop_members').select('id, member_id, name, email, phone, address, status').eq('coop_id', coopId).eq('member_id', safeMemberId)
+        });
+    }
+    if (safeEmail) {
+        attempts.push({
+            label: '이메일',
+            query: () => _supabase.from('coop_members').select('id, member_id, name, email, phone, address, status').eq('coop_id', coopId).ilike('email', safeEmail)
+        });
+    }
+    if (safeName) {
+        attempts.push({
+            label: '이름',
+            query: () => _supabase.from('coop_members').select('id, member_id, name, email, phone, address, status').eq('coop_id', coopId).eq('name', safeName)
+        });
+    }
+
+    for (const attempt of attempts) {
+        const { data, error } = await attempt.query();
+        if (error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        if (rows.length === 1) {
+            return { matchType: attempt.label, member: rows[0] };
+        }
+        if (rows.length > 1) {
+            throw new Error(`${attempt.label}로 일치하는 조합원이 여러 명입니다. 조합원 번호를 정확히 입력해 주세요.`);
+        }
+    }
+    return { matchType: '', member: null };
+} // End of findMemberForEmployeeLink
+
+async function pullMemberOfficialValues() {
+    try {
+        const memberId = document.getElementById('editMemberId')?.value || '';
+        const email = document.getElementById('editEmail')?.value || '';
+        const name = document.getElementById('editName')?.value || '';
+        updateMemberPullStatus('조합원/임원 정보를 조회하고 있습니다.', 'info');
+
+        const match = await findMemberForEmployeeLink({ memberId, email, name });
+        if (!match?.member) {
+            updateMemberPullStatus('일치하는 조합원을 찾지 못했습니다. 조합원 번호를 먼저 확인해 주세요.', 'danger');
+            return;
+        }
+
+        const targetMemberId = String(match.member.member_id || '').trim();
+        const { data: officials, error: officialsError } = await _supabase
+            .from('coop_officials')
+            .select('id, member_id, role, category, status')
+            .eq('coop_id', String(myInfo?.coop_id || '').trim())
+            .eq('member_id', targetMemberId)
+            .eq('status', 'active');
+        if (officialsError) throw officialsError;
+
+        const preferredOfficial = resolvePreferredOfficialForEmployeeLink(officials);
+        document.getElementById('editMemberId').value = targetMemberId;
+        document.getElementById('editName').value = String(match.member.name || name || '').trim();
+        document.getElementById('editEmail').value = String(match.member.email || email || '').trim();
+        document.getElementById('editPhone').value = String(match.member.phone || '').trim();
+        document.getElementById('editAddress').value = String(match.member.address || '').trim();
+        document.getElementById('editAddressDetail').value = '';
+        if (preferredOfficial?.role) {
+            populateDetailPositionOptions(String(preferredOfficial.role || '').trim());
+            syncDetailAuthLevelFromPosition();
+        }
+        const roleSuffix = preferredOfficial?.role ? ` / 임원 직책 ${preferredOfficial.role}` : '';
+        updateMemberPullStatus(`${match.matchType} 기준으로 조합원 정보를 불러왔습니다${roleSuffix}. 저장을 눌러 반영해 주세요.`, 'success');
+    } catch (error) {
+        updateMemberPullStatus(error?.message || '조합원/임원 값 불러오기에 실패했습니다.', 'danger');
+    }
+} // End of pullMemberOfficialValues
+
 function openInviteModal() {
     document.getElementById("newName").value = "";
     document.getElementById("newEmail").value = "";
     populateInvitePositionOptions('사원');
+    syncInviteAuthLevelFromPosition();
     document.getElementById("newRole").value = "staff";
     populateInviteDepartmentOptions('');
     document.getElementById("newDeptCustom").value = "";
@@ -1804,6 +2035,7 @@ async function runInvite() {
                 emp_name: name,
                 email: email,
                 position: String(document.getElementById("newRank").value || '사원').trim(),
+                auth_level: normalizeHrAuthLevelValue(document.getElementById('newAuthLevel')?.value) ?? 9,
                 role: document.getElementById("newRole").value,
                 department: getInviteDepartmentValue(),
                 hire_date: formatAdminEmployeeKstDate(new Date())
@@ -1933,6 +2165,7 @@ async function saveSettings() {
         const currentYear = new Date().getFullYear();
         const updates = [];
         const coopId = myInfo?.coop_id || null;
+        const advancedSettingsMap = new Map((Array.isArray(advancedSettingsRaw) ? advancedSettingsRaw : []).map((row) => [String(row?.item_key || '').trim(), row]));
         const telegramApprovalConfig = collectTelegramApprovalSettingsFromUi();
         const approvalLineConfig = collectApprovalLineSettingsFromUi();
 
@@ -1946,7 +2179,12 @@ async function saveSettings() {
             // 고급 설정 탭인 경우
             advancedSettingsRaw.forEach((r, i) => {
                 const val = document.getElementById(`adv_val_${i}`).value;
-                updates.push({ item_key: r.item_key, item_value: Number(val) });
+                updates.push({
+                    item_key: r.item_key,
+                    item_value: Number(val),
+                    category: resolveRefSettingCategory(r.item_key, advancedSettingsMap),
+                    description: r.description || null
+                });
             });
         } else if (!isHrWorkforceLiteProfile()) {
             // 일반 설정 탭인 경우 (요율 계산)
@@ -1955,14 +2193,19 @@ async function saveSettings() {
             
             // 필수 항목들 패키징
             updates.push(
-                { item_key: 'pension_rate_emp', item_value: pen },
-                { item_key: 'pension_rate_biz', item_value: pen },
-                { item_key: 'health_rate_emp', item_value: hlt },
-                { item_key: 'health_rate_biz', item_value: hlt },
-                { item_key: 'limit_meal', item_value: Number(document.getElementById("set_meal").value) },
-                { item_key: 'limit_car', item_value: Number(document.getElementById("set_car").value) },
-                { item_key: 'limit_child', item_value: Number(document.getElementById("set_child").value) }
+                { item_key: 'pension_rate_emp', item_value: pen, category: resolveRefSettingCategory('pension_rate_emp', advancedSettingsMap) },
+                { item_key: 'pension_rate_biz', item_value: pen, category: resolveRefSettingCategory('pension_rate_biz', advancedSettingsMap) },
+                { item_key: 'health_rate_emp', item_value: hlt, category: resolveRefSettingCategory('health_rate_emp', advancedSettingsMap) },
+                { item_key: 'health_rate_biz', item_value: hlt, category: resolveRefSettingCategory('health_rate_biz', advancedSettingsMap) },
+                { item_key: 'limit_meal', item_value: Number(document.getElementById("set_meal").value), category: resolveRefSettingCategory('limit_meal', advancedSettingsMap) },
+                { item_key: 'limit_car', item_value: Number(document.getElementById("set_car").value), category: resolveRefSettingCategory('limit_car', advancedSettingsMap) },
+                { item_key: 'limit_child', item_value: Number(document.getElementById("set_child").value), category: resolveRefSettingCategory('limit_child', advancedSettingsMap) }
             );
+        }
+
+        const missingCategoryUpdate = updates.find((item) => !String(item?.category || '').trim());
+        if (missingCategoryUpdate) {
+            throw new Error(`설정 카테고리를 확인할 수 없습니다: ${missingCategoryUpdate.item_key}`);
         }
 
         // [핵심] 저장할 테이블 분기 처리
@@ -1988,7 +2231,8 @@ async function saveSettings() {
             // 2. 현재 데이터 저장 (Original 테이블)
             const settingsUpdates = updates.map(u => ({
                 ...u,
-                coop_id: coopId
+                coop_id: coopId,
+                target_year: currentYear
             }));
             
             // Original 테이블은 item_key만 있으면 됨
@@ -2098,14 +2342,16 @@ async function openDetail(u) {
 
     document.getElementById("detailName").innerText = u.emp_name; document.getElementById("viewMemberId").innerText = u.member_id || "-";
     document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = u.emp_id;
-    document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewPosition").innerText = u.position || "-"; document.getElementById("viewDept").innerText = u.department || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
+    document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewPosition").innerText = u.position || "-"; document.getElementById("viewAuthLevel").innerText = formatHrAuthLevelLabel(u.auth_level); document.getElementById("viewDept").innerText = u.department || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
     document.getElementById("editAddress").value = u.address || ""; document.getElementById("editAddressDetail").value = ""; 
     document.getElementById("editHireDate").value = u.hire_date || "";
     populateDetailPositionOptions(u.position || '사원');
+    populateDetailAuthLevelOptions(u.auth_level);
     populateDetailDepartmentOptions(u.department || '');
     document.getElementById("viewSalary").innerText = "******"; document.getElementById("viewSalary").dataset.real = (u.base_salary||0).toLocaleString() + " 원";
     document.getElementById("viewSalaryDate").innerText = u.salary_apply_date || "-"; document.getElementById("editSalary").value = u.base_salary || 0; document.getElementById("salaryApplyDate").value = u.salary_apply_date || "";
+    updateMemberPullStatus('조합원 번호, 이메일, 이름 순으로 일치 대상을 찾아 값을 채웁니다.', 'muted');
 
     const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: u.emp_id });
     document.getElementById("viewBirth").innerText = birthDate || "미등록";
@@ -2154,6 +2400,7 @@ async function saveBasicInfo() {
     const sal = Number(document.getElementById("editSalary").value); 
     const date = document.getElementById("salaryApplyDate").value; 
     const position = String(document.getElementById("editPosition")?.value || '').trim();
+    const authLevel = normalizeHrAuthLevelValue(document.getElementById('editAuthLevel')?.value);
     const department = getDetailDepartmentValue();
     const normalizedHireDate = hireDate ? hireDate : null;
     const normalizedSalaryApplyDate = date ? date : null;
@@ -2161,10 +2408,11 @@ async function saveBasicInfo() {
     // 2. 업데이트 객체 생성 (빈 값이면 null 처리)
     const updates = { 
         emp_name: name, 
-        member_id: memberId ? Number(memberId) : null, // [추가됨] 숫자 변환
+        member_id: memberId ? String(memberId).trim() : null,
         phone: phone, 
         email: email, 
         position: position,
+        auth_level: authLevel,
         department: department,
         address: fullAddress, 
         hire_date: normalizedHireDate, 
@@ -2193,6 +2441,7 @@ async function saveBasicInfo() {
     document.getElementById("viewPhone").innerText = phone; 
     document.getElementById("viewEmail").innerText = email; 
     document.getElementById("viewPosition").innerText = position || "-";
+    document.getElementById("viewAuthLevel").innerText = formatHrAuthLevelLabel(authLevel);
     document.getElementById("viewDept").innerText = department || "-";
     document.getElementById("viewAddress").innerText = fullAddress; 
     document.getElementById("viewHireDate").innerText = normalizedHireDate || "-"; 
