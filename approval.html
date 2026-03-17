@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.42 | Change: 2026-03-15 - 시간외 근로 구간 기준 휴게시간 자동 반영으로 조정. -->
+<!-- Version: v1.1.44 | Change: 2026-03-17 - 제목 공통 수정과 제목/내용 검색 확대 적용. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.42 | approval.html');</script>
+  <script>console.log('[Version] v1.1.44 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -35,6 +35,24 @@
     
     .file-item { font-size: 0.9rem; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; border: 1px solid #eee; }
     .file-size { font-size: 0.8rem; color: #888; float: right; }
+    .attachment-dropzone {
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 14px;
+      transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .attachment-dropzone.is-dragover {
+      border-color: #0d6efd;
+      background: #eef5ff;
+      box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.08);
+    }
+    .attachment-dropzone-label {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 6px;
+    }
     .html-preview-box {
       min-height: 280px;
       max-height: 65vh;
@@ -332,7 +350,7 @@
         </div>
         <div class="col-12 hidden mb-3" id="divNoticeSubject">
           <label class="small text-muted fw-bold">제목</label>
-          <input type="text" class="form-control" id="noticeSubject" placeholder="예: 공문 제목">
+          <input type="text" class="form-control" id="noticeSubject" placeholder="예: 공문 제목" oninput="markApprovalTitleInputDirty('notice')">
         </div>
         <div class="col-12 hidden mb-3" id="divNoticeApprovalMemo">
           <label class="small text-muted fw-bold">결재 요청 메모 (내부용)</label>
@@ -341,7 +359,7 @@
         </div>
         <div class="col-12 hidden mb-3" id="divProposalSubject">
           <label class="small text-muted fw-bold" id="proposalSubjectLabel">품의 제목</label>
-          <input type="text" class="form-control" id="proposalSubject" placeholder="예: 2026년 2월 사무국 운영비 집행 건">
+          <input type="text" class="form-control" id="proposalSubject" placeholder="예: 2026년 2월 사무국 운영비 집행 건" oninput="markApprovalTitleInputDirty('proposal')">
         </div>
         <div class="col-12" id="divAmount">
           <label class="small text-muted" id="amountLabel">금액 (원)</label>
@@ -559,8 +577,11 @@
 
       <div class="mb-4">
         <label class="small text-muted">증빙 첨부 <span id="fileHelp" class="text-danger small hidden">(가족관계증명서 필수)</span></label>
-        <input type="file" class="form-control" id="attachFile" multiple accept=".pdf,.png,.jpg,.jpeg" onchange="updateFileList()">
-        <div class="small text-muted mt-2">업로드는 PDF 또는 이미지(PNG, JPG, JPEG) 파일만 가능합니다.</div>
+        <div id="attachmentDropZone" class="attachment-dropzone">
+          <div class="attachment-dropzone-label">여기로 파일을 끌어놓아도 첨부됩니다.</div>
+          <input type="file" class="form-control" id="attachFile" multiple accept=".pdf,.png,.jpg,.jpeg" onchange="updateFileList()">
+          <div class="small text-muted mt-2" id="attachmentDropZoneText">여기로 파일을 끌어놓거나 위에서 선택하세요. 업로드는 PDF 또는 이미지(PNG, JPG, JPEG) 파일만 가능합니다.</div>
+        </div>
         <div id="fileListArea" class="mt-2"></div>
       </div>
 
@@ -571,7 +592,7 @@
   <div id="view-todo" class="hidden"><div id="todoList" class="list-group"></div></div>
   <div id="view-history" class="hidden">
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="searchKeyword" placeholder="검색" onkeyup="filterHistory()">
+      <input type="text" class="form-control" id="searchKeyword" placeholder="제목 또는 내용 검색" onkeyup="filterHistory()">
       <button class="btn btn-outline-secondary">🔍</button>
       <button class="btn btn-outline-success" onclick="exportHistoryCsv()">⬇ CSV</button>
     </div>
@@ -621,7 +642,7 @@
 <div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header py-2"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-4" id="confirmBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="confirmOkBtn">확인</button></div></div></div></div>
-<div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
+<div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목, 내용 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
 <div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="relViewModalTitle">📄 문서 내용</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
 <div class="modal fade" id="physicalRejectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 실물결재 반려</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">반려 사유</label><textarea id="physicalRejectReason" class="form-control" rows="5" placeholder="반려 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-danger btn-sm" id="btnPhysicalRejectSubmit" onclick="submitPhysicalReject()">반려 처리</button></div></div></div></div>
 <div class="modal fade" id="cancelDraftModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">🗑️ 상신 취소</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">취소 사유</label><textarea id="cancelDraftReason" class="form-control" rows="4" placeholder="취소 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button><button class="btn btn-danger btn-sm" id="btnCancelDraftSubmit" onclick="submitDraftCancel()">취소 확정</button></div></div></div></div>
@@ -684,7 +705,6 @@ let approvalRuntimeProfile = 'legacy_full';
 let approvalCompanyInfo = {};
 let approvalSecretaryJeongyeolEnabled = true;
 let approvalSecretaryAttendanceEnabled = true;
-let approvalSecretaryExpenseLimit = 300000;
 let approvalLeaveTypeCatalog = null;
 let approvalDocRuleCatalog = {};
 let approvalLeaveSnapshotSupported = false;
@@ -853,11 +873,6 @@ function isApprovalJeongyeolFeatureEnabled() {
 function isApprovalAttendanceJeongyeolEnabled() {
     if (!isApprovalWorkforceLiteProfile()) return true;
     return approvalSecretaryAttendanceEnabled === true;
-}
-
-function getApprovalExpenseJeongyeolLimit() {
-    if (!isApprovalWorkforceLiteProfile()) return 300000;
-    return Math.max(0, parseApprovalNumber(approvalSecretaryExpenseLimit, 300000));
 }
 
 function getApprovalDefaultLeaveTypeCatalog() {
@@ -1108,6 +1123,7 @@ function syncApprovalLeaveInputMode() {
     if (dateRangeTitle) dateRangeTitle.textContent = `📅 ${label} 기간`;
     if (singleDayTitle) singleDayTitle.textContent = `📅 ${label} 날짜`;
     if (halfDayTitle) halfDayTitle.textContent = `📅 ${label} 날짜`;
+    syncApprovalTitleInput('휴가');
 }
 
 function isApprovalProposalLikeType(docType) {
@@ -1344,7 +1360,9 @@ function applyApprovalRuntimeProfileUi() {
         dependentSection.classList.toggle('hidden', isLite);
     }
     if (jeongyeolCard) {
-        jeongyeolCard.classList.toggle('hidden', isLite && !isApprovalJeongyeolFeatureEnabled());
+        const currentType = String(categoryEl?.value || '').trim();
+        const canShowJeongyeolCard = isApprovalJeongyeolFeatureEnabled() && isApprovalAttendanceJeongyeolTargetType(currentType);
+        jeongyeolCard.classList.toggle('hidden', !canShowJeongyeolCard);
     }
     if (monthlyPanel) {
         monthlyPanel.classList.toggle('hidden', !isCurrentUserSecretaryGeneral() || (isLite && !isApprovalJeongyeolFeatureEnabled()));
@@ -1379,7 +1397,6 @@ async function loadApprovalCompanyInfo() {
     });
     approvalSecretaryJeongyeolEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_jeongyeol_enabled'], true);
     approvalSecretaryAttendanceEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_attendance_enabled'], true);
-    approvalSecretaryExpenseLimit = Math.max(0, parseApprovalNumber(approvalCompanyInfo['approval_secretary_expense_limit'], 300000));
     approvalDocRuleCatalog = parseApprovalDocRuleCatalog(approvalCompanyInfo[APPROVAL_DOC_RULE_CONFIG_KEY]);
     approvalOvertimePolicy = parseApprovalOvertimePolicy(approvalCompanyInfo[APPROVAL_OVERTIME_POLICY_KEY]);
     syncApprovalLeaveTypeRuntime();
@@ -1535,6 +1552,7 @@ function recalcApprovalOvertimeSummary() {
             ? `휴일 근로는 1일 전체 근무(8시간)로 기록합니다. 현재 처리 방식은 ${modeLabel}입니다.`
             : `평일 시간외 근로는 입력한 시작/종료 시간을 기준으로 기록하고, 4시간 초과 시 휴게시간 30분을 자동 반영합니다. 현재 처리 방식은 ${modeLabel}입니다.`;
     }
+    syncApprovalTitleInput(getCurrentApprovalCategory());
 }
 
 function syncApprovalOvertimePolicyUi() {
@@ -1635,7 +1653,27 @@ function buildConfiguredApprovalLineTemplate() {
     return unique;
 }
 
+function isApprovalMoneyRelatedType(type) {
+    const safeType = String(type || '').trim();
+    return safeType === '지출결의' || safeType === '구매요청';
+}
+
+function isApprovalAttendanceJeongyeolTargetType(type) {
+    const safeType = String(type || '').trim();
+    return safeType === '휴가' || isApprovalOvertimeType(safeType);
+} // End of isApprovalAttendanceJeongyeolTargetType
+
 function buildDefaultApprovalLineTemplate() {
+    const currentType = getCurrentDraftMainType();
+    if (isApprovalMoneyRelatedType(currentType)) {
+        const targetUser = getApprovalLineTargetEmpInfo();
+        const targetEmpId = String(targetUser?.emp_id || '').trim();
+        const chairman = getChairmanApprover();
+        const chairmanEmpId = String(chairman?.emp_id || '').trim();
+        if (chairmanEmpId && chairmanEmpId !== targetEmpId) return [chairman];
+        return [];
+    }
+
     const configuredLine = buildConfiguredApprovalLineTemplate();
     if (configuredLine.length > 0) return configuredLine;
     if (!isApprovalWorkforceLiteProfile()) return [];
@@ -1700,6 +1738,10 @@ function getCurrentDraftAmount() {
     return raw;
 }
 
+function hasChairmanInApprovalLine(approvers) {
+    return (Array.isArray(approvers) ? approvers : []).some((approver) => String(approver?.position || '').includes('이사장'));
+}
+
 function toPositiveDocId(value) {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed <= 0) return null;
@@ -1730,10 +1772,8 @@ function isSecretaryGeneralByEmpId(empId) {
 function getJeongyeolAutoDecision(mainType, amountValue, options = {}) {
     if (!isApprovalJeongyeolFeatureEnabled()) return null;
     const type = String(mainType || '').trim();
-    const amount = Number(amountValue || 0);
     const drafterEmpId = String(options?.drafterEmpId || '').trim() || String(myInfo?.emp_id || '').trim();
     const drafterIsSecretary = isSecretaryGeneralByEmpId(drafterEmpId);
-    const expenseLimit = getApprovalExpenseJeongyeolLimit();
 
     if (type === '휴가' || isApprovalOvertimeType(type)) {
         if (!isApprovalAttendanceJeongyeolEnabled()) return null;
@@ -1754,19 +1794,13 @@ function getJeongyeolAutoDecision(mainType, amountValue, options = {}) {
             targetApprover: 'SECRETARY'
         };
     }
-    if (type === '지출결의' && expenseLimit > 0 && amount > 0 && amount <= expenseLimit) {
-        return {
-            mode: 'AUTO',
-            applied: true,
-            ruleCode: 'AUTO_EXPENSE_UNDER_300K',
-            ruleLabel: `${formatMoney(expenseLimit)}원 이하 지출결의 자동 전결 (${formatMoney(amount)}원)`,
-            targetApprover: 'SECRETARY'
-        };
-    }
     return null;
 }
 
 function getJeongyeolDecision(mainType, amountValue, options = {}) {
+    if (!isApprovalAttendanceJeongyeolTargetType(mainType)) {
+        return { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' };
+    }
     const manualToggle = !!manualJeongyeolSelected;
     const autoDecision = getJeongyeolAutoDecision(mainType, amountValue, options);
     if (autoDecision) {
@@ -1836,6 +1870,12 @@ function applyJeongyeolLineDecision(decision, options = {}) {
 function updateJeongyeolUi() {
     const hintEl = document.getElementById('jeongyeolHint');
     const toggleEl = document.getElementById('chkSecretaryJeongyeol');
+    const jeongyeolCard = toggleEl?.closest('.mb-3');
+    const mainType = getCurrentDraftMainType();
+    const attendanceTargetType = isApprovalAttendanceJeongyeolTargetType(mainType);
+    if (jeongyeolCard) {
+        jeongyeolCard.classList.toggle('hidden', !isApprovalJeongyeolFeatureEnabled() || !attendanceTargetType);
+    }
     if (!isApprovalJeongyeolFeatureEnabled()) {
         if (toggleEl) {
             toggleEl.checked = false;
@@ -1850,7 +1890,19 @@ function updateJeongyeolUi() {
         applyApprovalRuntimeProfileUi();
         return;
     }
-    const mainType = getCurrentDraftMainType();
+    if (!attendanceTargetType) {
+        if (toggleEl) {
+            toggleEl.checked = false;
+            toggleEl.disabled = true;
+        }
+        manualJeongyeolSelected = false;
+        manualJeongyeolToggleTouched = false;
+        if (hintEl) {
+            hintEl.textContent = '사무국장 전결은 근태 문서에서만 사용할 수 있습니다.';
+        }
+        applyJeongyeolLineDecision({ mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '', targetApprover: '' }, { showAlertOnMissing: false });
+        return;
+    }
     const amount = getCurrentDraftAmount();
     const options = { drafterEmpId: getCurrentDraftDrafterEmpId() };
     const autoDecision = getJeongyeolAutoDecision(mainType, amount, options);
@@ -1874,12 +1926,13 @@ function updateJeongyeolUi() {
     if (hintEl) {
         if (decision.applied) {
             hintEl.textContent = `적용중: ${decision.ruleLabel}`;
+        } else if (isApprovalMoneyRelatedType(mainType)) {
+            hintEl.textContent = '금액 관련 문서는 전결 대상이 아니며 이사장 결재가 필요합니다.';
         } else if (canSecretaryControlAuto && autoDecision?.ruleLabel) {
             hintEl.textContent = `자동 전결 가능: ${autoDecision.ruleLabel}`;
         } else {
             const hintParts = [];
             if (isApprovalAttendanceJeongyeolEnabled()) hintParts.push('근태');
-            if (getApprovalExpenseJeongyeolLimit() > 0) hintParts.push(`${formatMoney(getApprovalExpenseJeongyeolLimit())}원 이하 지출결의`);
             hintEl.textContent = hintParts.length > 0
                 ? `자동 전결 규정(${hintParts.join('/')})을 우선 적용합니다.`
                 : '자동 전결 규정이 없습니다. 필요 시 수동으로 전결을 선택하세요.';
@@ -3025,7 +3078,10 @@ function applySelectedApprovalTemplate() {
     if (currentCategory === '공문') {
         setApprovalEditorContent(sourceNoticeParts.publicBody || '');
         const subjectEl = document.getElementById('noticeSubject');
-        if (subjectEl) subjectEl.value = String(selected?.title || '');
+        if (subjectEl) {
+            subjectEl.value = String(selected?.title || '');
+            subjectEl.dataset.autoGenerated = '0';
+        }
         const receiverEl = document.getElementById('noticeReceiver');
         if (receiverEl && String(selected?.receiver || '').trim()) receiverEl.value = String(selected.receiver || '');
         const viaEl = document.getElementById('noticeVia');
@@ -3038,9 +3094,10 @@ function applySelectedApprovalTemplate() {
         }
     } else {
         setApprovalEditorContent(sourceNoticeParts.publicBody || '');
-        if (currentCategory === '일반품의') {
-            const proposalTitleEl = document.getElementById('proposalSubject');
-            if (proposalTitleEl) proposalTitleEl.value = String(selected?.title || '');
+        const proposalTitleEl = document.getElementById('proposalSubject');
+        if (proposalTitleEl) {
+            proposalTitleEl.value = String(selected?.title || '');
+            proposalTitleEl.dataset.autoGenerated = '0';
         }
     }
 
@@ -3413,6 +3470,8 @@ const ATTACHMENT_RULES = {
     allowedExt: ['pdf', 'png', 'jpg', 'jpeg']
 };
 
+const ATTACHMENT_DROP_ZONE_DEFAULT_TEXT = '여기로 파일을 끌어놓거나 위에서 선택하세요. 업로드는 PDF 또는 이미지(PNG, JPG, JPEG) 파일만 가능합니다.';
+
 function validateAttachments(fileList) {
     if (!fileList || fileList.length === 0) return { ok: true };
     const maxBytes = ATTACHMENT_RULES.maxSizeMB * 1024 * 1024;
@@ -3427,6 +3486,85 @@ function validateAttachments(fileList) {
         }
     }
     return { ok: true };
+}
+
+function buildAttachmentFileTransfer(files) {
+    const dataTransfer = new DataTransfer();
+    Array.from(files || []).forEach((file) => {
+        if (file) dataTransfer.items.add(file);
+    });
+    return dataTransfer;
+}
+
+function mergeAttachmentFiles(existingFiles, incomingFiles) {
+    const seen = new Set();
+    const dataTransfer = new DataTransfer();
+    [...Array.from(existingFiles || []), ...Array.from(incomingFiles || [])].forEach((file) => {
+        if (!file) return;
+        const dedupeKey = `${file.name || ''}::${file.size || 0}::${file.lastModified || 0}`;
+        if (seen.has(dedupeKey)) return;
+        seen.add(dedupeKey);
+        dataTransfer.items.add(file);
+    });
+    return dataTransfer.files;
+}
+
+function updateAttachmentDropZoneUi() {
+    const dropZone = document.getElementById('attachmentDropZone');
+    const textEl = document.getElementById('attachmentDropZoneText');
+    const input = document.getElementById('attachFile');
+    if (!dropZone || !textEl || !input) return;
+    const count = Array.from(input.files || []).length;
+    if (count > 0) {
+        textEl.textContent = `${count}개 파일이 첨부되었습니다. 파일을 더 끌어놓으면 기존 첨부에 추가됩니다.`;
+    } else {
+        textEl.textContent = ATTACHMENT_DROP_ZONE_DEFAULT_TEXT;
+    }
+}
+
+function setupAttachmentDropZone() {
+    const dropZone = document.getElementById('attachmentDropZone');
+    const input = document.getElementById('attachFile');
+    if (!dropZone || !input) return;
+
+    const stopEvent = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    };
+    const activate = (event) => {
+        stopEvent(event);
+        dropZone.classList.add('is-dragover');
+    };
+    const deactivate = (event) => {
+        stopEvent(event);
+        const relatedTarget = event.relatedTarget;
+        if (!relatedTarget || !dropZone.contains(relatedTarget)) {
+            dropZone.classList.remove('is-dragover');
+        }
+    };
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, activate);
+    });
+    ['dragleave', 'dragend'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, deactivate);
+    });
+    dropZone.addEventListener('drop', (event) => {
+        stopEvent(event);
+        dropZone.classList.remove('is-dragover');
+        const droppedFiles = Array.from(event.dataTransfer?.files || []);
+        if (!droppedFiles.length) return;
+        const mergedFiles = mergeAttachmentFiles(input.files, droppedFiles);
+        const validation = validateAttachments(Array.from(mergedFiles || []));
+        if (!validation.ok) {
+            showAlert(validation.message);
+            return;
+        }
+        input.files = buildAttachmentFileTransfer(mergedFiles).files;
+        updateFileList();
+    });
+
+    updateAttachmentDropZoneUi();
 }
 
 window.onload = async function() {
@@ -3457,6 +3595,7 @@ window.onload = async function() {
             if (bodyEl) bodyEl.innerHTML = '<div class="d-flex align-items-center justify-content-center text-muted" style="min-height: 360px;">미리볼 파일을 불러오는 중입니다.</div>';
         });
     }
+    setupAttachmentDropZone();
     syncDelegationAvailabilityUi();
     
     const stored = localStorage.getItem('erp_user');
@@ -3637,6 +3776,7 @@ function handlePayrollMonthChange() {
         summary.className = "small text-muted";
         summary.textContent = "연월이 변경되었습니다. 급여대장을 다시 불러와주세요.";
     }
+    syncApprovalTitleInput('지출결의');
 }
 
 function handleExpenseSubTypeChange() {
@@ -3660,6 +3800,7 @@ function handleExpenseSubTypeChange() {
         if (amountLabel) amountLabel.innerText = "금액 (원)";
         if (amountInput) amountInput.placeholder = "0";
         updateJeongyeolUi();
+        syncApprovalTitleInput('지출결의');
         return;
     }
 
@@ -3668,6 +3809,7 @@ function handleExpenseSubTypeChange() {
         if (divMonth) divMonth.classList.add("hidden");
         if (divLoad) divLoad.classList.add("hidden");
         updateJeongyeolUi();
+        syncApprovalTitleInput('지출결의');
         return showAlert("급여 연동은 관리자/회계 권한에서만 사용할 수 있습니다.");
     }
 
@@ -3690,6 +3832,7 @@ function handleExpenseSubTypeChange() {
         setApprovalEditorContent(`${ymLabel} 급여 지급을 위해 지출결의를 상신합니다.`);
     }
     updateJeongyeolUi();
+    syncApprovalTitleInput('지출결의');
 }
 
 async function loadSalaryLedgerForExpense() {
@@ -3909,6 +4052,125 @@ function switchTab(tab) {
     else { document.getElementById('view-history').classList.remove('hidden'); document.getElementById('tab3').classList.add('active'); loadHistoryList(); }
 }
 
+function getApprovalTitleInputElement(mainType) {
+    return String(mainType || '').trim() === '공문'
+        ? document.getElementById('noticeSubject')
+        : document.getElementById('proposalSubject');
+} // End of getApprovalTitleInputElement
+
+function markApprovalTitleInputDirty(inputKind) {
+    const safeInputKind = String(inputKind || '').trim();
+    const inputEl = safeInputKind === 'notice'
+        ? document.getElementById('noticeSubject')
+        : document.getElementById('proposalSubject');
+    if (inputEl) inputEl.dataset.autoGenerated = '0';
+} // End of markApprovalTitleInputDirty
+
+function getApprovalTitleFieldConfig(mainType) {
+    const safeType = String(mainType || '').trim();
+    if (safeType === '일반품의') {
+        return {
+            label: '품의 제목',
+            placeholder: '예: 2026년 2월 사무국 운영비 집행 건'
+        };
+    }
+    if (isApprovalProposalLikeType(safeType)) {
+        const subjectConfig = getApprovalSubjectConfig(safeType);
+        return {
+            label: subjectConfig.label,
+            placeholder: subjectConfig.placeholder
+        };
+    }
+    return {
+        label: '제목',
+        placeholder: safeType ? `예: ${safeType}` : '예: 문서 제목'
+    };
+} // End of getApprovalTitleFieldConfig
+
+function buildApprovalGeneratedTitle(mainType) {
+    const safeType = String(mainType || '').trim();
+    if (!safeType) return '';
+    if (safeType === '휴가') {
+        const leaveLabel = getApprovalCurrentLeaveTypeLabel() || '휴가';
+        const leaveDays = Number(document.getElementById('leaveDaysCalc')?.value || 0);
+        const leavePeriodLabel = leaveDays > 0 ? buildLeavePeriodLabelForDraft(leaveLabel, leaveDays) : '';
+        return leavePeriodLabel ? `${leaveLabel} 신청 (${leavePeriodLabel})` : `${leaveLabel} 신청`;
+    }
+    if (isApprovalOvertimeType(safeType)) {
+        const overtimeSnapshot = buildApprovalOvertimeSnapshot(safeType);
+        if (overtimeSnapshot.work_date && overtimeSnapshot.total_hours > 0) {
+            return `${safeType} 신청 (${overtimeSnapshot.work_date} · ${overtimeSnapshot.total_hours}시간)`;
+        }
+        return `${safeType} 신청`;
+    }
+    if (safeType === '부양가족') {
+        const mode = document.querySelector('input[name="depOption"]:checked')?.value || 'add';
+        return `부양가족 ${mode === 'add' ? '등재' : '해제'} 신청`;
+    }
+    if (safeType === '지출결의') {
+        const expenseMode = String(document.getElementById('expenseSubType')?.value || '일반').trim();
+        const payrollMonthValue = String(document.getElementById('payrollMonth')?.value || '').trim();
+        if (expenseMode === '급여' && payrollMonthValue) {
+            return `급여 지출결의 (${payrollMonthValue})`;
+        }
+        return '지출결의';
+    }
+    if (safeType === '공문') {
+        return String(document.getElementById('noticeSubject')?.value || '').trim();
+    }
+    if (safeType === '일반품의' || isApprovalProposalLikeType(safeType)) {
+        return String(document.getElementById('proposalSubject')?.value || '').trim();
+    }
+    return safeType;
+} // End of buildApprovalGeneratedTitle
+
+function syncApprovalTitleInput(mainType, options = {}) {
+    const safeType = String(mainType || '').trim();
+    const force = options && options.force === true;
+    const titleInput = getApprovalTitleInputElement(safeType);
+    const proposalLabel = document.getElementById('proposalSubjectLabel');
+    const proposalInput = document.getElementById('proposalSubject');
+
+    if (safeType && safeType !== '공문') {
+        const fieldConfig = getApprovalTitleFieldConfig(safeType);
+        if (proposalLabel) proposalLabel.textContent = fieldConfig.label;
+        if (proposalInput) proposalInput.placeholder = fieldConfig.placeholder;
+    }
+    if (!titleInput) return;
+
+    const currentValue = String(titleInput.value || '').trim();
+    const isAutoGenerated = titleInput.dataset.autoGenerated === '1';
+    const generatedTitle = String(buildApprovalGeneratedTitle(safeType) || '').trim();
+    const shouldApplyGenerated = safeType && safeType !== '공문' && !(safeType === '일반품의' || isApprovalProposalLikeType(safeType));
+
+    if (!shouldApplyGenerated) {
+        if (force) {
+            titleInput.value = '';
+            titleInput.dataset.autoGenerated = '0';
+            return;
+        }
+        return;
+    }
+
+    if (force || !currentValue || isAutoGenerated) {
+        titleInput.value = generatedTitle;
+        titleInput.dataset.autoGenerated = generatedTitle ? '1' : '0';
+    }
+} // End of syncApprovalTitleInput
+
+function getApprovalResolvedTitle(mainType, generatedTitle) {
+    const safeType = String(mainType || '').trim();
+    const titleInput = getApprovalTitleInputElement(safeType);
+    const currentValue = String(titleInput?.value || '').trim();
+    const safeGeneratedTitle = String(generatedTitle || '').trim();
+
+    if (!currentValue) return safeGeneratedTitle || safeType;
+    if (titleInput && titleInput.dataset.autoGenerated === '1' && safeGeneratedTitle) {
+        return safeGeneratedTitle;
+    }
+    return currentValue;
+} // End of getApprovalResolvedTitle
+
 // [수정] 카테고리 변경 핸들러 (반차 UI 제어 포함)
 // [수정] 카테고리 변경 핸들러 (관련 문서 UI 제어 추가)
 function handleCategoryChange() {
@@ -3978,6 +4240,7 @@ function handleCategoryChange() {
         if (isApprovalWorkforceLiteProfile()) renderApprovalLeaveTypeOptions();
         divLeave.classList.remove("hidden");
         divLeaveType.classList.remove("hidden");
+        divProposalSubject.classList.remove("hidden");
         divAmt.classList.add("hidden");
         const currentDesc = String(getApprovalEditorContent() || '').trim();
         if (!currentDesc || isApprovalAutoGeneratedTemplateContent(currentDesc)) {
@@ -3987,6 +4250,7 @@ function handleCategoryChange() {
     } 
     else if (isApprovalOvertimeType(type)) {
         divOvertime.classList.remove("hidden");
+        divProposalSubject.classList.remove("hidden");
         divAmt.classList.add("hidden");
         btnAppDescPreview.classList.remove("hidden");
         appDescHtmlHelp.classList.remove("hidden");
@@ -4008,6 +4272,7 @@ function handleCategoryChange() {
     }
     else if (type === '부양가족') {
         divDep.classList.remove("hidden");
+        divProposalSubject.classList.remove("hidden");
         amtLabel.innerText = "변동 인원 (명)";
         amountInput.placeholder = "예: 1";
         amountInput.value = "1";
@@ -4016,6 +4281,7 @@ function handleCategoryChange() {
     }
     else if (type === '지출결의') { // [New] 지출결의일 때 관련문서 UI 오픈
         divRel.classList.remove("hidden");
+        divProposalSubject.classList.remove("hidden");
         if (canUseSalaryExpense()) {
             divSalaryExpense.classList.remove("hidden");
             handleExpenseSubTypeChange();
@@ -4076,10 +4342,12 @@ function handleCategoryChange() {
         }
     }
     else {
+        divProposalSubject.classList.remove("hidden");
         const currentDesc = String(getApprovalEditorContent() || '').trim();
         if (isApprovalAutoGeneratedTemplateContent(currentDesc)) setApprovalEditorContent("");
     }
     syncApprovalAttachmentHelp(type);
+    syncApprovalTitleInput(type, { force: typeChanged });
     applyDefaultApprovalLineTemplate();
     setApprovalEditorForCategory(type);
     updateJeongyeolUi();
@@ -4091,14 +4359,14 @@ function openAppDescPreview() {
     const rawContent = getApprovalEditorContent();
     if (!rawContent.trim()) return showAlert("본문 내용을 먼저 입력하세요.");
 
-    const proposalTitle = document.getElementById("proposalSubject")?.value?.trim() || '';
+    const previewTitle = getApprovalResolvedTitle(type, buildApprovalGeneratedTitle(type));
     const modalTitle = document.getElementById("appDescPreviewTitle");
     const modalMeta = document.getElementById("appDescPreviewMeta");
     const modalBody = document.getElementById("appDescPreviewBody");
     if (!modalTitle || !modalMeta || !modalBody) return;
 
     const allowHtml = isApprovalHtmlEditorType(type);
-    modalTitle.textContent = proposalTitle || `${type || '문서'} 본문 미리보기`;
+    modalTitle.textContent = previewTitle || `${type || '문서'} 본문 미리보기`;
     modalMeta.textContent = allowHtml
         ? `${type || '문서'} HTML 렌더링 미리보기`
         : '줄바꿈 기준 본문 미리보기';
@@ -4112,6 +4380,7 @@ function updateDepTemplate() {
     const mode = document.querySelector('input[name="depOption"]:checked').value;
     const actionText = mode === 'add' ? "등재" : "해제";
     setApprovalEditorContent(`[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`);
+    syncApprovalTitleInput('부양가족');
 }
 
 function getApprovalLeaveTargetEmpInfo() {
@@ -4662,7 +4931,10 @@ async function buildJeongyeolMonthlyDraft() {
     handleCategoryChange();
 
     const proposalSubjectEl = document.getElementById('proposalSubject');
-    if (proposalSubjectEl) proposalSubjectEl.value = reportTitle;
+    if (proposalSubjectEl) {
+        proposalSubjectEl.value = reportTitle;
+        proposalSubjectEl.dataset.autoGenerated = '0';
+    }
     const amountEl = document.getElementById('appAmount');
     if (amountEl) amountEl.value = String(Math.round(expenseTotal));
     setApprovalEditorContent(content);
@@ -4860,7 +5132,7 @@ async function handleDraftSubmit(e) {
         }
         finalAmt = days;
         const leavePeriodLabel = buildLeavePeriodLabelForDraft(lType, days);
-        title = leavePeriodLabel ? `${lType} 신청 (${leavePeriodLabel})` : `${lType} 신청`;
+        title = getApprovalResolvedTitle(mainType, leavePeriodLabel ? `${lType} 신청 (${leavePeriodLabel})` : `${lType} 신청`);
     } 
     else if (isApprovalOvertimeType(mainType)) {
         attendanceSnapshotPayload = buildApprovalOvertimeSnapshot(mainType);
@@ -4870,7 +5142,7 @@ async function handleDraftSubmit(e) {
         }
         if (!(attendanceSnapshotPayload.total_hours > 0)) return showAlert("인정 시간을 확인하세요.");
         finalAmt = attendanceSnapshotPayload.total_hours;
-        title = `시간외근로 신청 (${attendanceSnapshotPayload.work_date} · ${attendanceSnapshotPayload.total_hours}시간)`;
+        title = getApprovalResolvedTitle(mainType, `시간외근로 신청 (${attendanceSnapshotPayload.work_date} · ${attendanceSnapshotPayload.total_hours}시간)`);
     }
     else if (mainType === '부양가족') {
         const mode = document.querySelector('input[name="depOption"]:checked').value; // add or remove
@@ -4881,7 +5153,7 @@ async function handleDraftSubmit(e) {
         if(!isProxy && document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류 필수입니다.");
         
         if (mode === 'remove') finalAmt = -Math.abs(finalAmt);
-        title = `부양가족 ${modeTxt} 신청`;
+        title = getApprovalResolvedTitle(mainType, `부양가족 ${modeTxt} 신청`);
     }
 
     else if (mainType === '지출결의') {
@@ -4893,7 +5165,7 @@ async function handleDraftSubmit(e) {
             }
 
             subType = '지출결의(급여)';
-            title = `급여 지출결의 (${payrollMonth})`;
+            title = getApprovalResolvedTitle(mainType, `급여 지출결의 (${payrollMonth})`);
             finalAmt = Number(document.getElementById("appAmount").value || 0);
             if (finalAmt <= 0) return showAlert("실지급 합계 금액을 확인해주세요.");
 
@@ -4903,7 +5175,7 @@ async function handleDraftSubmit(e) {
                 appendDesc += `\n\n[급여대장 연동] ${ymLabel} / 대상 ${salaryExpenseState.empCount}명 / 지급총액 ${formatMoney(salaryExpenseState.payTotal)}원 / 공제총액 ${formatMoney(salaryExpenseState.dedTotal)}원 / 실지급총액 ${formatMoney(salaryExpenseState.netTotal)}원`;
             }
         } else {
-            title = '지출결의';
+            title = getApprovalResolvedTitle(mainType, '지출결의');
         }
     }
     else if (mainType === '공문') {
@@ -4912,14 +5184,14 @@ async function handleDraftSubmit(e) {
         receiver = document.getElementById("noticeReceiver").value.trim();
         via = document.getElementById("noticeVia").value.trim();
         noticeApprovalMemo = String(document.getElementById("noticeApprovalMemo")?.value || '').trim();
-        title = subject;
+        title = getApprovalResolvedTitle(mainType, subject);
         subType = '공문';
         finalAmt = 0;
     }
     else if (mainType === '일반품의') {
         const proposalTitle = document.getElementById("proposalSubject").value.trim();
         if (!proposalTitle) return showAlert("일반품의 제목을 입력하세요.");
-        title = proposalTitle;
+        title = getApprovalResolvedTitle(mainType, proposalTitle);
         subType = '일반품의';
         if (proposalTitle.startsWith(`${JEONGYEOL_MONTHLY_TITLE_PREFIX} (`)) {
             subType = JEONGYEOL_MONTHLY_DOC_TYPE;
@@ -4929,7 +5201,7 @@ async function handleDraftSubmit(e) {
         const proposalTitle = document.getElementById("proposalSubject").value.trim();
         const subjectConfig = getApprovalSubjectConfig(mainType);
         if (!proposalTitle) return showAlert(`${subjectConfig.label}을 입력하세요.`);
-        title = proposalTitle;
+        title = getApprovalResolvedTitle(mainType, proposalTitle);
         subType = mainType;
         if (mainType === '구매요청') {
             finalAmt = Number(document.getElementById("appAmount").value || 0);
@@ -4939,13 +5211,16 @@ async function handleDraftSubmit(e) {
         }
     }
     else {
-        title = `${mainType}`;
+        title = getApprovalResolvedTitle(mainType, `${mainType}`);
     }
 
     jeongyeolDecision = getJeongyeolDecision(mainType, finalAmt, { drafterEmpId: drafterId });
     const jeongyeolApplyResult = applyJeongyeolLineDecision(jeongyeolDecision, { showAlertOnMissing: true });
     if (!jeongyeolApplyResult.ok) return;
     if (finalApprovers.length === 0) return showAlert("결재선을 지정해주세요.");
+    if (isApprovalMoneyRelatedType(mainType) && !hasChairmanInApprovalLine(finalApprovers)) {
+        return showAlert('금액 관련 문서는 이사장 결재가 반드시 포함되어야 합니다.');
+    }
     if (jeongyeolDecision.applied) {
         appendDesc += `\n\n[전결 적용] ${jeongyeolDecision.ruleLabel}`;
     }
@@ -5767,7 +6042,11 @@ function applyHistoryFilters(list) {
         return mapHistoryProcessGroup(doc) === historyProcessFilter;
     });
     if (!key) return byProcess;
-    return byProcess.filter(d => (d.title || '').toLowerCase().includes(key));
+    return byProcess.filter(d => {
+        const title = String(d?.title || '').toLowerCase();
+        const content = String(d?.content || '').toLowerCase();
+        return title.includes(key) || content.includes(key);
+    });
 }
 
 function renderHistoryFilterMeta() {
@@ -6003,8 +6282,11 @@ function renderDocs(target, list, isTodo) {
 }
 function updateFileList() {
     const area = document.getElementById("fileListArea");
+    if (!area) return;
     area.innerHTML = "";
-    Array.from(document.getElementById("attachFile").files).forEach((f, idx) => {
+    const input = document.getElementById("attachFile");
+    const files = Array.from(input?.files || []);
+    files.forEach((f, idx) => {
         const item = document.createElement("div");
         item.className = "file-item";
         const canPreview = canPreviewAttachment(f.name);
@@ -6016,6 +6298,7 @@ function updateFileList() {
         `;
         area.appendChild(item);
     });
+    updateAttachmentDropZoneUi();
 }
 
 function openSignedDoc(encodedUrl) {
@@ -6610,6 +6893,7 @@ function openRelSearch() {
 // 2. 검색 실행 (완료/실물결재완료된 '일반품의' & 같은 부서)
 async function runRelSearch() {
     const key = document.getElementById("relKeyword").value.trim();
+    const loweredKey = key.toLowerCase();
     const listEl = document.getElementById("relResultList");
     listEl.innerHTML = '<div class="p-3 text-center">검색 중...</div>';
 
@@ -6626,7 +6910,7 @@ async function runRelSearch() {
 
     if (key) {
         const safeKey = sanitizeOrKeyword(key);
-        if (safeKey) query = query.or(`title.ilike.%${safeKey}%,drafter_name.ilike.%${safeKey}%`);
+        if (safeKey) query = query.or(`title.ilike.%${safeKey}%,content.ilike.%${safeKey}%,drafter_name.ilike.%${safeKey}%`);
     }
 
     const { data, error } = await query;
@@ -6641,7 +6925,13 @@ async function runRelSearch() {
     const filtered = data.filter(doc => {
         const drafter = allUsers.find(u => u.emp_id === doc.drafter_id);
         // 작성자가 없거나(퇴사), 부서가 같거나, 내가 관리자면 통과
-        return !drafter || drafter.department === myDept || (myInfo.role === 'admin' || myInfo.role === 'admin_all');
+        const withinDept = !drafter || drafter.department === myDept || (myInfo.role === 'admin' || myInfo.role === 'admin_all');
+        if (!withinDept) return false;
+        if (!loweredKey) return true;
+        const title = String(doc?.title || '').toLowerCase();
+        const content = String(doc?.content || '').toLowerCase();
+        const drafterName = String(doc?.drafter_name || '').toLowerCase();
+        return title.includes(loweredKey) || content.includes(loweredKey) || drafterName.includes(loweredKey);
     });
 
     if (filtered.length === 0) {

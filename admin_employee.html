@@ -1230,11 +1230,6 @@ function buildWorkforceLiteApprovalSettingsMarkup() {
             <label class="form-check-label" for="set_secretary_attendance_enabled">근태 자동전결 포함</label>
           </div>
         </div>
-        <div class="col-12">
-          <label class="small text-muted fw-bold mb-1" for="set_secretary_expense_limit">지출결의 자동전결 한도 (원)</label>
-          <input type="number" id="set_secretary_expense_limit" class="form-control form-control-sm" min="0" step="1000" placeholder="예: 300000">
-          <div class="small text-muted mt-1">한도를 0으로 저장하면 지출결의 자동전결을 사용하지 않습니다.</div>
-        </div>
         <div class="col-12"><hr class="my-2"></div>
         <div class="col-12">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1421,11 +1416,9 @@ function syncHrProfileCompanySettingsUi() {
     });
     const enabledToggle = document.getElementById('set_secretary_jeongyeol_enabled');
     const attendanceToggle = document.getElementById('set_secretary_attendance_enabled');
-    const expenseLimitInput = document.getElementById('set_secretary_expense_limit');
-    if (enabledToggle && attendanceToggle && expenseLimitInput) {
+    if (enabledToggle && attendanceToggle) {
         enabledToggle.checked = parseAdminEmployeeBoolean(companyInfo['approval_secretary_jeongyeol_enabled'], true);
         attendanceToggle.checked = parseAdminEmployeeBoolean(companyInfo['approval_secretary_attendance_enabled'], true);
-        expenseLimitInput.value = Number(companyInfo['approval_secretary_expense_limit'] || 300000);
     }
     hrLeaveTypeCatalog = parseHrLeaveTypeCatalog(companyInfo[HR_WORKFORCE_LITE_LEAVE_CONFIG_KEY]);
     renderWorkforceLiteLeaveTypeRows();
@@ -1468,11 +1461,9 @@ function collectWorkforceLiteApprovalRuleCatalogFromUi() {
 function syncSecretaryJeongyeolFieldState() {
     const enabledToggle = document.getElementById('set_secretary_jeongyeol_enabled');
     const attendanceToggle = document.getElementById('set_secretary_attendance_enabled');
-    const expenseLimitInput = document.getElementById('set_secretary_expense_limit');
-    if (!enabledToggle || !attendanceToggle || !expenseLimitInput) return;
+    if (!enabledToggle || !attendanceToggle) return;
     const isEnabled = !!enabledToggle.checked;
     attendanceToggle.disabled = !isEnabled;
-    expenseLimitInput.disabled = !isEnabled;
 }
 
 function applyHrRuntimeProfileUi() {
@@ -2064,11 +2055,6 @@ async function saveSettings() {
                 coop_id: coopId,
                 key: 'approval_secretary_attendance_enabled',
                 value: document.getElementById('set_secretary_attendance_enabled')?.checked ? 'true' : 'false'
-            });
-            cUpdates.push({
-                coop_id: coopId,
-                key: 'approval_secretary_expense_limit',
-                value: String(Math.max(0, Number(document.getElementById('set_secretary_expense_limit')?.value || 0)))
             });
             cUpdates.push({
                 coop_id: coopId,

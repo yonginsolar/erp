@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
 Version: v1.0.30
-Change: 2026-03-16 - member_admin 사이드바에서 선거 관리자 메뉴 제거.
+Change: 2026-03-17 - member_admin 사이드바에 선거관리 허브 메뉴 복구.
 -->
 <html lang="ko">
 <head>
@@ -106,6 +106,9 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 </a>
 <a class="nav-link" onclick="switchTab('deposit')" id="nav-deposit" style="cursor:pointer;">
 <i class="bi bi-cash-coin"></i> 입금 매칭
+</a>
+<a class="nav-link" href="vote_hub.html" id="nav-vote-hub" style="cursor:pointer;">
+<i class="bi bi-check2-square"></i> 선거관리
 </a>
 
 <div class="menu-category" id="siteOpsCategory">운영 관리</div>
@@ -4901,6 +4904,7 @@ return true;
 function applyAdminMemberRuntimeUi(runtime) {
 g_adminMemberRuntime = runtime && typeof runtime === 'object' ? runtime : null;
 const memberAdminEnabled = isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
+const voteEnabled = memberAdminEnabled && isAdminMemberRuntimeModuleEnabled('vote');
 const siteAdminEnabled = isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'member_admin';
 const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
 [
@@ -4910,6 +4914,7 @@ const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
 ['nav-funds-manage', memberAdminEnabled],
 ['nav-applications', memberAdminEnabled],
 ['nav-deposit', memberAdminEnabled],
+['nav-vote-hub', voteEnabled],
 ['siteOpsCategory', siteAdminEnabled],
 ['nav-notices', siteAdminEnabled],
 ['nav-official-sign', siteAdminEnabled],
