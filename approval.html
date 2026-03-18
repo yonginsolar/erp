@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.46 | Change: 2026-03-18 - 이사장 문서 보관함에서 조합 전체 문서를 조회하도록 조정. -->
+<!-- Version: v1.1.47 | Change: 2026-03-18 - 이사장이 실물결재대기 문서를 전자 승인/반려할 수 있도록 조정. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.45 | approval.html');</script>
+  <script>console.log('[Version] v1.1.47 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -6361,7 +6361,11 @@ function renderDocs(target, list, isTodo) {
                 todoActions.push(`<button class="btn btn-sm btn-outline-primary me-1" onclick="openRelView(${titleDocId})">👁️ 바로보기</button>`);
             }
             if (String(doc?.status || '') === '실물결재대기' || doc?._physical_pending) {
-                btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<span class="badge bg-warning text-dark">실물결재 대기</span><div class="small text-muted mt-2">실물 서명 후 사무국장이 서명본을 첨부하면 완료됩니다.</div></div>`;
+                if (isChairmanApprovalUser() && canPerform('approval.process')) {
+                    btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<span class="badge bg-warning text-dark me-1">실물결재 대기</span><button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">전자 승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">전자 반려</button><div class="small text-muted mt-2">이사장은 실물결재대기 문서를 이 화면에서 전자 승인 또는 반려할 수 있습니다.</div></div>`;
+                } else {
+                    btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<span class="badge bg-warning text-dark">실물결재 대기</span><div class="small text-muted mt-2">실물 서명 후 사무국장이 서명본을 첨부하면 완료됩니다.</div></div>`;
+                }
             } else {
                 btnHtml = `<div class="mt-2 text-end">${delegatedBadge}${todoActions.join('')}<button class="btn btn-sm btn-success me-1" onclick="procDoc(${doc.id},'승인')">승인</button><button class="btn btn-sm btn-danger" onclick="procDoc(${doc.id},'반려')">반려</button></div>`;
             }

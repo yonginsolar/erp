@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.9 -->
+<!-- Version: v1.0.10 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.9 | index.html');</script>
+  <script>console.log('[Version] v1.0.10 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -51,7 +51,7 @@
     <div id="loginForm" class="hidden">
       <p class="text-muted mb-4 small">
         등록된 이메일로 간편하게 로그인하세요.<br>
-        (링크 클릭 시 자동 접속)
+        메일로 받은 인증코드를 이 화면에서 바로 입력하면 됩니다.
       </p>
 
       <div class="mb-3 text-start">
@@ -61,8 +61,17 @@
       </div>
 
       <button class="btn btn-primary w-100 py-2" id="btnSend" onclick="sendMagicLink()">
-        📧 로그인 링크 받기
+        📧 인증코드 받기
       </button>
+
+      <div id="otpArea" class="hidden mt-3 text-start">
+        <label class="form-label">이메일 인증코드</label>
+        <div class="input-group">
+          <input type="text" class="form-control text-center" id="otpInput" placeholder="메일로 받은 인증코드" inputmode="numeric" autocomplete="one-time-code" onkeyup="if(event.key==='Enter') verifyEmailOtp()">
+          <button class="btn btn-outline-primary" type="button" id="btnVerifyOtp" onclick="verifyEmailOtp()">코드 확인</button>
+        </div>
+        <div class="text-muted small mt-2">같은 브라우저에서 코드를 입력하면 바로 로그인됩니다.</div>
+      </div>
 
       <button class="btn btn-kakao w-100 py-2 mt-2" onclick="startKakaoLogin()">
         💬 카카오로 로그인
@@ -247,7 +256,6 @@ const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const ERP_BASE_URL = new URL('./', window.location.href);
-const REDIRECT_URL = new URL('index.html', ERP_BASE_URL).href;
 const SUPABASE_PROJECT_REF = 'ifdqlwxgqgsvnawmhlfc';
 const ERP_SESSION_EXPIRED_NOTICE_KEY = 'erp_session_expired_notice_v1';
 const MAGICLINK_RATE_KEY = 'erp_magiclink_rate_v1';
@@ -266,6 +274,7 @@ let suppressSessionExpiredHandling = false;
 let loginFormOpenedAt = Date.now();
 let magicLinkCooldownTimer = null;
 let kakaoLoginInFlight = false;
+let pendingOtpEmail = '';
 
 function getSupabaseAuthStorageKeys() {
     const prefix = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
@@ -337,7 +346,7 @@ function applyMagicLinkCooldown() {
         const remainMs = Math.max(0, Number(state.cooldown_until || 0) - Date.now());
         if (remainMs <= 0) {
             btn.disabled = false;
-            btn.innerText = '📧 로그인 링크 받기';
+            btn.innerText = '📧 인증코드 받기';
             updateLoginGuardHint('');
             return false;
         }
@@ -929,6 +938,7 @@ async function sendMagicLink() {
     const email = String(document.getElementById('emailInput').value || '').trim().toLowerCase();
     const btn = document.getElementById('btnSend');
     const msg = document.getElementById('statusMsg');
+    const otpArea = document.getElementById('otpArea');
     const guard = evaluateMagicLinkGuard(email);
     if (!guard.ok) {
         applyMagicLinkCooldown();
@@ -936,6 +946,10 @@ async function sendMagicLink() {
     }
 
     updateLoginGuardHint('');
+    if (msg) {
+        msg.style.display = 'none';
+        msg.textContent = '';
+    }
     btn.disabled = true; btn.innerText = "전송 중...";
     try {
         const { rows, error: employeeError } = await findRegisteredEmployeeByEmail(email);
@@ -951,7 +965,12 @@ async function sendMagicLink() {
             return;
         }
 
-        const { error } = await _supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: REDIRECT_URL } });
+        const { error } = await _supabase.auth.signInWithOtp({
+            email,
+            options: {
+                shouldCreateUser: true
+            }
+        });
         if (error) {
             recordMagicLinkAttempt(email, false);
             showAlert("전송 실패: " + error.message);
@@ -959,24 +978,66 @@ async function sendMagicLink() {
         }
 
         recordMagicLinkAttempt(email, true);
-        btn.classList.add("hidden");
-        msg.style.display = "block";
-        msg.textContent = "";
-        const strong = document.createElement('strong');
-        strong.textContent = "📩 전송 완료!";
-        msg.appendChild(strong);
-        msg.appendChild(document.createElement('br'));
-        msg.appendChild(document.createTextNode("이메일함에서 로그인 링크를 클릭하면 자동으로 접속됩니다."));
+        pendingOtpEmail = email;
+        if (otpArea) otpArea.classList.remove('hidden');
+        if (msg) {
+            msg.style.display = "block";
+            msg.textContent = "";
+            const strong = document.createElement('strong');
+            strong.textContent = "📩 전송 완료!";
+            msg.appendChild(strong);
+            msg.appendChild(document.createElement('br'));
+            msg.appendChild(document.createTextNode("메일로 받은 인증코드를 아래에 입력해 주세요."));
+        }
     } catch (error) {
         recordMagicLinkAttempt(email, false);
         showAlert("전송 실패: " + (error?.message || error));
     } finally {
-        if (!btn.classList.contains('hidden')) {
-            btn.disabled = false;
-            btn.innerText = "로그인 메일 전송";
-        }
+        btn.disabled = false;
+        btn.innerText = "📧 인증코드 받기";
     }
 } // End of sendMagicLink
+
+async function verifyEmailOtp() {
+    const email = String(pendingOtpEmail || document.getElementById('emailInput')?.value || '').trim().toLowerCase();
+    const token = String(document.getElementById('otpInput')?.value || '').trim();
+    const verifyBtn = document.getElementById('btnVerifyOtp');
+    if (!email) {
+        showAlert('먼저 이메일로 인증코드를 받아 주세요.');
+        return;
+    }
+    if (!token) {
+        showAlert('메일로 받은 인증코드를 입력해 주세요.');
+        return;
+    }
+
+    verifyBtn.disabled = true;
+    verifyBtn.innerText = '확인 중...';
+    try {
+        const { data, error } = await _supabase.auth.verifyOtp({
+            email,
+            token,
+            type: 'email'
+        });
+        if (error) {
+            showAlert('인증 실패: ' + error.message);
+            return;
+        }
+        const user = data?.user || (await _supabase.auth.getUser()).data?.user || null;
+        if (!user) {
+            showAlert('인증은 완료되었지만 세션을 확인하지 못했습니다. 다시 시도해 주세요.');
+            return;
+        }
+        sessionStorage.removeItem(ERP_SESSION_EXPIRED_NOTICE_KEY);
+        showScreen('loadingScreen');
+        await loadUserInfo(user);
+    } catch (error) {
+        showAlert('인증 실패: ' + (error?.message || error));
+    } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.innerText = '코드 확인';
+    }
+} // End of verifyEmailOtp
 
 async function startKakaoLogin() {
     if (kakaoLoginInFlight) return;

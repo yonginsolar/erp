@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.5 -->
+<!-- Version: v1.0.6 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.5 | officials_admin.html');</script>
+  <script>console.log('[Version] v1.0.6 | officials_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -376,37 +376,19 @@
       return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
     }
 
-    function canUseIntegratedSignatureAdmin() {
-      if (!isModuleEnabled(currentRuntime, 'site_admin')) return false;
-      const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
-      const canSiteAdmin = hasPermission(permissionSet, 'site.admin');
-      return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
-    }
-
     function updateSignatureManagementButton() {
       const button = document.getElementById('signatureManageBtn');
       if (!button) return;
-      const enabled = canUseStandaloneSignatureAdmin() || canUseIntegratedSignatureAdmin();
+      const enabled = canUseStandaloneSignatureAdmin();
       button.classList.toggle('d-none', !enabled);
       if (!enabled) return;
-      if (canUseIntegratedSignatureAdmin()) {
-        button.textContent = '서명 관리';
-        button.classList.remove('btn-outline-primary');
-        button.classList.add('btn-outline-secondary');
-        button.title = '조합원/홈페이지 관리에 연결된 통합 서명 관리 화면을 엽니다.';
-      } else {
-        button.textContent = '서명 관리';
-        button.classList.remove('btn-outline-secondary');
-        button.classList.add('btn-outline-primary');
-        button.title = '조합원 관리와 분리된 전용 서명 관리 화면을 엽니다.';
-      }
+      button.textContent = '서명 관리';
+      button.classList.remove('btn-outline-secondary');
+      button.classList.add('btn-outline-primary');
+      button.title = '임원 관리 전용 서명 관리 화면을 엽니다.';
     }
 
     function openSignatureManagement() {
-      if (canUseIntegratedSignatureAdmin()) {
-        location.href = 'admin_member.html?scope=site_admin&tab=official-sign';
-        return;
-      }
       if (canUseStandaloneSignatureAdmin()) {
         location.href = 'officials_signature_admin.html';
         return;

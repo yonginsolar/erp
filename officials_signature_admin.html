@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.0 -->
+<!-- Version: v1.0.1 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.0 | officials_signature_admin.html');</script>
+  <script>console.log('[Version] v1.0.1 | officials_signature_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -44,12 +44,11 @@
       <div class="toolbar mb-3">
         <div>
           <h1 class="h4 mb-1">임원·대의원·선관위원 서명 관리</h1>
-          <div class="helper">전자서명 모듈만 사용하는 조합도 여기서 서명 이미지를 바로 관리할 수 있습니다. 조합원/홈페이지 관리가 연결된 경우에는 기존 통합 탭으로도 이동할 수 있습니다.</div>
+          <div class="helper">임원 관리 전용 서명 화면입니다. 전자서명 모듈만 사용하는 조합도 여기서 서명 이미지를 바로 관리할 수 있습니다.</div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='index.html'">ERP 메인</button>
           <button class="btn btn-outline-secondary btn-sm" type="button" onclick="location.href='officials_admin.html'">임원 관리</button>
-          <button class="btn btn-outline-primary btn-sm d-none" id="integratedSignatureLinkBtn" type="button" onclick="location.href='admin_member.html?scope=site_admin&tab=official-sign'">통합 서명 관리 열기</button>
         </div>
       </div>
 
@@ -181,13 +180,6 @@
       return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
     }
 
-    function canOpenIntegratedSignatureAdmin() {
-      if (!isModuleEnabled(currentRuntime, 'site_admin')) return false;
-      const canMemberAdmin = hasPermission(permissionSet, 'member.admin');
-      const canSiteAdmin = hasPermission(permissionSet, 'site.admin');
-      return isAdminFallbackUser() || canMemberAdmin === true || canSiteAdmin === true;
-    }
-
     function categoryLabel(category) {
       const safe = String(category || '').toLowerCase();
       if (safe === 'delegate') return '대의원';
@@ -218,12 +210,6 @@
       if (!el) return;
       el.classList.add('d-none');
       el.textContent = '';
-    }
-
-    function updateIntegratedLinkVisibility() {
-      const btn = document.getElementById('integratedSignatureLinkBtn');
-      if (!btn) return;
-      btn.classList.toggle('d-none', !canOpenIntegratedSignatureAdmin());
     }
 
     async function loadOfficialSignatures() {
@@ -426,7 +412,7 @@
       currentRuntime = await loadRuntime();
       currentCoopId = await getMyCoopId();
 
-      const moduleEnabled = canManageStandaloneSignatures() || canOpenIntegratedSignatureAdmin();
+      const moduleEnabled = canManageStandaloneSignatures();
       if (!moduleEnabled) {
         showAlert('현재 조합에서는 서명 관리 화면을 사용할 수 없습니다.', 'warning');
         setTimeout(() => {
@@ -434,8 +420,6 @@
         }, 900);
         return false;
       }
-
-      updateIntegratedLinkVisibility();
       return true;
     }
 
