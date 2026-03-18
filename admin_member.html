@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.30
+Version: v1.0.35
 Change: 2026-03-17 - member_admin 사이드바에 선거관리 허브 메뉴 복구.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.30';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.35';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -918,15 +918,49 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 <div class="modal-header"><h5 class="modal-title fw-bold">엑셀 다운로드 옵션</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
 <div class="form-check mb-2">
-<input class="form-check-input" type="radio" name="excelOption" value="public" checked onchange="togglePwd(false)">
+<input class="form-check-input" type="radio" name="excelOption" value="public" checked onchange="syncExcelOptionState()">
 <label class="form-check-label">일반용 (기본 정보)</label>
 </div>
 <div class="form-check">
-<input class="form-check-input" type="radio" name="excelOption" value="secret" onchange="togglePwd(true)">
+<input class="form-check-input" type="radio" name="excelOption" value="secret" onchange="syncExcelOptionState()">
 <label class="form-check-label text-danger">보안용 (주민번호/계좌 포함)</label>
+</div>
+<div class="form-check mt-2">
+<input class="form-check-input" type="radio" name="excelOption" value="city-report" onchange="syncExcelOptionState()">
+<label class="form-check-label text-primary">시청 신고용 (출자 현황 중심)</label>
+</div>
+<div class="row g-2 mt-3">
+<div class="col-md-6" id="memberExportCutoffDateField">
+<label class="form-label small fw-bold" id="memberExportCutoffDateLabel">기준일</label>
+<input type="date" id="memberExportCutoffDate" class="form-control form-control-sm">
+</div>
+<div class="col-md-6 d-none" id="memberExportReportYearField">
+<label class="form-label small fw-bold">신고연도</label>
+<input type="number" id="memberExportReportYear" class="form-control form-control-sm" min="2000" max="9999" step="1" placeholder="예: 2025">
+<div class="form-text">입력한 연도의 12월 31일 기준으로 시청 신고용 명부를 계산합니다.</div>
+</div>
+<div class="col-md-6">
+<label class="form-label small fw-bold">출자 1좌 금액</label>
+<div class="input-group input-group-sm">
+<input type="number" id="memberExportShareUnitAmount" class="form-control" min="1" step="1" placeholder="예: 100000">
+<button class="btn btn-outline-secondary" type="button" onclick="saveMemberExportShareUnitSetting()">저장</button>
+</div>
+<div class="form-text">엑셀 다운로드 계산용 설정입니다. 관리 화면 표에는 표시하지 않습니다.</div>
+</div>
 </div>
 <div class="mt-3" id="pwdArea" style="display:none;">
 <input type="password" id="decryptKey" class="form-control form-control-sm" placeholder="암호화 비밀번호 입력">
+</div>
+<div class="border rounded-3 p-3 mt-3 bg-light">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+<label class="form-label small fw-bold mb-0">보안 엑셀 PIN 설정</label>
+<span id="memberExportPinStatus" class="badge bg-secondary">확인 중</span>
+</div>
+<div class="input-group input-group-sm">
+<input type="password" id="memberExportSecurePin" class="form-control" placeholder="새 PIN 4자리 이상">
+<button class="btn btn-outline-danger" type="button" onclick="saveMemberExportSecurePin()">PIN 저장</button>
+</div>
+<div class="form-text">보안용 엑셀 다운로드 시 조합별 PIN을 서버에서 검증합니다.</div>
 </div>
 </div>
 <div class="modal-footer"><button class="btn btn-success" onclick="downloadExcel()">다운로드</button></div>
@@ -2325,8 +2359,10 @@ let g_badges = []; // DB에서 불러온 뱃지 목록을 기억해둠
 let g_fund_page = 0; // [추가] 무한 스크롤 페이지 번호
 const PAGE_SIZE = 20; // [추가] 한 번에 불러올 개수
 
-    // [신규] 보안 엑셀 다운로드용 2차 인증 PIN (관리자가 입력해야 함)
-    const SECURE_PIN = "solar2025!";
+const MEMBER_EXPORT_SHARE_UNIT_KEY = 'member_export_share_unit_amount';
+const MEMBER_EXPORT_SECURE_PIN_MIN_LENGTH = 4;
+let g_memberExportSecurePinConfigured = false;
+let g_memberExportOrgName = '';
 
 // [신규] 차트 인스턴스 관리용 (중복 생성 방지)
 let g_charts = {
@@ -2526,8 +2562,428 @@ fetchMembers();
 }
 
 // 엑셀 다운로드 (보안/일반)
-function togglePwd(show) { document.getElementById('pwdArea').style.display = show ? 'block' : 'none'; }
-function openExcelModal() { new bootstrap.Modal(document.getElementById('excelModal')).show(); }
+function getSelectedExcelOption() {
+    return document.querySelector('input[name="excelOption"]:checked')?.value || 'public';
+} // End of getSelectedExcelOption
+
+function setMemberExportPinStatus(ready) {
+    g_memberExportSecurePinConfigured = !!ready;
+    const badge = document.getElementById('memberExportPinStatus');
+    if (!badge) return;
+    if (ready) {
+        badge.className = 'badge bg-success';
+        badge.textContent = '설정됨';
+        return;
+    }
+    badge.className = 'badge bg-secondary';
+    badge.textContent = '미설정';
+} // End of setMemberExportPinStatus
+
+function syncExcelOptionState() {
+    const selected = getSelectedExcelOption();
+    const isSecret = selected === 'secret';
+    const isCityReport = selected === 'city-report';
+    const pwdArea = document.getElementById('pwdArea');
+    const cutoffField = document.getElementById('memberExportCutoffDateField');
+    const reportYearField = document.getElementById('memberExportReportYearField');
+    if (pwdArea) pwdArea.style.display = isSecret ? 'block' : 'none';
+    if (cutoffField) cutoffField.classList.toggle('d-none', isCityReport);
+    if (reportYearField) reportYearField.classList.toggle('d-none', !isCityReport);
+} // End of syncExcelOptionState
+
+function togglePwd(show) {
+    const selected = getSelectedExcelOption();
+    if (selected === 'secret') {
+        syncExcelOptionState();
+        return;
+    }
+    const pwdArea = document.getElementById('pwdArea');
+    if (pwdArea) pwdArea.style.display = show ? 'block' : 'none';
+} // End of togglePwd
+
+function getTodayIsoDate() {
+    return new Date().toISOString().slice(0, 10);
+} // End of getTodayIsoDate
+
+function getCurrentYearText() {
+    return String(new Date().getFullYear());
+} // End of getCurrentYearText
+
+function normalizeMemberExportReportYear(value) {
+    const raw = String(value || '').trim();
+    if (!/^\d{4}$/.test(raw)) return '';
+    return raw;
+} // End of normalizeMemberExportReportYear
+
+function buildMemberExportCityReportCutoffDate(yearText) {
+    const safeYear = normalizeMemberExportReportYear(yearText);
+    if (!safeYear) return '';
+    return `${safeYear}-12-31`;
+} // End of buildMemberExportCityReportCutoffDate
+
+function getMemberExportCutoffDate() {
+    if (getSelectedExcelOption() === 'city-report') {
+        const reportYearInput = document.getElementById('memberExportReportYear');
+        return buildMemberExportCityReportCutoffDate(reportYearInput?.value);
+    }
+    const input = document.getElementById('memberExportCutoffDate');
+    return String(input?.value || '').trim();
+} // End of getMemberExportCutoffDate
+
+function formatMemberExportCutoffDate(dateText) {
+    const safe = String(dateText || '').trim();
+    if (!safe) return '-';
+    return safe.replace(/-/g, '.');
+} // End of formatMemberExportCutoffDate
+
+function normalizeMemberExportShareUnitAmount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return null;
+    return Math.round(numeric);
+} // End of normalizeMemberExportShareUnitAmount
+
+function formatMemberExportRatio(ratio) {
+    const numeric = Number(ratio);
+    if (!Number.isFinite(numeric)) return 0;
+    return Number(numeric.toFixed(2));
+} // End of formatMemberExportRatio
+
+function formatMemberExportShareCount(capitalAmount, shareUnitAmount) {
+    const capital = Number(capitalAmount || 0);
+    const unit = normalizeMemberExportShareUnitAmount(shareUnitAmount);
+    if (!unit) return '';
+    return Number((capital / unit).toFixed(3));
+} // End of formatMemberExportShareCount
+
+function formatMemberExportBirthDateText(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '-';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.replace(/-/g, '.') + '.';
+    if (/^\d{4}\.\d{2}\.\d{2}\.?$/.test(raw)) return raw.endsWith('.') ? raw : `${raw}.`;
+    return '-';
+} // End of formatMemberExportBirthDateText
+
+function formatMemberExportBirthDateFromRrnDisplay(rrnDisplay) {
+    const raw = String(rrnDisplay || '').trim();
+    const match = raw.match(/^(\d{2})(\d{2})(\d{2})-(\d)/);
+    if (!match) return '-';
+    const [, yy, mm, dd, centuryCode] = match;
+    const centuryMap = {
+        '1': '19',
+        '2': '19',
+        '5': '19',
+        '6': '19',
+        '3': '20',
+        '4': '20',
+        '7': '20',
+        '8': '20',
+        '9': '18',
+        '0': '18'
+    };
+    const century = centuryMap[centuryCode];
+    if (!century) return '-';
+    return `${century}${yy}.${mm}.${dd}.`;
+} // End of formatMemberExportBirthDateFromRrnDisplay
+
+function formatMemberExportAmountDisplay(value) {
+    const normalized = String(value ?? '').replace(/,/g, '').trim();
+    const amount = Number(normalized || 0);
+    if (!Number.isFinite(amount)) return '0';
+    return amount.toLocaleString('ko-KR');
+} // End of formatMemberExportAmountDisplay
+
+function formatMemberExportIdentityValue(record) {
+    const memberType = String(record?.member_type || '').trim();
+    if (memberType === '단체') {
+        return String(record?.corp_number || record?.business_number || '-').trim() || '-';
+    }
+    const birthDateText = formatMemberExportBirthDateText(record?.birth_date);
+    if (birthDateText !== '-') return birthDateText;
+    return formatMemberExportBirthDateFromRrnDisplay(record?.rrn_display);
+} // End of formatMemberExportIdentityValue
+
+function buildMemberExportWorksheet(exportType, rows, options = {}) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    if (exportType !== 'city-report') {
+        const ws = XLSX.utils.json_to_sheet(safeRows);
+        const wscols = Object.keys(safeRows[0] || {}).map(() => ({ wch: 16 }));
+        ws['!cols'] = wscols;
+        return ws;
+    }
+
+    const shareUnitAmount = normalizeMemberExportShareUnitAmount(options.shareUnitAmount) || 0;
+    const coopName = String(options.coopName || '').trim() || '협동조합';
+    const aoa = [
+        ['', '', `${coopName} 출자자 명부`],
+        [`* 1좌당 금액: ${shareUnitAmount.toLocaleString()}원`, '', '', '', '', '(단위: 좌, 원, %)'],
+        [],
+        ['연번', '성명(법인명)', '생년월일(법인등록번호)', '출자좌수', '출자금액', '비율']
+    ];
+
+    safeRows.forEach((row) => {
+        aoa.push([
+            row['연번'] || '',
+            row['성명(법인명)'] || '',
+            row['생년월일(법인등록번호)'] || '',
+            row['출자좌수'] || '',
+            formatMemberExportAmountDisplay(row['출자금액']),
+            row['비율'] || 0
+        ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [
+        { wch: 8 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 10 }
+    ];
+    ws['!merges'] = [
+        { s: { r: 0, c: 2 }, e: { r: 0, c: 5 } }
+    ];
+    return ws;
+} // End of buildMemberExportWorksheet
+
+async function loadMemberExportModalSettings() {
+    const cutoffInput = document.getElementById('memberExportCutoffDate');
+    const reportYearInput = document.getElementById('memberExportReportYear');
+    const shareUnitInput = document.getElementById('memberExportShareUnitAmount');
+    if (cutoffInput && !cutoffInput.value) cutoffInput.value = getTodayIsoDate();
+    if (reportYearInput && !reportYearInput.value) reportYearInput.value = getCurrentYearText();
+    if (shareUnitInput) shareUnitInput.value = '';
+    setMemberExportPinStatus(false);
+    g_memberExportOrgName = '';
+
+    try {
+        const { data: companyConfigs, error: shareError } = await scopeAdminTenant(
+            _supabase
+                .from('ref_company_info')
+                .select('key, value')
+                .in('key', [MEMBER_EXPORT_SHARE_UNIT_KEY, 'company_name', 'orgName'])
+        );
+        if (shareError) throw shareError;
+        const configMap = new Map((companyConfigs || []).map((row) => [String(row.key || '').trim(), row.value]));
+        if (shareUnitInput && configMap.get(MEMBER_EXPORT_SHARE_UNIT_KEY)) {
+            shareUnitInput.value = String(configMap.get(MEMBER_EXPORT_SHARE_UNIT_KEY));
+        }
+        g_memberExportOrgName = String(configMap.get('company_name') || configMap.get('orgName') || '').trim();
+    } catch (error) {
+        console.warn('member export share unit load failed:', error);
+    }
+
+    try {
+        const { data: pinReady, error: pinError } = await _supabase.rpc('member_export_secure_pin_status');
+        if (pinError) throw pinError;
+        setMemberExportPinStatus(!!pinReady);
+    } catch (error) {
+        console.warn('member export secure pin status failed:', error);
+        setMemberExportPinStatus(false);
+    }
+    syncExcelOptionState();
+} // End of loadMemberExportModalSettings
+
+async function saveMemberExportShareUnitSetting(options = {}) {
+    const silent = !!options.silent;
+    const input = document.getElementById('memberExportShareUnitAmount');
+    const normalized = normalizeMemberExportShareUnitAmount(input?.value);
+    if (!normalized) {
+        if (!silent) myAlert('출자 1좌 금액을 정확히 입력해주세요.', 'warning');
+        return false;
+    }
+    try {
+        const payload = await withAdminTenantPayload({ key: MEMBER_EXPORT_SHARE_UNIT_KEY, value: String(normalized) });
+        const { error } = await _supabase.from('ref_company_info').upsert(payload, { onConflict: 'coop_id,key' });
+        if (error) throw error;
+        if (input) input.value = String(normalized);
+        if (!silent) myAlert('출자 1좌 금액 설정이 저장되었습니다.');
+        return true;
+    } catch (error) {
+        if (!silent) myAlert('출자 1좌 금액 저장 실패: ' + error.message, 'error');
+        return false;
+    }
+} // End of saveMemberExportShareUnitSetting
+
+async function saveMemberExportSecurePin() {
+    const input = document.getElementById('memberExportSecurePin');
+    const pin = String(input?.value || '').trim();
+    if (pin.length < MEMBER_EXPORT_SECURE_PIN_MIN_LENGTH) {
+        myAlert(`PIN은 ${MEMBER_EXPORT_SECURE_PIN_MIN_LENGTH}자리 이상 입력해주세요.`, 'warning');
+        return false;
+    }
+    showLoading(true);
+    try {
+        const { error } = await _supabase.rpc('member_export_set_secure_pin', { p_pin: pin });
+        if (error) throw error;
+        setMemberExportPinStatus(true);
+        if (input) input.value = '';
+        myAlert('보안 엑셀 PIN이 저장되었습니다.');
+        return true;
+    } catch (error) {
+        myAlert('보안 엑셀 PIN 저장 실패: ' + error.message, 'error');
+        return false;
+    } finally {
+        showLoading(false);
+    }
+} // End of saveMemberExportSecurePin
+
+async function openExcelModal() {
+    await loadMemberExportModalSettings();
+    syncExcelOptionState();
+    new bootstrap.Modal(document.getElementById('excelModal')).show();
+} // End of openExcelModal
+
+async function fetchMemberCapitalSnapshotByDate(cutoffDate) {
+    const safeCutoffDate = String(cutoffDate || '').trim();
+    const snapshotMap = {};
+    if (!safeCutoffDate) return snapshotMap;
+    const { data, error } = await scopeAdminTenant(
+        _supabase
+            .from('ref_members')
+            .select('member_id, amount')
+            .lte('deposit_date', safeCutoffDate)
+    );
+    if (error) throw error;
+    (data || []).forEach((row) => {
+        const memberId = String(row.member_id || '').trim();
+        if (!memberId) return;
+        const amount = Number(row.amount || 0);
+        snapshotMap[memberId] = (snapshotMap[memberId] || 0) + amount;
+    });
+    return snapshotMap;
+} // End of fetchMemberCapitalSnapshotByDate
+
+async function fetchAllMembersForExport() {
+    const { data: members, error } = await scopeAdminTenant(
+        _supabase
+            .from('coop_members')
+            .select([
+                'id',
+                'member_id',
+                'name',
+                'member_type',
+                'phone',
+                'email',
+                'status',
+                'join_date',
+                'birth_date',
+                'address',
+                'rrn_display',
+                'corp_number',
+                'business_number',
+                'bank_name',
+                'account_holder',
+                'account_num_display'
+            ].join(','))
+            .neq('status', '승인대기')
+            .order('name', { ascending: true })
+    );
+    if (error) throw error;
+
+    const list = Array.isArray(members) ? members : [];
+    const memberUids = list.map((row) => row.id).filter(Boolean);
+    const capitalMap = {};
+
+    if (memberUids.length > 0) {
+        const { data: assets, error: assetError } = await _supabase
+            .from('view_my_assets')
+            .select('member_uid, total_capital')
+            .in('member_uid', memberUids);
+        if (assetError) throw assetError;
+        (assets || []).forEach((row) => {
+            capitalMap[String(row.member_uid || '')] = Number(row.total_capital || 0);
+        });
+    }
+
+    return list.map((row) => ({
+        ...row,
+        total_capital: capitalMap[String(row.id || '')] || 0,
+        account_number: row.account_num_display || null
+    }));
+} // End of fetchAllMembersForExport
+
+function buildMemberExportRows(records, options = {}) {
+    const safeRecords = Array.isArray(records) ? records : [];
+    const cutoffDate = String(options.cutoffDate || '').trim();
+    const cutoffLabel = formatMemberExportCutoffDate(cutoffDate);
+    const shareUnitAmount = normalizeMemberExportShareUnitAmount(options.shareUnitAmount);
+    const snapshotMap = options.snapshotMap || {};
+    const exportType = String(options.exportType || 'public');
+
+    const normalizedRecords = safeRecords.map((record) => {
+        const memberId = String(record.member_id || '').trim();
+        const capitalAmount = Number(snapshotMap[memberId] ?? record.total_capital ?? 0);
+        return {
+            ...record,
+            member_id: memberId,
+            capitalAmount
+        };
+    });
+
+    const totalCapital = normalizedRecords.reduce((sum, record) => sum + Number(record.capitalAmount || 0), 0);
+    const overLimitMembers = [];
+
+    const rows = normalizedRecords.map((record) => {
+        const ratio = totalCapital > 0 ? (Number(record.capitalAmount || 0) / totalCapital) * 100 : 0;
+        const normalizedRatio = formatMemberExportRatio(ratio);
+        const overLimit = normalizedRatio > 30;
+        if (overLimit) {
+            overLimitMembers.push({ name: record.name || '-', ratio: normalizedRatio });
+        }
+
+        const commonFields = {
+            "조합원번호": record.member_id || '-',
+            "이름": record.name || '-',
+            "유형": record.member_type || '-',
+            "상태": record.status || '-',
+            "가입일": record.join_date || '',
+            "기준일": cutoffLabel,
+            "출자좌수": formatMemberExportShareCount(record.capitalAmount, shareUnitAmount),
+            "출자금액": formatMemberExportAmountDisplay(record.capitalAmount),
+            "비율(%)": normalizedRatio,
+            "30% 초과 여부": overLimit ? '주의' : ''
+        };
+
+        if (exportType === 'secret') {
+            return {
+                ...commonFields,
+                "연락처": record.phone || '-',
+                "주소": record.address || '-',
+                "주민/사업자번호(전체)": record.decrypted_rrn || '-',
+                "은행명": record.bank_name || '-',
+                "예금주": record.account_holder || '-',
+                "계좌번호(전체)": record.decrypted_account || '-'
+            };
+        }
+
+        if (exportType === 'city-report') {
+            return {
+                "연번": 0,
+                "성명(법인명)": record.name || '-',
+                "생년월일(법인등록번호)": formatMemberExportIdentityValue(record),
+                "출자좌수": formatMemberExportShareCount(record.capitalAmount, shareUnitAmount),
+                "출자금액": formatMemberExportAmountDisplay(record.capitalAmount),
+                "비율": normalizedRatio,
+                "30% 초과 여부": overLimit ? '주의' : ''
+            };
+        }
+
+        return {
+            ...commonFields,
+            "연락처": record.phone || '-',
+            "주소": record.address || '-'
+        };
+    });
+
+    if (exportType === 'city-report') {
+        rows.forEach((row, index) => {
+            row['연번'] = index + 1;
+        });
+    }
+
+    return { rows, overLimitMembers, totalCapital };
+} // End of buildMemberExportRows
 
 function openCreateMemberModal() {
 const defaults = {
@@ -2922,75 +3378,123 @@ myConfirm(`총 ${g_member_import_rows.length}건 중 ${validRows.length}건을 �
 
 // [수정] 엑셀 다운로드 (보안 모드 RPC 연동 및 로그 기록)
 async function downloadExcel() {
-    const type = document.querySelector('input[name="excelOption"]:checked').value;
+    const type = getSelectedExcelOption();
+    const cutoffDate = getMemberExportCutoffDate();
+    const shareUnitAmount = normalizeMemberExportShareUnitAmount(document.getElementById('memberExportShareUnitAmount')?.value);
+    const coopName = String(g_memberExportOrgName || '').trim();
     let dataToExport = [];
     let fileName = "조합원명부_일반.xlsx";
+    let exportSourceRecords = [];
+
+    if (!cutoffDate) {
+        return myAlert(type === 'city-report' ? '시청 신고용 연도를 입력해주세요.' : '기준일을 선택해주세요.', 'warning');
+    }
+
+    if (!shareUnitAmount) {
+        return myAlert('출자 1좌 금액을 입력해주세요.', 'warning');
+    }
+
+    const shareUnitSaved = await saveMemberExportShareUnitSetting({ silent: true });
+    if (!shareUnitSaved) return;
+
+    showLoading(true);
+    let snapshotMap = {};
+    try {
+        snapshotMap = await fetchMemberCapitalSnapshotByDate(cutoffDate);
+    } catch (snapshotError) {
+        showLoading(false);
+        console.error(snapshotError);
+        return myAlert('기준일 출자금 계산 실패: ' + snapshotError.message, 'error');
+    }
+
+    try {
+        exportSourceRecords = await fetchAllMembersForExport();
+    } catch (memberError) {
+        showLoading(false);
+        console.error(memberError);
+        return myAlert('전체 조합원 명부 조회 실패: ' + memberError.message, 'error');
+    }
 
     // 1. 보안용 엑셀 다운로드
     if(type === 'secret') {
         const inputPin = document.getElementById('decryptKey').value;
 
-        // PIN 번호 검증 (JS 레벨 2차 인증)
-        if(inputPin !== SECURE_PIN) {
-            return myAlert('비밀번호가 올바르지 않습니다.', 'warning');
+        if (!g_memberExportSecurePinConfigured) {
+            showLoading(false);
+            return myAlert('보안 엑셀 PIN이 아직 설정되지 않았습니다. 먼저 PIN을 저장해주세요.', 'warning');
         }
 
-        showLoading(true);
+        if (!inputPin) {
+            showLoading(false);
+            return myAlert('보안 엑셀 PIN을 입력해주세요.', 'warning');
+        }
 
-        // 보안 RPC 호출 (DB 내부에서 복호화 수행)
-        const { data, error } = await _supabase.rpc('get_full_members_secure');
-
-        showLoading(false);
+        const { data, error } = await _supabase.rpc('get_full_members_secure', { p_pin: inputPin });
 
         if(error) {
+            showLoading(false);
             console.error(error);
             return myAlert('보안 데이터 로드 실패: ' + error.message, 'error');
         }
 
-        // 데이터 매핑 (복호화된 칼럼 사용)
-        dataToExport = data.map(m => ({
-            "조합원번호": m.member_id,
-            "이름": m.name,
-            "유형": m.member_type,
-            "상태": m.status,
-            "연락처": m.phone,
-            "주소": m.address,
-            "가입일": m.join_date,
-            "주민/사업자번호(전체)": m.decrypted_rrn,    // 복호화된 값
-            "은행명": m.bank_name,
-            "예금주": m.account_holder,
-            "계좌번호(전체)": m.decrypted_account      // 복호화된 값
-        }));
+        const exportResult = buildMemberExportRows(data || [], {
+            cutoffDate,
+            shareUnitAmount,
+            snapshotMap,
+            exportType: 'secret'
+        });
+        dataToExport = exportResult.rows;
 
-        fileName = "조합원명부_보안(개인정보포함).xlsx";
+        fileName = `조합원명부_보안_${cutoffDate}.xlsx`;
 
         // 로그 기록
-        logAdminAction('DOWNLOAD', '조합원명부', '보안용(주민/계좌 포함) 다운로드');
+        logAdminAction('DOWNLOAD', '조합원명부', `보안용 다운로드 (기준일 ${cutoffDate})`);
+        if (exportResult.overLimitMembers.length > 0) {
+            console.warn('30% 초과 조합원', exportResult.overLimitMembers);
+        }
 
+        dataToExport = exportResult.rows;
+        if (exportResult.overLimitMembers.length > 0) {
+            showLoading(false);
+            const ws = buildMemberExportWorksheet(type, dataToExport, { cutoffDate, shareUnitAmount, coopName });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "명부");
+            XLSX.writeFile(wb, fileName);
+            document.getElementById('decryptKey').value = '';
+            bootstrap.Modal.getInstance(document.getElementById('excelModal')).hide();
+            const warningText = exportResult.overLimitMembers.map((item) => `${item.name}(${item.ratio}%)`).join(', ');
+            return myAlert(`다운로드되었습니다. 기준일 ${cutoffDate} 기준 30% 초과 조합원이 있습니다: ${warningText}`, 'warning');
+        }
     } else {
-        // 2. 일반용 엑셀 다운로드 (기존 g_members 활용)
-        // 화면에 있는 데이터 그대로 사용 (마스킹된 상태)
-        dataToExport = g_members.map(m => ({
-            "조합원번호": m.member_id,
-            "이름": m.name,
-            "유형": m.member_type,
-            "연락처": m.phone,
-            "상태": m.status,
-            "가입일": m.join_date,
-            "출자금": m.total_capital,
-            "주소": m.address
-        }));
+        // 2. 일반용/시청 신고용 엑셀 다운로드 (현재 조합 전체 명부 기준)
+        const exportResult = buildMemberExportRows(exportSourceRecords, {
+            cutoffDate,
+            shareUnitAmount,
+            snapshotMap,
+            exportType: type
+        });
+        dataToExport = exportResult.rows;
+        fileName = type === 'city-report'
+            ? `조합원명부_시청신고용_${cutoffDate}.xlsx`
+            : `조합원명부_일반_${cutoffDate}.xlsx`;
+        logAdminAction('DOWNLOAD', '조합원명부', type === 'city-report' ? `시청 신고용 다운로드 (기준일 ${cutoffDate})` : `일반용 다운로드 (기준일 ${cutoffDate})`);
 
-        // 로그 기록
-        logAdminAction('DOWNLOAD', '조합원명부', '일반용 다운로드');
+        if (exportResult.overLimitMembers.length > 0) {
+            showLoading(false);
+            const ws = buildMemberExportWorksheet(type, dataToExport, { cutoffDate, shareUnitAmount, coopName });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "명부");
+            XLSX.writeFile(wb, fileName);
+            document.getElementById('decryptKey').value = '';
+            bootstrap.Modal.getInstance(document.getElementById('excelModal')).hide();
+            const warningText = exportResult.overLimitMembers.map((item) => `${item.name}(${item.ratio}%)`).join(', ');
+            return myAlert(`다운로드되었습니다. 기준일 ${cutoffDate} 기준 30% 초과 조합원이 있습니다: ${warningText}`, 'warning');
+        }
     }
 
     // 3. 엑셀 파일 생성 및 다운로드 (SheetJS)
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-    // 칼럼 너비 자동 조정 (약간의 편의성)
-    const wscols = Object.keys(dataToExport[0] || {}).map(k => ({wch: 15}));
-    ws['!cols'] = wscols;
+    showLoading(false);
+    const ws = buildMemberExportWorksheet(type, dataToExport, { cutoffDate, shareUnitAmount, coopName });
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "명부");
@@ -5295,6 +5799,7 @@ async function fetchMembers() {
                 'email',
                 'status',
                 'join_date',
+                'birth_date',
                 'created_at',
                 'address',
                 'rrn_display',
@@ -5359,7 +5864,8 @@ async function fetchMembers() {
             ...m,
             // 맵에서 UUID로 찾아 매칭 (없으면 0원)
             total_capital: capitalMap[m.id] || 0,
-            account_number: m.account_num_display || null
+            account_number: m.account_num_display || null,
+            birth_date: m.birth_date || null
         }));
 
         // (옵션) 만약 정렬 기준이 '출자금순'이라면 JS 레벨에서 재정렬
