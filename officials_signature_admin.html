@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!-- Version: v1.0.2 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.1 | officials_signature_admin.html');</script>
+  <script>console.log('[Version] v1.0.2 | officials_signature_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -55,7 +55,7 @@
       <div id="pageAlert" class="alert d-none" role="alert"></div>
 
       <div class="alert alert-info small mb-3">
-        <i class="bi bi-info-circle-fill"></i> 업로드한 서명 이미지는 <code>coop_officials.seal_url</code>에 저장되며, 의사록·총회자료 전자서명 화면에서 재사용됩니다.
+        <i class="bi bi-info-circle-fill"></i> 업로드한 서명 이미지는 <code>coop_officials.seal_url</code>에 저장되며, 의사록·총회자료 전자서명 화면에서 재사용됩니다. 큰 이미지는 업로드 전에 자동 축소하고, 너무 작은 이미지는 경고만 표시한 뒤 그대로 등록합니다.
       </div>
 
       <div class="card border-0 shadow-sm">
@@ -99,6 +99,8 @@
     let currentCoopId = '';
     let currentUser = null;
     let officialSignGroups = {};
+    const MAX_SEAL_LONG_EDGE = 1600;
+    const MIN_SEAL_LONG_EDGE_WARNING = 600;
 
     function readStoredUser() {
       try { return JSON.parse(localStorage.getItem('erp_user') || 'null'); } catch (_) { return null; }
@@ -210,6 +212,68 @@
       if (!el) return;
       el.classList.add('d-none');
       el.textContent = '';
+    }
+
+    async function loadImageElementFromFile(file) {
+      const objectUrl = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error('IMAGE_LOAD_FAILED'));
+          image.src = objectUrl;
+        });
+        return img;
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+
+    async function prepareSealUploadFile(file) {
+      const image = await loadImageElementFromFile(file);
+      const width = Number(image.naturalWidth || image.width || 0);
+      const height = Number(image.naturalHeight || image.height || 0);
+      if (!width || !height) {
+        throw new Error('IMAGE_DIMENSION_READ_FAILED');
+      }
+
+      const longEdge = Math.max(width, height);
+      const shouldWarnSmall = longEdge < MIN_SEAL_LONG_EDGE_WARNING;
+      const shouldResize = longEdge > MAX_SEAL_LONG_EDGE;
+
+      if (!shouldResize) {
+        return {
+          file,
+          resized: false,
+          smallWarning: shouldWarnSmall
+        };
+      }
+
+      const scale = MAX_SEAL_LONG_EDGE / longEdge;
+      const targetWidth = Math.max(1, Math.round(width * scale));
+      const targetHeight = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('CANVAS_CONTEXT_UNAVAILABLE');
+      ctx.clearRect(0, 0, targetWidth, targetHeight);
+      ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((value) => {
+          if (value) resolve(value);
+          else reject(new Error('IMAGE_RESIZE_FAILED'));
+        }, 'image/png');
+      });
+
+      const converted = new File([blob], 'seal.png', { type: 'image/png' });
+      return {
+        file: converted,
+        resized: true,
+        smallWarning: false
+      };
     }
 
     async function loadOfficialSignatures() {
@@ -348,13 +412,24 @@
       }
 
       clearAlert();
-      const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'png';
+      let prepared;
+      try {
+        prepared = await prepareSealUploadFile(file);
+      } catch (error) {
+        showAlert('이미지 처리 실패: ' + (error?.message || 'Unknown error'), 'danger');
+        return;
+      }
+
+      const uploadFile = prepared.file;
+      const ext = uploadFile.type === 'image/png'
+        ? 'png'
+        : (uploadFile.name.includes('.') ? uploadFile.name.split('.').pop().toLowerCase() : 'png');
       const memberSafe = String(group.member_id || groupKey).replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `official_seals/${memberSafe}/${Date.now()}.${ext}`;
 
       const { error: uploadError } = await _supabase.storage
         .from('attachments')
-        .upload(fileName, file, { upsert: true, contentType: file.type });
+        .upload(fileName, uploadFile, { upsert: true, contentType: uploadFile.type || 'image/png' });
       if (uploadError) {
         showAlert('업로드 실패: ' + uploadError.message, 'danger');
         return;
@@ -380,7 +455,13 @@
         return;
       }
 
-      showAlert('서명 이미지가 등록되었습니다.', 'success');
+      if (prepared.smallWarning) {
+        showAlert('서명 이미지가 등록되었습니다. 다만 현재 파일 해상도가 낮아 문서에서 흐릿하게 보일 수 있습니다.', 'warning');
+      } else if (prepared.resized) {
+        showAlert('서명 이미지가 등록되었습니다. 큰 이미지는 업로드 전에 자동으로 축소했습니다.', 'success');
+      } else {
+        showAlert('서명 이미지가 등록되었습니다.', 'success');
+      }
       await loadOfficialSignatures();
     }
 
