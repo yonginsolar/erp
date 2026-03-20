@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.10 -->
+<!-- Version: v1.0.11 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.10 | index.html');</script>
+  <script>console.log('[Version] v1.0.11 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -113,8 +113,8 @@
         </button>
         
         <button class="btn btn-white btn-menu hidden" id="btnAdmin" onclick="location.href='admin_employee.html'">
-          ⚙️ <strong id="btnAdminTitle">직원관리</strong>
-          <span class="d-block small text-muted" id="btnAdminDesc">직원 등록, 권한, 재직 상태, 연차 조정</span>
+          ⚙️ <strong id="btnAdminTitle">직원 및 설정 관리</strong>
+          <span class="d-block small text-muted" id="btnAdminDesc">직원 등록, 권한, 급여·근태, 전자결재 설정 관리</span>
         </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnMemberAdmin" onclick="location.href='member_admin.html'">
@@ -594,8 +594,8 @@ function applyHrMenuLabel(runtime) {
     const isLite = String(runtime?.runtime_profile || 'legacy_full') === 'workforce_lite';
     const titleEl = document.getElementById('btnAdminTitle');
     const descEl = document.getElementById('btnAdminDesc');
-    if (titleEl) titleEl.textContent = isLite ? '직원 및 설정 관리' : '직원관리';
-    if (descEl) descEl.textContent = isLite ? '직원 등록, 권한, 전자결재 설정 관리' : '직원 등록, 권한, 재직 상태, 연차 조정';
+    if (titleEl) titleEl.textContent = '직원 및 설정 관리';
+    if (descEl) descEl.textContent = isLite ? '직원 등록, 권한, 전자결재 설정 관리' : '직원 등록, 권한, 급여·근태, 전자결재 설정 관리';
 }
 
 function getMenuButtonsContainer() {

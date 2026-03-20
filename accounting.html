@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.50 | Change: 2026-03-09 - 4대보험 정산대기 일괄정산 버튼을 추가. -->
+<!-- Version: v1.0.57 | Change: 2026-03-20 - 결산 완료 연도는 읽기 전용으로 표시하고, 결산 모달 기준값에서 기존 CLOSE 전표를 제외하도록 보정. -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.50 | accounting.html');</script>
+  <script>console.log('[Version] v1.0.57 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -588,9 +588,52 @@
           <label class="small text-muted">결산 연도</label>
           <input type="number" class="form-control" id="closingYearInput" min="1900" max="2100">
         </div>
+        <div class="small text-muted mb-2" id="closingReadonlyInfo"></div>
         <div class="mb-2">
-          <label class="small text-muted">당기순이익 (추정)</label>
+          <label class="small text-muted">법인세 차감전 당기순이익</label>
+          <input type="text" class="form-control bg-light" id="closingPretaxIncome" readonly>
+        </div>
+        <div class="mb-2">
+          <label class="small text-muted">법인세 차감후 당기순손익</label>
           <input type="text" class="form-control bg-light" id="closingNetIncome" readonly>
+        </div>
+        <div class="alert alert-warning small p-2 mb-2">
+          조합법인 특례를 적용해 법인세를 추정 계산합니다. 국세는 조합법인 특례 세율, 법인지방소득세는 지방세법 표준세율을 사용하며 세액공제는 국세에만 차감합니다.
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="small text-muted">추정 과세표준</label>
+            <input type="text" class="form-control bg-light" id="closingTaxBase" readonly>
+          </div>
+          <div class="col-6">
+            <label class="small text-muted">추정 법인세(국세, 공제후)</label>
+            <input type="text" class="form-control bg-light" id="closingEstimatedCorporateTax" readonly>
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="small text-muted">세액공제/감면</label>
+            <input type="number" class="form-control" id="closingTaxCreditInput" min="0" step="1" value="0">
+          </div>
+          <div class="col-6">
+            <label class="small text-muted">추정 법인지방소득세</label>
+            <input type="text" class="form-control bg-light" id="closingEstimatedLocalTax" readonly>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="small text-muted">법인세비용</label>
+          <input type="number" class="form-control" id="closingTaxExpenseInput" min="0" step="1" value="0">
+          <div class="small text-muted mt-1" id="closingTaxExpenseHint">자동 추천값이 입력되며 수정할 수 있습니다. 결산 실행 시 (차)법인세비용 / (대)미지급금 인식 후 손익마감에 함께 반영합니다.</div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="small text-muted">기납부세액</label>
+            <input type="number" class="form-control" id="closingPrepaidTaxInput" min="0" step="1" value="0">
+          </div>
+          <div class="col-6">
+            <label class="small text-muted">예상 납부세액</label>
+            <input type="text" class="form-control bg-light" id="closingExpectedTaxPayable" readonly>
+          </div>
         </div>
         <div class="small text-muted mb-2" id="closingCapitalInfo">출자금/법정적립금 정보를 계산 중입니다.</div>
         <div class="alert alert-info small p-2">
@@ -601,7 +644,7 @@
             <label class="small text-muted">법정적립금</label>
             <input type="number" class="form-control" id="closingLegalInput" min="0" step="1">
             <div class="small text-muted mt-1" id="closingLegalHint"></div>
-            <div class="small text-danger mt-1 hidden" id="closingLegalWarn">자동 계산값과 다릅니다. 신고 기준을 다시 확인하세요.</div>
+            <div class="small text-danger mt-1 hidden" id="closingLegalWarn">법정적립금이 최소 기준(법인세 차감후 순손익의 10%)보다 작습니다.</div>
           </div>
           <div class="col-6">
             <label class="small text-muted">임의적립금</label>
@@ -619,6 +662,35 @@
 </div>
 
 <div class="modal fade" id="selectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header p-3 bg-light"><h6 class="m-0 fw-bold">계정과목 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="p-2 border-bottom bg-white sticky-top"><input type="text" class="form-control" id="accountSearchInput" placeholder="검색어 입력..." onkeyup="filterAccounts()"></div><div id="accountList" style="height: 350px; overflow-y: auto;"></div></div></div></div></div>
+
+<div class="modal fade" id="approvalSplitReclassModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <div>
+          <h6 class="modal-title fw-bold mb-1">전자결재 분할 재분류</h6>
+          <div class="small text-muted">한 전자결재 건을 여러 계정으로 나눠 재분류합니다. 각 행 금액의 합계는 원금액과 같아야 합니다.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="approvalSplitReclassMeta" class="small text-muted mb-3">대상을 불러오는 중입니다.</div>
+        <div id="approvalSplitReclassRows" class="d-flex flex-column gap-2"></div>
+        <div class="d-flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addApprovalSplitReclassRow()">행 추가</button>
+          <div class="small">
+            분할 합계 <span class="fw-bold" id="approvalSplitReclassTotal">0원</span>
+            <span class="text-muted">/ 원금액 <span class="fw-bold" id="approvalSplitReclassSourceAmount">0원</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary btn-sm" id="approvalSplitReclassSaveBtn" onclick="submitApprovalSplitReclass()">분할 재분류 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="durunuriModal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -786,8 +858,10 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let mData=[], cardData=[]; 
-let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal, closingModal, yearModal, durunuriModal;
+let selectModal, reportModal, addModal, infoModal, alertModal, confirmModal, closingModal, yearModal, durunuriModal, approvalSplitReclassModal;
 let myInfo = null, confirmCallback = null;
+let confirmReturnModalId = null, confirmAccepted = false;
+let closingTaxExpenseManual = false;
 let closingContext = null;
 let yearModalCallback = null;
 let lastReportParts = null;
@@ -800,10 +874,207 @@ let addContext = null;
 let permissionSet = new Set();
 let historyViewMode = 'single';
 let approvalUnclassifiedIndex = new Map();
+let approvalSplitReclassState = null;
 let durunuriSupportRowsCache = [];
 const AUTO_SYNC_UNDO_KEY = 'erp_auto_sync_last_undo_v1';
 const INSURANCE_PENDING_TAG = '[4대보험정산대기]';
 const KST_TZ_ACCOUNTING = 'Asia/Seoul';
+const COOP_CORPORATE_TAX_BRACKETS = [
+    { limit: 2000000000, rate: 0.09, deduction: 0 },
+    { limit: Infinity, rate: 0.12, deduction: 60000000 }
+];
+const LOCAL_CORPORATE_TAX_BRACKETS = [
+    { limit: 200000000, rate: 0.01, deduction: 0 },
+    { limit: 20000000000, rate: 0.02, deduction: 2000000 },
+    { limit: 300000000000, rate: 0.022, deduction: 39800000 },
+    { limit: Infinity, rate: 0.025, deduction: 655800000 }
+];
+const ACCOUNTING_REPORT_ACCOUNT_ALIAS_BY_COMPACT = {
+    '부가세대급금': '부가세대급금',
+    '부가세예수금': '부가세예수금',
+    '잡이익': '잡이익',
+    '잡손실': '잡손실'
+};
+const ACCOUNTING_REPORT_ASSET_ACCOUNTS = new Set(['부가세대급금', '보통예금', '현금', '선급금', '미수금']);
+
+function normalizeAccountingReportAccountName(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return '';
+    const compact = raw.replace(/\s+/g, '');
+    return ACCOUNTING_REPORT_ACCOUNT_ALIAS_BY_COMPACT[compact] || raw;
+}
+
+function normalizeAccountingReportType(type, account) {
+    if (ACCOUNTING_REPORT_ASSET_ACCOUNTS.has(account)) return '자산';
+    if (account === '부가세예수금') return '부채';
+    if (account === '잡이익') return '영업외수익';
+    if (account === '잡손실') return '비용';
+    return String(type || '').trim();
+}
+
+function buildClosingIncomeSummary(rows) {
+    const balances = {};
+    const rev = {};
+    const exp = {};
+    const otherRev = {};
+    let tRev = 0;
+    let tExp = 0;
+    let tOtherRev = 0;
+
+    (rows || []).forEach((row) => {
+        const debit = Number(row?.Debit || 0);
+        const credit = Number(row?.Credit || 0);
+        const account = normalizeAccountingReportAccountName(row?.Account);
+        const type = normalizeAccountingReportType(row?.Type, account);
+        if (!account) return;
+
+        if (!balances[account]) balances[account] = { type, amount: 0 };
+
+        if (type === '비용') {
+            const amount = debit - credit;
+            if (!amount) return;
+            balances[account].type = type;
+            balances[account].amount += amount;
+            exp[account] = (exp[account] || 0) + amount;
+            tExp += amount;
+            return;
+        }
+
+        if (type === '매출' || type === '영업외수익') {
+            const amount = credit - debit;
+            if (!amount) return;
+            balances[account].type = type;
+            balances[account].amount += amount;
+            if (type === '매출') {
+                rev[account] = (rev[account] || 0) + amount;
+                tRev += amount;
+            } else {
+                otherRev[account] = (otherRev[account] || 0) + amount;
+                tOtherRev += amount;
+            }
+        }
+    });
+
+    return {
+        balances,
+        rev,
+        exp,
+        otherRev,
+        tRev,
+        tExp,
+        tOtherRev,
+        netIncome: tRev - tExp + tOtherRev
+    };
+}
+
+function isClosingCarryforwardRow(row, targetYear) {
+    const relatedKey = `CLOSE-${targetYear}`;
+    const transId = String(row?.Trans_ID || '').trim();
+    const desc = String(row?.Description || '').trim();
+    return transId === relatedKey && desc.startsWith('[손익마감]');
+}
+
+function getClosingReportPeriodRows(rows, targetYear) {
+    return (rows || []).filter((row) => !isClosingCarryforwardRow(row, targetYear));
+}
+
+function getClosingRelatedRows(rows, targetYear) {
+    const relatedKey = `CLOSE-${targetYear}`;
+    return (rows || []).filter((row) => String(row?.Trans_ID || '').trim() === relatedKey);
+}
+
+function getClosingContextBaseRows(rows, targetYear) {
+    const relatedKey = `CLOSE-${targetYear}`;
+    return (rows || []).filter((row) => String(row?.Trans_ID || '').trim() !== relatedKey);
+}
+
+function buildExistingClosingSummary(rows, targetYear) {
+    const closingRows = getClosingRelatedRows(rows, targetYear);
+    const summary = {
+        isClosed: closingRows.length > 0,
+        taxExpense: 0,
+        legal: 0,
+        voluntary: 0
+    };
+
+    closingRows.forEach((row) => {
+        const desc = String(row?.Description || '').trim();
+        const type = String(row?.Type || '').trim();
+        const accountCompact = String(row?.Account || '').replace(/\s+/g, '');
+        const debit = Number(row?.Debit || 0);
+        const credit = Number(row?.Credit || 0);
+
+        if (desc.startsWith('[법인세반영]') && type === '비용' && accountCompact === '법인세비용') {
+            summary.taxExpense += (debit - credit);
+        }
+        if (desc === '[이익처분] 법정적립' && type === '자본' && accountCompact === '법정적립금') {
+            summary.legal += (credit - debit);
+        }
+        if (desc === '[이익처분] 임의적립' && type === '자본' && accountCompact === '임의적립금') {
+            summary.voluntary += (credit - debit);
+        }
+    });
+
+    return summary;
+}
+
+function getProgressiveTaxFromBrackets(baseAmount, brackets) {
+    const base = Math.max(0, Math.round(Number(baseAmount || 0)));
+    if (!base) return 0;
+
+    for (const bracket of (brackets || [])) {
+        if (base <= bracket.limit) {
+            return Math.max(0, Math.floor(base * bracket.rate - bracket.deduction));
+        }
+    }
+    return 0;
+}
+
+function buildTaxAdjustmentSummary(rows) {
+    const summary = { fines: 0, noProof: 0, donations: 0, entertain: 0 };
+
+    (rows || []).forEach((row) => {
+        const debit = Number(row?.Debit || 0);
+        if (!debit) return;
+
+        const account = normalizeAccountingReportAccountName(row?.Account);
+        const type = normalizeAccountingReportType(row?.Type, account);
+        if (type !== '비용') return;
+
+        const desc = String(row?.Description || '');
+        const evidenceType = String(row?.Evidence_Type || '');
+        if (account === '세금과공과' && (desc.includes('과태료') || desc.includes('벌금'))) summary.fines += debit;
+        if (account === '접대비') summary.entertain += debit;
+        if (account === '기부금') summary.donations += debit;
+        if (debit > 30000 && evidenceType === '기타(영수증)') summary.noProof += debit;
+    });
+
+    return summary;
+}
+
+function buildClosingTaxEstimate(preTaxNetIncome, addBackFines = 0, taxCredit = 0, prepaidTax = 0) {
+    const taxableBase = Math.max(0, Math.round(Number(preTaxNetIncome || 0) + Number(addBackFines || 0)));
+    const nationalGross = getProgressiveTaxFromBrackets(taxableBase, COOP_CORPORATE_TAX_BRACKETS);
+    const localTax = getProgressiveTaxFromBrackets(taxableBase, LOCAL_CORPORATE_TAX_BRACKETS);
+    const creditRequested = Math.max(0, Math.round(Number(taxCredit || 0)));
+    const creditApplied = Math.min(creditRequested, nationalGross);
+    const nationalAfterCredit = Math.max(0, nationalGross - creditApplied);
+    const recommendedExpense = nationalAfterCredit + localTax;
+    const prepaidApplied = Math.max(0, Math.round(Number(prepaidTax || 0)));
+    const expectedPayable = Math.max(0, recommendedExpense - prepaidApplied);
+
+    return {
+        taxBase: taxableBase,
+        nationalGross,
+        nationalAfterCredit,
+        localTax,
+        creditRequested,
+        creditApplied,
+        recommendedExpense,
+        prepaidApplied,
+        expectedPayable
+    };
+}
 
 function hasAccountingRoleFallback(permissionKey) {
     const role = String(myInfo?.role || '').toLowerCase();
@@ -903,6 +1174,7 @@ window.onload = async function() {
     closingModal = new bootstrap.Modal(document.getElementById('closingModal'));
     yearModal = new bootstrap.Modal(document.getElementById('yearModal'));
     durunuriModal = new bootstrap.Modal(document.getElementById('durunuriModal'));
+    approvalSplitReclassModal = new bootstrap.Modal(document.getElementById('approvalSplitReclassModal'));
 
     const blurActiveIfInside = (modalEl) => {
         const activeEl = document.activeElement;
@@ -910,7 +1182,7 @@ window.onload = async function() {
             activeEl.blur();
         }
     };
-    ['alertModal', 'confirmModal', 'yearModal', 'closingModal', 'selectModal', 'reportModal', 'addModal', 'infoModal', 'durunuriModal']
+    ['alertModal', 'confirmModal', 'yearModal', 'closingModal', 'selectModal', 'reportModal', 'addModal', 'infoModal', 'durunuriModal', 'approvalSplitReclassModal']
         .forEach((id) => {
             const modalEl = document.getElementById(id);
             if (!modalEl) return;
@@ -920,6 +1192,7 @@ window.onload = async function() {
     document.getElementById("btnConfirmYes").onclick = function() {
         const cb = confirmCallback;
         confirmCallback = null;
+        confirmAccepted = true;
         const confirmEl = document.getElementById('confirmModal');
         blurActiveIfInside(confirmEl);
         confirmModal.hide();
@@ -927,7 +1200,33 @@ window.onload = async function() {
             setTimeout(() => cb(), 0);
         }
     };
+    document.getElementById('confirmModal').addEventListener('hidden.bs.modal', () => {
+        if (confirmReturnModalId && !confirmAccepted) {
+            const modalId = confirmReturnModalId;
+            confirmReturnModalId = null;
+            confirmAccepted = false;
+            const modalEl = document.getElementById(modalId);
+            if (modalEl) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                setTimeout(() => modal.show(), 0);
+            }
+            return;
+        }
+        confirmReturnModalId = null;
+        confirmAccepted = false;
+    });
     document.getElementById('selectModal').addEventListener('hidden.bs.modal', () => { selectContext = null; });
+    document.getElementById('approvalSplitReclassModal').addEventListener('hidden.bs.modal', () => {
+        approvalSplitReclassState = null;
+        const rowsEl = document.getElementById('approvalSplitReclassRows');
+        if (rowsEl) rowsEl.innerHTML = '';
+        const metaEl = document.getElementById('approvalSplitReclassMeta');
+        if (metaEl) metaEl.textContent = '대상을 불러오는 중입니다.';
+        const totalEl = document.getElementById('approvalSplitReclassTotal');
+        if (totalEl) totalEl.textContent = '0원';
+        const sourceEl = document.getElementById('approvalSplitReclassSourceAmount');
+        if (sourceEl) sourceEl.textContent = '0원';
+    });
     document.getElementById("btnYearModalYes").onclick = function() {
         const yearVal = Number(document.getElementById("yearModalInput").value);
         if (!yearVal) return showAlert("알림", "연도를 입력하세요.");
@@ -938,6 +1237,12 @@ window.onload = async function() {
     document.getElementById("btnClosingRun").onclick = async function() { await runClosingFromModal(); };
     document.getElementById("closingYearInput").addEventListener("change", refreshClosingContext);
     document.getElementById("closingLegalInput").addEventListener("input", handleClosingLegalInputChange);
+    document.getElementById("closingTaxCreditInput").addEventListener("input", () => syncClosingFormState(false, { preserveManualTax: true }));
+    document.getElementById("closingPrepaidTaxInput").addEventListener("input", () => syncClosingFormState(false, { preserveManualTax: true }));
+    document.getElementById("closingTaxExpenseInput").addEventListener("input", () => {
+        closingTaxExpenseManual = true;
+        syncClosingFormState(false, { preserveManualTax: true });
+    });
 
     const stored = localStorage.getItem('erp_user');
     if(!stored) { location.href = 'index.html'; return; }
@@ -1075,10 +1380,12 @@ function showAlert(t,m) {
     document.getElementById("alertBody").textContent = msg;
     alertModal.show();
 }
-function showConfirm(t,m,cb) {
+function showConfirm(t,m,cb,options = {}) {
     document.getElementById("confirmTitle").innerText = t;
     document.getElementById("confirmBody").textContent = m || "";
     confirmCallback = cb;
+    confirmReturnModalId = options?.returnModalId || null;
+    confirmAccepted = false;
     confirmModal.show();
 }
 function validNum(el) { if(el.value < 0) el.value = Math.abs(el.value); }
@@ -1201,6 +1508,34 @@ function parseApprovalReclassSourceIdFromTransId(transId) {
     if (!raw.startsWith(prefix)) return null;
     const source = raw.slice(prefix.length).trim();
     return source || null;
+}
+
+function parseApprovalDocIdFromTransId(transId) {
+    const sourceId = parseApprovalSourceIdFromTransId(transId) || parseApprovalReclassSourceIdFromTransId(transId);
+    if (!sourceId) return null;
+    const parsed = Number(sourceId);
+    if (!Number.isInteger(parsed) || parsed <= 0) return null;
+    return parsed;
+}
+
+function buildApprovalDocOpenUrl(docId) {
+    const safeDocId = Number(docId || 0);
+    if (!Number.isInteger(safeDocId) || safeDocId <= 0) return '';
+    return `approval.html?doc=${safeDocId}`;
+}
+
+function openApprovalDocPreview(docId) {
+    const url = buildApprovalDocOpenUrl(docId);
+    if (!url) return showAlert("알림", "연결된 전자결재 문서를 찾지 못했습니다.");
+    const popup = window.open(url, '_blank', 'noopener');
+    if (!popup) location.href = url;
+}
+
+function buildApprovalDocTitleButtonHtml(text, docId, className = 'btn btn-link btn-sm p-0 align-baseline text-decoration-none') {
+    const safeDocId = Number(docId || 0);
+    const safeText = escapeHtml(String(text || '전자결재 문서'));
+    if (!Number.isInteger(safeDocId) || safeDocId <= 0) return safeText;
+    return `<button type="button" class="${escapeHtml(className)}" onclick="openApprovalDocPreview(${safeDocId})">${safeText}</button>`;
 }
 
 function getApprovalReclassExpenseAccounts() {
@@ -1375,19 +1710,22 @@ function renderApprovalUnclassifiedQueue(items) {
     const rowsHtml = safeItems.map((item) => {
         const safeDate = escapeHtml(item.date || '-');
         const safeTransId = escapeHtml(item.transId || '-');
-        const safeDesc = escapeHtml((item.description || '').replace(/^\[전자결재-발생\]\s*/i, '') || item.description || '-');
+        const cleanDesc = (item.description || '').replace(/^\[전자결재-발생\]\s*/i, '') || item.description || '-';
+        const safeDesc = escapeHtml(cleanDesc);
         const safeProject = escapeHtml(item.project || '본사');
         const safeOperator = escapeHtml(item.operator || 'System');
         const amountLabel = Number(item.amount || 0).toLocaleString();
+        const titleHtml = buildApprovalDocTitleButtonHtml(cleanDesc, Number(item.sourceId), 'btn btn-link p-0 text-start fw-bold text-decoration-none align-baseline');
         const inputId = `approvalReclassAccount-${item.domKey}`;
         const vatId = `approvalReclassVat-${item.domKey}`;
         const pickBtnId = `approvalReclassPickBtn-${item.domKey}`;
         const btnId = `approvalReclassBtn-${item.domKey}`;
+        const splitBtnId = `approvalReclassSplitBtn-${item.domKey}`;
         const disabledAttr = (!editable || !hasSelectableAccount) ? ' disabled' : '';
         return `
             <div class="border rounded p-2 mb-2 bg-light-subtle">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div class="fw-bold">${safeDesc}</div>
+                    <div class="fw-bold">${titleHtml || safeDesc}</div>
                     <span class="badge text-bg-secondary">${amountLabel}원</span>
                 </div>
                 <div class="small text-muted mb-2">${safeDate} · ${safeTransId} · ${safeProject} · ${safeOperator}</div>
@@ -1399,6 +1737,7 @@ function renderApprovalUnclassifiedQueue(items) {
                         <label class="form-check-label small" for="${vatId}">부가세 포함</label>
                     </div>
                     <button id="${btnId}" class="btn btn-sm btn-outline-primary"${disabledAttr} onclick="submitApprovalUnclassifiedReclass('${item.domKey}')">재분류</button>
+                    <button id="${splitBtnId}" class="btn btn-sm btn-outline-dark"${disabledAttr} onclick="openApprovalSplitReclassModal('${item.domKey}')">분할 재분류</button>
                 </div>
             </div>
         `;
@@ -1514,6 +1853,267 @@ async function submitApprovalUnclassifiedReclass(rowKey) {
         loadHistory();
     } finally {
         if (actionBtn) actionBtn.disabled = false;
+    }
+}
+
+function createApprovalSplitReclassRowState() {
+    return {
+        rowId: `apr_split_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+        account: '',
+        amount: '',
+        useVat: false
+    };
+}
+
+function getApprovalSplitReclassItem() {
+    return approvalSplitReclassState && approvalSplitReclassState.item ? approvalSplitReclassState.item : null;
+}
+
+function renderApprovalSplitReclassRows() {
+    const rowsEl = document.getElementById('approvalSplitReclassRows');
+    const metaEl = document.getElementById('approvalSplitReclassMeta');
+    const totalEl = document.getElementById('approvalSplitReclassTotal');
+    const sourceEl = document.getElementById('approvalSplitReclassSourceAmount');
+    if (!rowsEl || !metaEl || !totalEl || !sourceEl) return;
+
+    const item = getApprovalSplitReclassItem();
+    const rows = Array.isArray(approvalSplitReclassState?.rows) ? approvalSplitReclassState.rows : [];
+    if (!item) {
+        rowsEl.innerHTML = '<div class="text-muted">대상 정보를 찾지 못했습니다.</div>';
+        metaEl.textContent = '대상 정보를 다시 불러와 주세요.';
+        totalEl.textContent = '0원';
+        sourceEl.textContent = '0원';
+        return;
+    }
+
+    metaEl.textContent = `${item.date || '-'} · ${item.transId || '-'} · ${(item.description || '').replace(/^\[전자결재-발생\]\s*/i, '') || item.transId || '전자결재'} · ${item.project || '본사'}`;
+    sourceEl.textContent = `${Number(item.amount || 0).toLocaleString()}원`;
+    totalEl.textContent = `${rows.reduce((sum, row) => sum + Math.max(0, Number(row.amount || 0)), 0).toLocaleString()}원`;
+
+    rowsEl.innerHTML = rows.map((row, index) => {
+        const inputId = `approvalSplitReclassAccount-${row.rowId}`;
+        const amountId = `approvalSplitReclassAmount-${row.rowId}`;
+        const vatId = `approvalSplitReclassVat-${row.rowId}`;
+        const removeDisabled = rows.length <= 1 ? ' disabled' : '';
+        return `
+            <div class="border rounded p-2 bg-light-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold small">분할 ${index + 1}</div>
+                    <button type="button" class="btn btn-outline-danger btn-sm"${removeDisabled} onclick="removeApprovalSplitReclassRow('${row.rowId}')">삭제</button>
+                </div>
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-5">
+                        <input id="${inputId}" class="form-control form-control-sm" type="text" placeholder="계정 선택 필요" readonly value="${escapeHtml(row.account || '')}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="openApprovalSplitReclassAccountPicker('${row.rowId}')">계정 선택</button>
+                    </div>
+                    <div class="col-md-3">
+                        <input id="${amountId}" class="form-control form-control-sm" type="number" min="0" step="1" value="${escapeHtml(row.amount || '')}" placeholder="금액">
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" id="${vatId}"${row.useVat ? ' checked' : ''}>
+                            <label class="form-check-label small" for="${vatId}">부가세 포함</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    rows.forEach((row) => {
+        const amountEl = document.getElementById(`approvalSplitReclassAmount-${row.rowId}`);
+        const vatEl = document.getElementById(`approvalSplitReclassVat-${row.rowId}`);
+        if (amountEl) {
+            amountEl.addEventListener('input', () => {
+                row.amount = String(amountEl.value || '').trim();
+                renderApprovalSplitReclassRows();
+            });
+        }
+        if (vatEl) {
+            vatEl.addEventListener('change', () => {
+                row.useVat = !!vatEl.checked;
+                renderApprovalSplitReclassRows();
+            });
+        }
+    });
+}
+
+function applyApprovalSplitReclassAccountSelection(rowId, accountName) {
+    const rows = Array.isArray(approvalSplitReclassState?.rows) ? approvalSplitReclassState.rows : [];
+    const target = rows.find((row) => row.rowId === String(rowId || '').trim());
+    if (!target) return;
+    target.account = String(accountName || '').trim();
+    renderApprovalSplitReclassRows();
+}
+
+function openApprovalSplitReclassAccountPicker(rowId) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    const item = getApprovalSplitReclassItem();
+    if (!item) return showAlert("알림", "대상을 다시 선택해주세요.");
+    const accounts = getApprovalReclassExpenseAccounts();
+    if (accounts.length === 0) return showAlert("오류", "비용 계정 마스터가 없어 선택할 수 없습니다. ac_master를 먼저 확인하세요.");
+    const searchInput = document.getElementById("accountSearchInput");
+    const currentInput = document.getElementById(`approvalSplitReclassAccount-${rowId}`);
+    selectContext = {
+        mode: 'approvalSplitReclass',
+        forcedType: '비용',
+        rowId: String(rowId || '').trim(),
+        projectOverride: item.project || ''
+    };
+    if (searchInput) searchInput.value = String(currentInput?.value || '').trim();
+    filterAccounts();
+    selectModal.show();
+    setTimeout(() => searchInput?.focus(), 300);
+}
+
+function addApprovalSplitReclassRow() {
+    if (!approvalSplitReclassState) return;
+    approvalSplitReclassState.rows.push(createApprovalSplitReclassRowState());
+    renderApprovalSplitReclassRows();
+}
+
+function removeApprovalSplitReclassRow(rowId) {
+    if (!approvalSplitReclassState || !Array.isArray(approvalSplitReclassState.rows)) return;
+    if (approvalSplitReclassState.rows.length <= 1) return;
+    approvalSplitReclassState.rows = approvalSplitReclassState.rows.filter((row) => row.rowId !== String(rowId || '').trim());
+    renderApprovalSplitReclassRows();
+}
+
+function openApprovalSplitReclassModal(rowKey) {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    const key = String(rowKey || '').trim();
+    const item = approvalUnclassifiedIndex.get(key);
+    if (!item) {
+        loadApprovalUnclassifiedQueue();
+        return showAlert("알림", "대상을 다시 선택해주세요. 목록을 새로고침했습니다.");
+    }
+    approvalSplitReclassState = {
+        item,
+        rows: [createApprovalSplitReclassRowState(), createApprovalSplitReclassRowState()]
+    };
+    renderApprovalSplitReclassRows();
+    approvalSplitReclassModal.show();
+}
+
+async function submitApprovalSplitReclass() {
+    if (!canPerform('accounting.edit')) return showAlert("수정 권한이 없습니다.");
+    const item = getApprovalSplitReclassItem();
+    if (!item) return showAlert("알림", "대상을 다시 선택해주세요.");
+    const rows = Array.isArray(approvalSplitReclassState?.rows) ? approvalSplitReclassState.rows : [];
+    if (rows.length === 0) return showAlert("오류", "분할 행이 없습니다.");
+
+    const normalizedRows = [];
+    for (const row of rows) {
+        const targetAccount = String(row.account || '').trim();
+        const amount = Math.max(0, Number(row.amount || 0));
+        const useVat = !!row.useVat;
+        if (!targetAccount) return showAlert("오류", "모든 분할 행에 비용 계정을 선택하세요.");
+        if (targetAccount === '미분류비용') return showAlert("오류", "미분류비용 외 계정을 선택하세요.");
+        if (!(amount > 0)) return showAlert("오류", "모든 분할 행의 금액을 0원 초과로 입력하세요.");
+
+        const accountRow = findApprovalReclassExpenseMasterRow(targetAccount);
+        if (!accountRow) return showAlert("오류", `선택한 계정(${targetAccount})을 마스터에서 찾지 못했습니다.`);
+
+        normalizedRows.push({
+            targetAccount,
+            amount,
+            useVat: useVat && !isTaxFreeMasterValue(accountRow.tax_free)
+        });
+    }
+
+    const sourceAmount = Math.max(0, Number(item.amount || 0));
+    const splitTotal = normalizedRows.reduce((sum, row) => sum + row.amount, 0);
+    if (splitTotal !== sourceAmount) {
+        return showAlert("오류", `분할 금액 합계(${splitTotal.toLocaleString()}원)가 원금액(${sourceAmount.toLocaleString()}원)과 일치해야 합니다.`);
+    }
+
+    const saveBtn = document.getElementById('approvalSplitReclassSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+        const reclassTransId = `APR-RCLS-${item.sourceId}`;
+        const { data: existingRows, error: existingError } = await _supabase
+            .from('ac_journal')
+            .select('Trans_ID')
+            .eq('Trans_ID', reclassTransId)
+            .limit(1);
+        if (existingError) return showAlert("오류", "기존 재분류 확인 실패: " + existingError.message);
+        if (existingRows && existingRows.length > 0) {
+            approvalSplitReclassModal.hide();
+            await loadApprovalUnclassifiedQueue();
+            return showAlert("알림", "이미 재분류 처리된 건입니다.");
+        }
+
+        const txDate = String(item.date || '').trim() || formatAccountingKstDate(new Date());
+        const writer = myInfo ? myInfo.emp_name : "System";
+        const descBase = String(item.description || '').trim() || String(item.transId || '전자결재');
+        const taggedDesc = `[전자결재-재분류:${item.transId}] ${descBase}`;
+        const entries = [];
+
+        normalizedRows.forEach((row, index) => {
+            const netAmount = row.useVat ? Math.round(row.amount / 1.1) : row.amount;
+            const vatAmount = row.useVat ? (row.amount - netAmount) : 0;
+            const branchTag = `[분할-${index + 1}]`;
+            entries.push({
+                Date: txDate,
+                Type: '비용',
+                Account: row.targetAccount,
+                Description: `${taggedDesc} ${branchTag}`,
+                Debit: netAmount,
+                Credit: 0,
+                Project: item.project || '본사',
+                Operator: writer,
+                Evidence_Type: '내부기표',
+                Trans_ID: reclassTransId
+            });
+            if (vatAmount > 0) {
+                entries.push({
+                    Date: txDate,
+                    Type: '자산',
+                    Account: '부가세대급금',
+                    Description: `${taggedDesc} ${branchTag} [부가세]`,
+                    Debit: vatAmount,
+                    Credit: 0,
+                    Project: item.project || '본사',
+                    Operator: writer,
+                    Evidence_Type: '내부기표',
+                    Trans_ID: reclassTransId
+                });
+            }
+        });
+
+        entries.push({
+            Date: txDate,
+            Type: '비용',
+            Account: '미분류비용',
+            Description: taggedDesc,
+            Debit: 0,
+            Credit: sourceAmount,
+            Project: item.project || '본사',
+            Operator: writer,
+            Evidence_Type: '내부기표',
+            Trans_ID: reclassTransId
+        });
+
+        const { error: insertError } = await _supabase.from('ac_journal').insert(entries);
+        if (insertError) return showAlert("오류", "분할 재분류 저장 실패: " + insertError.message);
+
+        setLastAutoSyncUndo({
+            type: 'approval_reclass_split',
+            label: `전자결재 분할 재분류 (${item.transId})`,
+            created_at: new Date().toISOString(),
+            trans_ids: [reclassTransId],
+            restores: []
+        });
+
+        approvalSplitReclassModal.hide();
+        showAlert("완료", `${item.transId} 건을 ${normalizedRows.length}개 계정으로 분할 재분류했습니다.`);
+        await loadApprovalUnclassifiedQueue();
+        refreshDashboard();
+        loadHistory();
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
     }
 }
 
@@ -2197,6 +2797,13 @@ function filterAccounts() {
             if (selectContext && selectContext.mode === 'approvalReclass') {
                 const targetKey = String(selectContext.domKey || '').trim();
                 if (targetKey) applyApprovalReclassAccountSelection(targetKey, acc.Item);
+                selectContext = null;
+                selectModal.hide();
+                return;
+            }
+            if (selectContext && selectContext.mode === 'approvalSplitReclass') {
+                const rowId = String(selectContext.rowId || '').trim();
+                if (rowId) applyApprovalSplitReclassAccountSelection(rowId, acc.Item);
                 selectContext = null;
                 selectModal.hide();
                 return;
@@ -3250,6 +3857,10 @@ async function openClosingModal() {
     document.getElementById("closingYearInput").value = defaultYear;
     document.getElementById("closingLegalInput").value = "";
     document.getElementById("closingVoluntaryInput").value = "0";
+    document.getElementById("closingTaxExpenseInput").value = "0";
+    document.getElementById("closingTaxCreditInput").value = "0";
+    document.getElementById("closingPrepaidTaxInput").value = "0";
+    closingTaxExpenseManual = false;
     await refreshClosingContext();
     closingModal.show();
 }
@@ -3259,24 +3870,14 @@ async function buildClosingContext(targetYear) {
     const endDate = `${targetYear}-12-31`;
 
     const { data: journals } = await _supabase.from('ac_journal').select('*')
-        .gte('Date', startDate).lte('Date', endDate)
-        .in('Type', ['매출', '비용', '영업외수익']);
+        .gte('Date', startDate).lte('Date', endDate);
 
-    let balances = {};
-    if (journals) {
-        journals.forEach(j => {
-            const acc = j.Account;
-            if (!balances[acc]) balances[acc] = { type: j.Type, amount: 0 };
-            balances[acc].amount += (Number(j.Debit||0) - Number(j.Credit||0));
-        });
-    }
-
-    let netIncome = 0;
-    Object.values(balances).forEach(info => {
-        if (info.amount === 0) return;
-        if (info.type === '비용') netIncome -= info.amount;
-        else netIncome += Math.abs(info.amount);
-    });
+    const baseJournals = getClosingContextBaseRows(journals || [], targetYear);
+    const closingSummary = buildExistingClosingSummary(journals || [], targetYear);
+    const incomeSummary = buildClosingIncomeSummary(baseJournals);
+    const balances = incomeSummary.balances;
+    const preTaxNetIncome = incomeSummary.netIncome;
+    const taxAdjust = buildTaxAdjustmentSummary(baseJournals);
 
     const { data: capRows } = await _supabase.from('ac_journal').select('*').eq('Account','출자금').lte('Date', endDate);
     const { data: legalRows } = await _supabase.from('ac_journal').select('*').eq('Account','법정적립금').lte('Date', endDate);
@@ -3287,21 +3888,181 @@ async function buildClosingContext(targetYear) {
     if (capitalTotal < 0) capitalTotal = 0;
 
     const thresholdMet = legalBalance >= (capitalTotal * 3);
-    const minLegal = (netIncome > 0 && !thresholdMet) ? Math.ceil(netIncome * 0.1) : 0;
-    const autoLegal = (netIncome > 0 && !thresholdMet) ? minLegal : 0;
 
     return {
         year: targetYear,
         startDate,
         endDate,
         balances,
-        netIncome,
+        preTaxNetIncome,
+        netIncome: preTaxNetIncome - closingSummary.taxExpense,
+        taxExpense: closingSummary.taxExpense,
+        taxAdjust,
+        taxEstimate: buildClosingTaxEstimate(preTaxNetIncome, taxAdjust.fines, 0, 0),
+        isClosed: closingSummary.isClosed,
+        existingLegal: closingSummary.legal,
+        existingVoluntary: closingSummary.voluntary,
         capitalTotal,
         legalBalance,
         thresholdMet,
-        minLegal,
-        autoLegal
+        minLegal: 0,
+        autoLegal: 0
     };
+}
+
+function getClosingRoundedInputValue(id) {
+    const inputEl = document.getElementById(id);
+    const raw = Number(inputEl?.value || 0);
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+    return Math.round(raw);
+}
+
+function getClosingTaxExpenseValue() {
+    return getClosingRoundedInputValue("closingTaxExpenseInput");
+}
+
+function getClosingTaxCreditValue() {
+    return getClosingRoundedInputValue("closingTaxCreditInput");
+}
+
+function getClosingPrepaidTaxValue() {
+    return getClosingRoundedInputValue("closingPrepaidTaxInput");
+}
+
+function syncClosingFormState(resetReserveValues = false, options = {}) {
+    const warn = document.getElementById("closingLegalWarn");
+    if (!closingContext || !warn) return;
+
+    const legalInput = document.getElementById("closingLegalInput");
+    const volInput = document.getElementById("closingVoluntaryInput");
+    const hint = document.getElementById("closingLegalHint");
+    const readonlyInfoEl = document.getElementById("closingReadonlyInfo");
+    const pretaxEl = document.getElementById("closingPretaxIncome");
+    const afterTaxEl = document.getElementById("closingNetIncome");
+    const taxBaseEl = document.getElementById("closingTaxBase");
+    const estCorpEl = document.getElementById("closingEstimatedCorporateTax");
+    const estLocalEl = document.getElementById("closingEstimatedLocalTax");
+    const taxCreditInput = document.getElementById("closingTaxCreditInput");
+    const prepaidTaxInput = document.getElementById("closingPrepaidTaxInput");
+    const taxExpenseInput = document.getElementById("closingTaxExpenseInput");
+    const taxExpenseHintEl = document.getElementById("closingTaxExpenseHint");
+    const expectedPayableEl = document.getElementById("closingExpectedTaxPayable");
+    const runBtn = document.getElementById("btnClosingRun");
+    const taxCredit = getClosingTaxCreditValue();
+    const prepaidTax = getClosingPrepaidTaxValue();
+    const estimate = buildClosingTaxEstimate(closingContext.preTaxNetIncome, closingContext.taxAdjust?.fines || 0, taxCredit, prepaidTax);
+
+    closingContext.taxEstimate = estimate;
+    if (taxBaseEl) taxBaseEl.value = estimate.taxBase.toLocaleString();
+    if (estCorpEl) estCorpEl.value = estimate.nationalAfterCredit.toLocaleString();
+    if (estLocalEl) estLocalEl.value = estimate.localTax.toLocaleString();
+    if (expectedPayableEl) expectedPayableEl.value = estimate.expectedPayable.toLocaleString();
+    if (closingContext.isClosed) {
+        closingTaxExpenseManual = false;
+        if (readonlyInfoEl) readonlyInfoEl.textContent = `이미 ${closingContext.year}년도 결산이 완료되어 읽기 전용으로 표시합니다.`;
+        if (taxCreditInput) {
+            taxCreditInput.value = '';
+            taxCreditInput.placeholder = '미저장';
+            taxCreditInput.disabled = true;
+        }
+        if (prepaidTaxInput) {
+            prepaidTaxInput.value = '';
+            prepaidTaxInput.placeholder = '미저장';
+            prepaidTaxInput.disabled = true;
+        }
+        if (taxExpenseInput) {
+            taxExpenseInput.value = Math.round(Number(closingContext.taxExpense || 0));
+            taxExpenseInput.disabled = true;
+        }
+        if (taxExpenseHintEl) {
+            taxExpenseHintEl.innerText = `반영된 법인세비용 ${Math.round(Number(closingContext.taxExpense || 0)).toLocaleString()}원을 읽기 전용으로 표시합니다. 세액공제/기납부세액 입력값은 별도 저장되지 않습니다.`;
+        }
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.textContent = '결산 완료';
+        }
+    } else {
+        if (readonlyInfoEl) readonlyInfoEl.textContent = '';
+        if (taxCreditInput) {
+            taxCreditInput.disabled = false;
+            taxCreditInput.placeholder = '';
+            if (taxCreditInput.value === '') taxCreditInput.value = '0';
+        }
+        if (prepaidTaxInput) {
+            prepaidTaxInput.disabled = false;
+            prepaidTaxInput.placeholder = '';
+            if (prepaidTaxInput.value === '') prepaidTaxInput.value = '0';
+        }
+        if ((!options.preserveManualTax || !closingTaxExpenseManual) && taxExpenseInput) {
+            taxExpenseInput.value = estimate.recommendedExpense;
+            closingTaxExpenseManual = false;
+        }
+        if (taxExpenseInput) taxExpenseInput.disabled = false;
+        if (taxExpenseHintEl) {
+            taxExpenseHintEl.innerText = closingTaxExpenseManual
+                ? `자동 추천 ${estimate.recommendedExpense.toLocaleString()}원에서 수동 수정 중입니다. 기납부세액은 예상 납부세액에만 반영됩니다.`
+                : `자동 추천 ${estimate.recommendedExpense.toLocaleString()}원이 입력되었습니다. 수정할 수 있으며, 기납부세액은 예상 납부세액에만 반영됩니다.`;
+        }
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.textContent = '결산 실행';
+        }
+    }
+    const taxExpense = getClosingTaxExpenseValue();
+
+    closingContext.taxExpense = taxExpense;
+    closingContext.netIncome = Number(closingContext.preTaxNetIncome || 0) - taxExpense;
+    closingContext.minLegal = (closingContext.netIncome > 0 && !closingContext.thresholdMet)
+        ? Math.ceil(closingContext.netIncome * 0.1)
+        : 0;
+    closingContext.autoLegal = closingContext.minLegal;
+
+    if (pretaxEl) pretaxEl.value = Number(closingContext.preTaxNetIncome || 0).toLocaleString();
+    if (afterTaxEl) afterTaxEl.value = Number(closingContext.netIncome || 0).toLocaleString();
+
+    if (closingContext.isClosed) {
+        legalInput.value = Math.round(Number(closingContext.existingLegal || 0));
+        volInput.value = Math.round(Number(closingContext.existingVoluntary || 0));
+        legalInput.disabled = true;
+        volInput.disabled = true;
+        hint.innerText = "이미 결산 완료된 연도라 적립금 값이 읽기 전용으로 표시됩니다.";
+    } else if (closingContext.netIncome <= 0) {
+        legalInput.value = 0;
+        volInput.value = 0;
+        legalInput.disabled = true;
+        volInput.disabled = true;
+        legalInput.min = 0;
+        legalInput.max = 0;
+        volInput.min = 0;
+        volInput.max = 0;
+        hint.innerText = "법인세 차감후 당기순손익이 0 이하이므로 적립금 입력이 비활성화됩니다.";
+    } else {
+        const currentLegal = Number(legalInput.value || 0);
+        const currentVol = Number(volInput.value || 0);
+        let nextLegal = resetReserveValues ? closingContext.autoLegal : currentLegal;
+        let nextVol = resetReserveValues ? 0 : currentVol;
+
+        legalInput.disabled = false;
+        volInput.disabled = false;
+        legalInput.min = closingContext.minLegal;
+        legalInput.max = closingContext.netIncome;
+        volInput.min = 0;
+        volInput.max = closingContext.netIncome;
+
+        if (nextLegal < closingContext.minLegal || nextLegal > closingContext.netIncome) nextLegal = closingContext.autoLegal;
+        if (nextVol < 0 || nextVol > closingContext.netIncome || (nextLegal + nextVol) > closingContext.netIncome) nextVol = 0;
+
+        legalInput.value = nextLegal;
+        volInput.value = nextVol;
+        if (closingContext.thresholdMet) {
+            hint.innerText = "출자금 3배 기준을 충족하여 법정적립금 0 입력이 가능합니다.";
+        } else {
+            hint.innerText = `법정적립금 최소액: ${closingContext.minLegal.toLocaleString()}원 (법인세 차감후 순손익의 10%)`;
+        }
+    }
+
+    warn.classList.add("hidden");
+    handleClosingLegalInputChange();
 }
 
 async function refreshClosingContext() {
@@ -3310,47 +4071,19 @@ async function refreshClosingContext() {
 
     closingContext = await buildClosingContext(yearVal);
     const ctx = closingContext;
-
-    const legalInput = document.getElementById("closingLegalInput");
-    const volInput = document.getElementById("closingVoluntaryInput");
-    const warn = document.getElementById("closingLegalWarn");
-    const hint = document.getElementById("closingLegalHint");
-
-    document.getElementById("closingNetIncome").value = ctx.netIncome.toLocaleString();
     document.getElementById("closingCapitalInfo").innerText = `출자금 누적: ${ctx.capitalTotal.toLocaleString()}원 · 법정적립금 누적: ${ctx.legalBalance.toLocaleString()}원 · 3배 기준 ${ctx.thresholdMet ? '충족' : '미충족'}`;
-
-    if (ctx.netIncome <= 0) {
-        legalInput.value = 0;
-        volInput.value = 0;
-        legalInput.disabled = true;
-        volInput.disabled = true;
-        hint.innerText = "당기순이익이 0 이하이므로 적립금 입력이 비활성화됩니다.";
-    } else {
-        legalInput.disabled = false;
-        volInput.disabled = false;
-        legalInput.min = ctx.minLegal;
-        legalInput.max = ctx.netIncome;
-        volInput.min = 0;
-        volInput.max = ctx.netIncome;
-        legalInput.value = ctx.autoLegal;
-        volInput.value = 0;
-        if (ctx.thresholdMet) {
-            hint.innerText = "출자금 3배 기준을 충족하여 법정적립금 0 입력이 가능합니다.";
-        } else {
-            hint.innerText = `법정적립금 최소액: ${ctx.minLegal.toLocaleString()}원 (순이익의 10%)`;
-        }
-    }
-
-    warn.classList.add("hidden");
-    handleClosingLegalInputChange();
+    syncClosingFormState(true);
 }
 
 function handleClosingLegalInputChange() {
     const warn = document.getElementById("closingLegalWarn");
     if (!closingContext) { warn.classList.add("hidden"); return; }
     const current = Number(document.getElementById("closingLegalInput").value || 0);
-    const autoVal = Number(closingContext.autoLegal || 0);
-    if (current !== autoVal) warn.classList.remove("hidden");
+    if (closingContext.netIncome <= 0 || closingContext.thresholdMet || closingContext.minLegal <= 0) {
+        warn.classList.add("hidden");
+        return;
+    }
+    if (current < Number(closingContext.minLegal || 0)) warn.classList.remove("hidden");
     else warn.classList.add("hidden");
 }
 
@@ -3359,6 +4092,11 @@ async function runClosingFromModal() {
     if (!closingContext) return;
 
     const ctx = closingContext;
+    if (ctx.isClosed) return showAlert("알림", `이미 ${ctx.year}년도 결산이 완료되어 읽기 전용으로만 확인할 수 있습니다.`);
+    const taxExpense = getClosingTaxExpenseValue();
+    const taxCredit = getClosingTaxCreditValue();
+    const prepaidTax = getClosingPrepaidTaxValue();
+    const estimate = buildClosingTaxEstimate(ctx.preTaxNetIncome, ctx.taxAdjust?.fines || 0, taxCredit, prepaidTax);
     const legal = Number(document.getElementById("closingLegalInput").value || 0);
     const vol = Number(document.getElementById("closingVoluntaryInput").value || 0);
 
@@ -3371,30 +4109,63 @@ async function runClosingFromModal() {
         if ((legal + vol) > ctx.netIncome) return showAlert("오류", "법정적립금 + 임의적립금이 당기순이익을 초과할 수 없습니다.");
     }
 
-    showConfirm("연말결산 실행", `${ctx.year}년 결산을 진행합니다.\n당기순이익: ${ctx.netIncome.toLocaleString()}원\n법정적립: ${legal.toLocaleString()}원\n임의적립: ${vol.toLocaleString()}원`, async () => {
-        await executeClosing(ctx, legal, vol);
+    const confirmMessage = `${ctx.year}년 결산을 진행합니다.\n법인세 차감전 당기순이익: ${ctx.preTaxNetIncome.toLocaleString()}원\n추정 과세표준: ${estimate.taxBase.toLocaleString()}원\n추정 법인세(국세, 공제후): ${estimate.nationalAfterCredit.toLocaleString()}원\n추정 법인지방소득세: ${estimate.localTax.toLocaleString()}원\n세액공제/감면: ${estimate.creditApplied.toLocaleString()}원\n기납부세액: ${estimate.prepaidApplied.toLocaleString()}원\n예상 납부세액: ${estimate.expectedPayable.toLocaleString()}원\n반영 법인세비용: ${taxExpense.toLocaleString()}원\n법인세 차감후 당기순손익: ${ctx.netIncome.toLocaleString()}원\n법정적립: ${legal.toLocaleString()}원\n임의적립: ${vol.toLocaleString()}원`;
+    const confirmAction = async () => {
+        await executeClosing(ctx, legal, vol, taxExpense);
+    };
+    const closingEl = document.getElementById('closingModal');
+
+    if (closingEl && closingEl.classList.contains('show')) {
+        const onClosingHidden = () => {
+            closingEl.removeEventListener('hidden.bs.modal', onClosingHidden);
+            showConfirm("연말결산 실행", confirmMessage, confirmAction, { returnModalId: 'closingModal' });
+        };
+        closingEl.addEventListener('hidden.bs.modal', onClosingHidden);
         closingModal.hide();
-    });
+        return;
+    }
+
+    showConfirm("연말결산 실행", confirmMessage, confirmAction);
 }
 
-async function executeClosing(ctx, legal, vol) {
+async function executeClosing(ctx, legal, vol, taxExpense) {
     const relatedKey = `CLOSE-${ctx.year}`;
     const writer = myInfo ? myInfo.emp_name : "System";
 
-    const { data: dup } = await _supabase.from('ac_journal').select('id').eq('Trans_ID', relatedKey).limit(1);
+    const { data: dup } = await _supabase.from('ac_journal').select('Trans_ID').eq('Trans_ID', relatedKey).limit(1);
     if (dup && dup.length > 0) return showAlert("중복", `이미 ${ctx.year}년도 결산이 완료되었습니다.`);
 
     let entries = [];
     for (const [acc, info] of Object.entries(ctx.balances)) {
-        if(info.amount === 0) continue;
-        if(info.type === '비용') { // 비용(차변) -> 대변 기입
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: info.amount, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '비용', Account: acc, Description: `[손익마감]`, Debit: 0, Credit: info.amount, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-        } else { // 수익(대변) -> 차변 기입
-            const abs = Math.abs(info.amount);
-            entries.push({ Date: ctx.endDate, Type: info.type, Account: acc, Description: `[손익마감]`, Debit: abs, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
-            entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: 0, Credit: abs, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+        const amount = Number(info?.amount || 0);
+        if (!amount) continue;
+        if (info.type === '비용') {
+            if (amount > 0) {
+                entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: amount, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+                entries.push({ Date: ctx.endDate, Type: '비용', Account: acc, Description: `[손익마감]`, Debit: 0, Credit: amount, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            } else {
+                const abs = Math.abs(amount);
+                entries.push({ Date: ctx.endDate, Type: '비용', Account: acc, Description: `[손익마감]`, Debit: abs, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+                entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: 0, Credit: abs, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            }
+        } else {
+            if (amount > 0) {
+                entries.push({ Date: ctx.endDate, Type: info.type, Account: acc, Description: `[손익마감]`, Debit: amount, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+                entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: 0, Credit: amount, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            } else {
+                const abs = Math.abs(amount);
+                entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] ${acc}`, Debit: abs, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+                entries.push({ Date: ctx.endDate, Type: info.type, Account: acc, Description: `[손익마감]`, Debit: 0, Credit: abs, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+            }
         }
+    }
+
+    if (taxExpense > 0) {
+        const taxDesc = `[법인세반영] ${ctx.year}년 법인세비용`;
+        entries.push({ Date: ctx.endDate, Type: '비용', Account: '법인세비용', Description: taxDesc, Debit: taxExpense, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+        entries.push({ Date: ctx.endDate, Type: '부채', Account: '미지급금', Description: taxDesc, Debit: 0, Credit: taxExpense, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+        entries.push({ Date: ctx.endDate, Type: '자본', Account: '이월이익잉여금', Description: `[손익마감] 법인세비용`, Debit: taxExpense, Credit: 0, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
+        entries.push({ Date: ctx.endDate, Type: '비용', Account: '법인세비용', Description: `[손익마감]`, Debit: 0, Credit: taxExpense, Trans_ID: relatedKey, Evidence_Type: '내부기표', Project: '본사', Operator: writer });
     }
 
     if(ctx.netIncome > 0) {
@@ -3413,7 +4184,7 @@ async function executeClosing(ctx, legal, vol) {
         const { error } = await _supabase.from('ac_journal').insert(entries);
         if(error) showAlert("오류", error.message);
         else {
-            showAlert("완료", `결산 및 이익처분이 완료되었습니다.\n당기순손익: ${ctx.netIncome.toLocaleString()}원`);
+            showAlert("완료", `결산 및 이익처분이 완료되었습니다.\n법인세 차감후 당기순손익: ${ctx.netIncome.toLocaleString()}원`);
             refreshDashboard();
         }
     } else {
@@ -3595,7 +4366,7 @@ function confirmSync(type) {
             const { data: insertedRows, error: insertError } = await _supabase
                 .from('ac_journal')
                 .insert(entries)
-                .select('id');
+                .select('Trans_ID');
             if(insertError) return showAlert("오류", "전표 저장 실패: " + insertError.message);
 
             const { error: stateError } = await _supabase
@@ -3603,11 +4374,11 @@ function confirmSync(type) {
                 .update({ is_accounted: true })
                 .eq('year_month', ym);
             if (stateError) {
-                const insertedIds = Array.isArray(insertedRows)
-                    ? insertedRows.map(row => row?.id).filter(v => v !== null && v !== undefined)
+                const insertedTransIds = Array.isArray(insertedRows)
+                    ? Array.from(new Set(insertedRows.map(row => String(row?.Trans_ID || '').trim()).filter(Boolean)))
                     : [];
-                if (insertedIds.length > 0) {
-                    const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('id', insertedIds);
+                if (insertedTransIds.length > 0) {
+                    const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('Trans_ID', insertedTransIds);
                     if (rollbackError) {
                         return showAlert("부분 완료", "처리상태 갱신과 전표 롤백이 모두 실패했습니다: " + rollbackError.message);
                     }
@@ -3863,7 +4634,7 @@ function confirmSync(type) {
                 const { data: insertedRows, error: insertError } = await _supabase
                     .from('ac_journal')
                     .insert(entries)
-                    .select('id');
+                    .select('Trans_ID');
                 if (insertError) {
                     console.error("전표 저장 실패:", insertError);
                     return showAlert("오류", "전표 저장 실패: " + insertError.message);
@@ -3875,11 +4646,11 @@ function confirmSync(type) {
                         .update({ status: '전표완료' })
                         .in('id', uniqueMarkIds);
                     if (updateError) {
-                        const insertedIds = Array.isArray(insertedRows)
-                            ? insertedRows.map(row => row?.id).filter(v => v !== null && v !== undefined)
+                        const insertedTransIds = Array.isArray(insertedRows)
+                            ? Array.from(new Set(insertedRows.map(row => String(row?.Trans_ID || '').trim()).filter(Boolean)))
                             : [];
-                        if (insertedIds.length > 0) {
-                            const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('id', insertedIds);
+                        if (insertedTransIds.length > 0) {
+                            const { error: rollbackError } = await _supabase.from('ac_journal').delete().in('Trans_ID', insertedTransIds);
                             if (rollbackError) {
                                 return showAlert("부분 오류", "상태 변경과 전표 롤백이 모두 실패했습니다: " + rollbackError.message);
                             }
@@ -4716,7 +5487,12 @@ function renderHistorySingle(rows) {
 
     items.forEach((item) => {
         const dateText = escapeHtml(item.date || '-');
-        const labelText = escapeHtml(item.label || '(항목 없음)');
+        const approvalDocId = parseApprovalDocIdFromTransId(item.transId);
+        const labelText = buildApprovalDocTitleButtonHtml(
+            item.label || '(항목 없음)',
+            approvalDocId,
+            'btn btn-link p-0 text-start fw-bold text-decoration-none align-baseline'
+        );
         const descText = escapeHtml(cleanTagPrefix(item.desc || ''));
         const operatorText = escapeHtml(item.operator);
         const transText = item.transId ? ` · ${escapeHtml(item.transId)}` : '';
@@ -4766,15 +5542,19 @@ function renderHistoryDouble(rows) {
         const safeDesc = escapeHtml(item.Description);
         const safeDate = escapeHtml(item.Date);
         const transId = item.Trans_ID ? String(item.Trans_ID) : "";
+        const approvalDocId = parseApprovalDocIdFromTransId(transId);
         const safeTransId = escapeHtml(transId);
         const idAttr = escapeHtml(item.id || '');
         const transAttr = safeTransId;
+        const descHtml = approvalDocId
+            ? buildApprovalDocTitleButtonHtml(item.Description || '전자결재 문서', approvalDocId)
+            : `<small>${safeDesc}</small>`;
         el.innerHTML += `
             <div class="list-group-item d-flex justify-content-between">
                 <div>
                     <small class="text-muted me-2">${safeDate}</small>
                     <span class="badge bg-secondary me-1">${safeType}</span>
-                    <b>${safeAccount}</b> <small>${safeDesc}</small>
+                    <b>${safeAccount}</b> ${descHtml}
                     ${safeTransId ? `<small class="text-muted ms-1">(${safeTransId})</small>` : ''}
                 </div>
                 <div class="fw-bold">${amt.toLocaleString()} <span class="text-danger cursor-pointer" data-id="${idAttr}" data-trans-id="${transAttr}" onclick="deleteTxByButton(this)">×</span></div>
@@ -4982,7 +5762,7 @@ function classifyYesuDelta(row, salaryMonthMap) {
         }
     }
 
-    if (desc.includes('원천징수')) return { '제세예수금': delta };
+    if (desc.includes('원천징수') || desc.includes('원천세')) return { '제세예수금': delta };
     if (
         desc.includes('4대보험') ||
         desc.includes('직원분 상환') ||
@@ -5103,6 +5883,7 @@ async function printReport() {
     const startDate = `${selYear}-01-01`;
     const endDate = (selYear === currYear) ? todayStr : `${selYear}-12-31`;
     const endYm = endDate.slice(0, 7);
+    const coopId = String(myInfo?.coop_id || '').trim();
     let rangeText = (selYear === currYear) ? `${startDate} ~ ${endDate} (가결산)` : `${startDate} ~ ${endDate} (확정)`;
 
     const [
@@ -5115,10 +5896,10 @@ async function printReport() {
     ] = await Promise.all([
         _supabase.from('ac_journal').select('*').gte('Date', startDate).lte('Date', endDate),
         _supabase.from('ac_journal').select('*').lte('Date', endDate),
-        _supabase.from('ref_company_info').select('*').eq('coop_id', String(myInfo?.coop_id || '').trim()),
+        _supabase.from('ref_company_info').select('*').eq('coop_id', coopId),
         _supabase.from('ac_master').select('Type, Standard, Item, Code'),
         _supabase.from('hr_salary').select('year_month,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total').lte('year_month', endYm),
-        _supabase.from('ref_members').select('*', { count: 'exact', head: true })
+        _supabase.from('coop_members').select('*', { count: 'exact', head: true }).eq('coop_id', coopId).eq('status', '정상')
     ]);
 
     const fetchError = periodError || closingError || infoError || masterError || salaryError || memberError;
@@ -5127,40 +5908,20 @@ async function printReport() {
     const info = {}; if(infoData) infoData.forEach(i=>info[i.key]=i.value);
     const memberCount = memberCountRaw || 0;
     const salaryMonthMap = buildSalaryDeductionMonthMap(salaryData || []);
+    const reportPeriodData = getClosingReportPeriodRows(periodData || [], selYear);
+    const hasClosingCarryforward = (periodData || []).some((row) => isClosingCarryforwardRow(row, selYear));
 
     let asset={}, liab={}, equity={}, rev={}, exp={}, otherRev={};
     let tAsset=0, tLiab=0, tEquity=0, tRev=0, tExp=0, tOtherRev=0;
     let capital = 0;
-    let taxAdjust = { fines: 0, noProof: 0, donations: 0, entertain: 0 };
+    const taxAdjust = buildTaxAdjustmentSummary(reportPeriodData);
     let surplus = { legal: 0, voluntary: 0, dividend: 0 };
-    const accountAliasByCompact = {
-        '부가세대급금': '부가세대급금',
-        '부가세예수금': '부가세예수금',
-        '잡이익': '잡이익',
-        '잡손실': '잡손실'
-    };
-
-    function normalizeAccountName(name) {
-        const raw = String(name || '').trim();
-        if (!raw) return '';
-        const compact = raw.replace(/\s+/g, '');
-        return accountAliasByCompact[compact] || raw;
-    }
-
-    function normalizeTypeByAccount(type, account) {
-        if (account === '부가세대급금' || account === '보통예금' || account === '현금' || account === '선급금' || account === '미수금') return '자산';
-        if (account === '부가세예수금') return '부채';
-        if (account === '잡이익') return '영업외수익';
-        if (account === '잡손실') return '비용';
-        return type || '';
-    }
-
     if (closingData) closingData.forEach(r => {
         const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
         const valDr = db - cr;
         const valCr = cr - db;
-        const account = normalizeAccountName(r.Account);
-        const type = normalizeTypeByAccount(r.Type, account);
+        const account = normalizeAccountingReportAccountName(r.Account);
+        const type = normalizeAccountingReportType(r.Type, account);
 
         if(type === '자산') { asset[account] = (asset[account] || 0) + valDr; tAsset += valDr; }
         else if(type === '부채') { liab[account] = (liab[account] || 0) + valCr; tLiab += valCr; }
@@ -5184,34 +5945,31 @@ async function printReport() {
         if (remainder) liab['기타예수금'] = (liab['기타예수금'] || 0) + remainder;
     }
 
-    if (periodData) periodData.forEach(r => {
-        const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
-        const valDr = db - cr;
-        const valCr = cr - db;
-        const account = normalizeAccountName(r.Account);
-        const type = normalizeTypeByAccount(r.Type, account);
+    const incomeSummary = buildClosingIncomeSummary(reportPeriodData);
+    rev = incomeSummary.rev;
+    exp = incomeSummary.exp;
+    otherRev = incomeSummary.otherRev;
+    tRev = incomeSummary.tRev;
+    tExp = incomeSummary.tExp;
+    tOtherRev = incomeSummary.tOtherRev;
 
-        if(type === '매출') { rev[account] = (rev[account] || 0) + valCr; tRev += valCr; }
-        else if(type === '비용') { exp[account] = (exp[account] || 0) + valDr; tExp += valDr; }
-        else if(type === '영업외수익') { otherRev[account] = (otherRev[account] || 0) + valCr; tOtherRev += valCr; }
-        else if(type === '자본') {
+    if (reportPeriodData) reportPeriodData.forEach(r => {
+        const cr = Number(r.Credit || 0);
+        const account = normalizeAccountingReportAccountName(r.Account);
+        const type = normalizeAccountingReportType(r.Type, account);
+
+        if(type === '자본') {
             if(account === '법정적립금') surplus.legal += cr;
             if(account === '임의적립금') surplus.voluntary += cr;
-        }
-
-        if(type === '비용') {
-            if(account === '세금과공과' && r.Description && (r.Description.includes('과태료') || r.Description.includes('벌금'))) taxAdjust.fines += db;
-            if(account === '접대비') taxAdjust.entertain += db;
-            if(account === '기부금') taxAdjust.donations += db;
-            if(db > 30000 && r.Evidence_Type === '기타(영수증)') taxAdjust.noProof += db;
         }
     });
 
     const operatingIncome = tRev - tExp;
     const netIncome = operatingIncome + tOtherRev;
-    const totalLiabEquity = tLiab + tEquity + netIncome;
+    const balanceSheetNetIncome = hasClosingCarryforward ? 0 : netIncome;
+    const totalLiabEquity = tLiab + tEquity + balanceSheetNetIncome;
     const taxBase = netIncome + taxAdjust.fines;
-    const estTax = Math.floor(taxBase * 0.09);
+    const taxEstimate = buildClosingTaxEstimate(netIncome, taxAdjust.fines, 0, 0);
     const totalSurplus = netIncome;
     const totalAppropriation = surplus.legal + surplus.voluntary;
     const carriedForward = totalSurplus - totalAppropriation;
@@ -5243,6 +6001,7 @@ async function printReport() {
 
     if (!codeMap['잡이익']) codeMap['잡이익'] = codeMap['기타수익'] || '910';
     if (!codeMap['잡손실']) codeMap['잡손실'] = codeMap['기타비용'] || '960';
+    if (!codeMap['법인세비용']) codeMap['법인세비용'] = '218';
     if (!codeMap['부가세대급금']) codeMap['부가세대급금'] = codeMap['매입세액'] || '136';
     if (!codeMap['부가세예수금']) codeMap['부가세예수금'] = codeMap['매출세액'] || '255';
     if (!codeMap['4대보험예수금']) codeMap['4대보험예수금'] = codeMap['4대보험예수'] || codeMap['예수금'] || '254';
@@ -5309,11 +6068,14 @@ async function printReport() {
     }).join('');
 
     const headerHtml = `<table class="rpt-header-tbl"><tr><th>회사명</th><td>${e(info.orgName||'')}</td><th>사업자번호</th><td>${e(info.bizNum||'')}</td></tr><tr><th>회계기간</th><td>${e(rangeText)}</td><th>대표자</th><td>${e(info.ceoName||'')}</td></tr><tr><th>출자금</th><td>${capital.toLocaleString()}원</td><th>조합원수</th><td>${memberCount}명</td></tr></table>`;
+    const bsNetIncomeHtml = hasClosingCarryforward
+        ? ''
+        : `<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div>`;
 
     const bsHtml = `
         <div class="rpt-sec">1. 재무상태표 (Balance Sheet)</div>
         <div style="text-align:right; font-size:11px;">(단위: 원)</div>
-        <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${renderLines(assetList, asset)}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${renderLines(liabList, liab)}${yesuNoteHtml}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${renderLines(equityList, equity)}<div class="d-flex justify-content-between text-primary"><span>(당기순이익)</span><span>${netIncome.toLocaleString()}</span></div><div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
+        <table class="rpt-tbl"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><tr><th colspan="2">자 산</th><th colspan="2">부채 및 자본</th></tr><tr style="vertical-align:top;"><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[유동자산]</div>${renderLines(assetList, asset)}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>자산총계</span><span>${tAsset.toLocaleString()}</span></div></td><td colspan="2"><div style="font-weight:bold; margin-bottom:5px;">[부채]</div>${renderLines(liabList, liab)}${yesuNoteHtml}<div class="fw-bold mt-3 mb-1 text-end border-top">부채총계: ${tLiab.toLocaleString()}</div><div style="font-weight:bold; margin-top:10px; margin-bottom:5px;">[자본]</div>${renderLines(equityList, equity)}${bsNetIncomeHtml}<div class="d-flex justify-content-between border-top mt-2 pt-2 fw-bold bg-light"><span>부채/자본 총계</span><span>${totalLiabEquity.toLocaleString()}</span></div></td></tr></table>
     `;
 
     const plHtml = `
@@ -5357,6 +6119,7 @@ async function printReport() {
         <div class="rpt-sec mt-4 text-danger">4. 법인세 신고용 조정명세서 (참고용)</div>
         <div class="alert alert-warning small p-2 mt-2">
             * 이 자료는 신고 참고용입니다. 실제 신고 시 세무 조정 사항을 재확인하세요.<br>
+            * 조합법인 특례(법인세)와 법인지방소득세 표준세율을 기준으로 한 추정치이며, 세액공제/기납부세액은 미반영 상태입니다.<br>
             * 개발비(자산) 인식 여부와 증빙 누락 건을 확인하십시오.
         </div>
         <table class="rpt-tbl mt-2">
@@ -5368,7 +6131,9 @@ async function printReport() {
             <tr><td class="rpt-indent">과태료/벌금 (손금불산입)</td><td class="rpt-amt">${taxAdjust.fines.toLocaleString()}</td></tr>
             <tr><td class="rpt-indent">접대비 한도초과 (별도계산필요)</td><td class="rpt-amt text-muted">(${taxAdjust.entertain.toLocaleString()})</td></tr>
             <tr><td class="bg-light fw-bold text-danger">3. 과세표준 (1+2)</td><td class="rpt-amt fw-bold text-danger">${taxBase.toLocaleString()}</td></tr>
-            <tr><td class="bg-light fw-bold">4. 예상 산출세액 (세율 9%)</td><td class="rpt-amt fw-bold">${estTax.toLocaleString()}</td></tr>
+            <tr><td class="bg-light fw-bold">4. 추정 법인세(국세, 조합법인 특례)</td><td class="rpt-amt fw-bold">${taxEstimate.nationalGross.toLocaleString()}</td></tr>
+            <tr><td class="bg-light fw-bold">5. 추정 법인지방소득세</td><td class="rpt-amt fw-bold">${taxEstimate.localTax.toLocaleString()}</td></tr>
+            <tr><td class="bg-light fw-bold">6. 추정 합계세액</td><td class="rpt-amt fw-bold">${taxEstimate.recommendedExpense.toLocaleString()}</td></tr>
         </table>
 
         <h6 class="fw-bold mt-4">⚠️ 증빙 검토 필요 (가산세 위험군)</h6>

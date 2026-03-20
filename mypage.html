@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.20 | Change: 2026-03-18 - Telegram 연결 안내에 봇 이름 검색 경로를 추가. -->
+<!-- Version: v1.0.25 | Change: 2026-03-19 - 마이페이지에서 관리자용 Google Calendar 구독 설정을 직접 관리할 수 있도록 보강. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.20 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.25 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -110,11 +110,10 @@ body{padding:18px 14px 28px}
 </div>
 <div class="row g-3">
 <div class="col-md-6"><label class="small text-muted">이름</label><input type="text" id="myName" class="form-control bg-light" readonly></div>
-  <div class="col-md-6">
+<div class="col-md-6">
         <label class="small text-muted fw-bold text-primary">조합원 번호</label>
     <input type="text" id="myMemberId" class="form-control readonly-field" placeholder="조합원 번호" oninput="autoHyphenMemberId(this)">
     </div>
-<div class="col-md-6"><label class="small text-muted">부양가족 (전자결재)</label><input type="number" id="myDependents" class="form-control bg-light" readonly placeholder="0"></div>
 <div class="col-md-6"><label class="small text-muted">전화번호</label><input type="text" id="myPhone" class="form-control readonly-field" maxlength="13" oninput="autoHyphen(this)"></div>
 <div class="col-md-6"><label class="small text-muted">이메일</label><input type="email" id="myEmail" class="form-control readonly-field"></div>
 <div class="col-12"><label class="small text-muted">주소</label><div class="input-group"><input type="text" id="myAddress" class="form-control readonly-field" placeholder="주소" readonly><button class="btn btn-outline-secondary hidden" id="btnAddrSearch" type="button" onclick="openAddressSearch()">🔍 검색</button></div></div>
@@ -134,7 +133,10 @@ body{padding:18px 14px 28px}
 </div>
 </div>
 </div>
-<div class="tab-pane fade" id="tabCalendar"><div id="calendar"></div></div>
+<div class="tab-pane fade" id="tabCalendar">
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3"><div class="small text-muted">승인 문서와 사내 일정을 Google Calendar에서 가져올 수 있는 `.ics` 파일로 내보냅니다.</div><button class="btn btn-sm btn-outline-primary align-self-start align-self-lg-auto" type="button" onclick="downloadGoogleCalendarIcs()">Google Calendar(.ics) 내보내기</button></div>
+<div class="card border mb-3 hidden" id="calendarSyncSettingsCard"><div class="card-body"><div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2"><div><div class="fw-bold">📅 Google Calendar 구독 설정</div><div class="small text-muted">관리자용 설정입니다. 직원들이 구독하는 URL 사용 여부와 Google ICS 포함 항목을 여기서 바로 관리할 수 있습니다.</div></div><button type="button" class="btn btn-primary btn-sm align-self-start align-self-lg-auto" onclick="saveMypageCalendarIcsSettings()">저장</button></div><div class="row g-3 mt-1"><div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="mypage_calendar_ics_enabled" onchange="syncMypageCalendarIcsActionState()"><label class="form-check-label fw-bold" for="mypage_calendar_ics_enabled">Google Calendar ICS 구독 사용</label></div></div><div class="col-12 col-lg-8"><label class="small text-muted">구독 URL</label><input type="text" class="form-control form-control-sm" id="mypage_calendar_ics_feed_url" readonly placeholder="저장 후 구독 URL이 생성됩니다."><div class="form-text" id="mypageCalendarIcsFeedHelp">Google Calendar에서 “URL로 추가”로 붙이면 승인 일정이 주기적으로 동기화됩니다.</div></div><div class="col-12 col-lg-4"><label class="small text-muted d-block">&nbsp;</label><div class="d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary btn-sm" id="btnCopyMypageCalendarIcsUrl" onclick="copyMypageCalendarIcsFeedUrl()">URL 복사</button><button type="button" class="btn btn-outline-primary btn-sm" id="btnRegenerateMypageCalendarIcsUrl" onclick="regenerateMypageCalendarIcsFeedToken()">URL 재발급</button></div></div><div class="col-12"><div class="fw-bold mb-2">Google ICS 포함 항목</div><div class="small text-muted mb-2">직원들이 휴대폰에서 보는 Google Calendar 구독 피드에 포함할 항목을 설정합니다.</div><div class="row g-2" id="mypageCalendarGoogleScopeSwitches"></div></div></div></div></div>
+<div id="calendar"></div></div>
 <div class="tab-pane fade" id="tabSalary">
 <div class="d-flex justify-content-between align-items-center mb-3">
 <div class="input-group" style="max-width: 250px;">
@@ -221,13 +223,43 @@ let mypageTelegramConnectUrl='';
 let mypageTelegramConnectCommand='';
 let mypageLeaveTypeCatalog=null;
 let mypageLeaveSnapshotSupported=false;
+let mypageBusinessTripSnapshotSupported=false;
+let mypageCalendarIcsSettings={enabled:false,feedToken:'',sourceCatalog:null};
 let lastAlertFocusTarget=null;
 const MYPAGE_LEAVE_TYPE_CONFIG_KEY='approval_leave_type_catalog_json';
 const MYPAGE_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT='id,created_at,doc_type,title,content,amount,status,drafter_id,leave_snapshot';
+const MYPAGE_BUSINESS_TRIP_SELECT_COLUMNS_WITH_SNAPSHOT='id,created_at,doc_type,title,content,status,drafter_id,drafter_name,business_trip_snapshot';
 const MYPAGE_DEFAULT_LEAVE_TYPE_CATALOG=Object.freeze([
 {id:'annual',label:'연차',enabled:true,deductible:true,duration_mode:'date_range',aliases:['연차']},
 {id:'half_day',label:'반차',enabled:true,deductible:true,duration_mode:'half_day',aliases:['반차']},
 {id:'birthday_half',label:'생일반차',enabled:true,deductible:false,duration_mode:'half_day',aliases:['생일반차']}
+]);
+const MYPAGE_CALENDAR_SOURCE_CONFIG_KEY='calendar_ics_source_catalog_json';
+const MYPAGE_DEFAULT_CALENDAR_SOURCE_CATALOG=Object.freeze({
+erp:Object.freeze({
+leave:true,
+business_trip:true,
+manual_events:true,
+birthdays:true,
+hire_anniversaries:true,
+company_anniversary:true
+}),
+google_ics:Object.freeze({
+leave:true,
+business_trip:true,
+manual_company:true,
+birthdays:false,
+hire_anniversaries:false,
+company_anniversary:true
+})
+});
+const MYPAGE_CALENDAR_SOURCE_ITEM_CATALOG=Object.freeze([
+{key:'leave',label:'승인된 휴가',description:'승인 또는 실물결재 완료된 휴가 문서를 Google Calendar 구독 피드에 포함합니다.'},
+{key:'business_trip',label:'승인된 출장',description:'승인 또는 실물결재 완료된 출장신청 문서를 Google Calendar 구독 피드에 포함합니다.'},
+{key:'manual_company',label:'공용 수동 일정',description:'회사 공개 수동 일정만 Google Calendar 구독 피드에 포함합니다.'},
+{key:'birthdays',label:'직원 생일',description:'직원 생일을 반복 일정으로 Google Calendar 구독 피드에 포함합니다.'},
+{key:'hire_anniversaries',label:'입사기념일',description:'직원 입사기념일을 반복 일정으로 Google Calendar 구독 피드에 포함합니다.'},
+{key:'company_anniversary',label:'창립기념일',description:'회사 창립기념일을 반복 일정으로 Google Calendar 구독 피드에 포함합니다.'}
 ]);
 function hasMypageRoleFallback(){
 const role=String(myInfo?.role||'').toLowerCase();
@@ -242,6 +274,171 @@ return role==='admin'||role==='admin_all';
 }
 function getMypageDefaultLeaveTypeCatalog(){
 return MYPAGE_DEFAULT_LEAVE_TYPE_CATALOG.map(item=>({id:String(item.id||'').trim(),label:String(item.label||'').trim(),enabled:item.enabled!==false,deductible:item.deductible===true,duration_mode:String(item.duration_mode||'date_range').trim(),aliases:Array.from(new Set((Array.isArray(item.aliases)?item.aliases:[]).map(alias=>String(alias||'').trim()).filter(Boolean)))}));
+}
+function getMypageDefaultCalendarSourceCatalog(){
+return JSON.parse(JSON.stringify(MYPAGE_DEFAULT_CALENDAR_SOURCE_CATALOG));
+}
+function normalizeMypageCalendarScopeCatalog(rawValue,defaults){
+const normalized={};
+const source=rawValue&&typeof rawValue==='object'&&!Array.isArray(rawValue)?rawValue:{};
+Object.keys(defaults||{}).forEach(key=>{
+normalized[key]=source[key]===undefined?defaults[key]===true:source[key]===true||String(source[key]).trim().toLowerCase()==='true';
+});
+return normalized;
+}
+function normalizeMypageCalendarSourceCatalog(rawValue){
+const defaults=getMypageDefaultCalendarSourceCatalog();
+let parsed=rawValue;
+if(typeof parsed==='string'){
+try{parsed=JSON.parse(parsed)}catch(_){parsed={}}
+}
+if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)) parsed={};
+return {
+erp:normalizeMypageCalendarScopeCatalog(parsed.erp,defaults.erp),
+google_ics:normalizeMypageCalendarScopeCatalog(parsed.google_ics,defaults.google_ics)
+};
+}
+function getMypageCalendarSourceCatalog(){
+return normalizeMypageCalendarSourceCatalog(companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]);
+}
+function canManageMypageCalendarSettings(){
+return permissionSet.size>0?permissionSet.has('hr.admin'):isMypageAdminUser();
+}
+function getMypageCalendarSourceItemInfo(key){
+return MYPAGE_CALENDAR_SOURCE_ITEM_CATALOG.find(item=>item.key===key)||null;
+}
+function buildMypageCalendarGoogleScopeSwitchesHtml(defaults){
+return Object.keys(defaults||{}).map(key=>{
+const info=getMypageCalendarSourceItemInfo(key);
+if(!info) return '';
+const inputId=`mypage_calendar_google_ics_${key}`;
+return `<div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="${inputId}"><label class="form-check-label fw-bold" for="${inputId}">${info.label}</label></div><div class="small text-muted ms-4">${info.description}</div></div>`;
+}).join('');
+}
+function getMypageCalendarIcsFeedUrl(token){
+const safeToken=String(token||'').trim();
+if(!safeToken) return '';
+return `${SUPABASE_URL}/functions/v1/erp-calendar-ics-feed?token=${encodeURIComponent(safeToken)}`;
+}
+function syncMypageCalendarSettingsCardVisibility(){
+const cardEl=document.getElementById('calendarSyncSettingsCard');
+if(!cardEl) return;
+cardEl.classList.toggle('hidden',!canManageMypageCalendarSettings());
+}
+function ensureMypageCalendarSettingsFields(){
+const wrapper=document.getElementById('mypageCalendarGoogleScopeSwitches');
+if(!wrapper) return;
+if(!wrapper.dataset.bound){
+wrapper.innerHTML=buildMypageCalendarGoogleScopeSwitchesHtml(getMypageDefaultCalendarSourceCatalog().google_ics);
+wrapper.dataset.bound='1';
+}
+}
+function syncMypageCalendarIcsActionState(){
+const enabledInput=document.getElementById('mypage_calendar_ics_enabled');
+const urlInput=document.getElementById('mypage_calendar_ics_feed_url');
+const copyButton=document.getElementById('btnCopyMypageCalendarIcsUrl');
+const regenerateButton=document.getElementById('btnRegenerateMypageCalendarIcsUrl');
+const helpText=document.getElementById('mypageCalendarIcsFeedHelp');
+const isEnabled=!!enabledInput?.checked;
+const hasUrl=!!String(urlInput?.value||'').trim();
+if(copyButton) copyButton.disabled=!hasUrl;
+if(regenerateButton) regenerateButton.disabled=!isEnabled;
+if(helpText){
+helpText.textContent=isEnabled
+?'Google Calendar에서 “URL로 추가”로 붙이면 승인 일정이 주기적으로 동기화됩니다.'
+:'비활성화하면 공개 구독 URL이 동작하지 않습니다. 포함 항목 설정은 그대로 저장됩니다.';
+}
+}
+function renderMypageCalendarIcsFeedUrl(){
+const urlInput=document.getElementById('mypage_calendar_ics_feed_url');
+if(!urlInput) return;
+urlInput.value=getMypageCalendarIcsFeedUrl(mypageCalendarIcsSettings.feedToken);
+syncMypageCalendarIcsActionState();
+}
+function syncMypageCalendarSettingsUi(){
+syncMypageCalendarSettingsCardVisibility();
+if(!canManageMypageCalendarSettings()) return;
+ensureMypageCalendarSettingsFields();
+const enabledInput=document.getElementById('mypage_calendar_ics_enabled');
+const sourceCatalog=normalizeMypageCalendarSourceCatalog(mypageCalendarIcsSettings.sourceCatalog||companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]);
+const enabled=mypageCalendarIcsSettings.enabled===true||String(companyInfo['calendar_ics_enabled']||'').trim().toLowerCase()==='true';
+if(enabledInput) enabledInput.checked=enabled;
+Object.entries(sourceCatalog.google_ics||{}).forEach(([key,value])=>{
+const input=document.getElementById(`mypage_calendar_google_ics_${key}`);
+if(input) input.checked=value===true;
+});
+renderMypageCalendarIcsFeedUrl();
+}
+function collectMypageCalendarIcsSettingsFromUi(){
+const sourceCatalog=normalizeMypageCalendarSourceCatalog(mypageCalendarIcsSettings.sourceCatalog||companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]);
+Object.keys(sourceCatalog.google_ics).forEach(key=>{
+sourceCatalog.google_ics[key]=!!document.getElementById(`mypage_calendar_google_ics_${key}`)?.checked;
+});
+return {
+enabled:!!document.getElementById('mypage_calendar_ics_enabled')?.checked,
+sourceCatalog
+};
+}
+async function loadMypageCalendarIcsSettings(){
+syncMypageCalendarSettingsCardVisibility();
+if(!canManageMypageCalendarSettings()) return;
+const fallbackCatalog=normalizeMypageCalendarSourceCatalog(companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]);
+mypageCalendarIcsSettings={enabled:String(companyInfo['calendar_ics_enabled']||'').trim().toLowerCase()==='true',feedToken:'',sourceCatalog:fallbackCatalog};
+try{
+const {data,error}=await _supabase.rpc('erp_get_calendar_ics_settings');
+if(error) throw error;
+mypageCalendarIcsSettings={enabled:data?.enabled===true,feedToken:String(data?.feed_token||'').trim(),sourceCatalog:normalizeMypageCalendarSourceCatalog(data?.source_catalog)};
+}catch(error){
+console.warn('mypage calendar ICS settings load failed:',error?.message||error);
+}
+syncMypageCalendarSettingsUi();
+}
+async function copyMypageCalendarIcsFeedUrl(){
+const feedUrl=getMypageCalendarIcsFeedUrl(mypageCalendarIcsSettings.feedToken);
+if(!feedUrl) return showAlert('먼저 캘린더 설정을 저장해 구독 URL을 생성해 주세요.');
+try{
+await navigator.clipboard.writeText(feedUrl);
+showAlert('Google Calendar 구독 URL을 복사했습니다.');
+}catch(error){
+showAlert('구독 URL 복사 실패: '+(error?.message||error));
+}
+}
+async function regenerateMypageCalendarIcsFeedToken(){
+if(!canManageMypageCalendarSettings()) return;
+openConfirmModal('캘린더 구독 URL을 재발급하시겠습니까?\n기존 URL은 더 이상 동작하지 않습니다.',async function(){
+try{
+const config=collectMypageCalendarIcsSettingsFromUi();
+const {data,error}=await _supabase.rpc('erp_upsert_calendar_ics_settings',{p_enabled:config.enabled,p_source_catalog:config.sourceCatalog,p_regenerate_token:true});
+if(error) throw error;
+companyInfo['calendar_ics_enabled']=data?.enabled===true?'true':'false';
+companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]=JSON.stringify(normalizeMypageCalendarSourceCatalog(data?.source_catalog));
+mypageCalendarIcsSettings={enabled:data?.enabled===true,feedToken:String(data?.feed_token||'').trim(),sourceCatalog:normalizeMypageCalendarSourceCatalog(data?.source_catalog)};
+syncMypageCalendarSettingsUi();
+showAlert('캘린더 구독 URL을 재발급했습니다. 기존 URL은 더 이상 동작하지 않습니다.');
+}catch(error){
+showAlert('캘린더 URL 재발급 실패: '+(error?.message||error));
+}
+});
+}
+async function saveMypageCalendarIcsSettings(){
+if(!canManageMypageCalendarSettings()) return;
+try{
+const config=collectMypageCalendarIcsSettingsFromUi();
+const {data,error}=await _supabase.rpc('erp_upsert_calendar_ics_settings',{p_enabled:config.enabled,p_source_catalog:config.sourceCatalog,p_regenerate_token:false});
+if(error) throw error;
+companyInfo['calendar_ics_enabled']=data?.enabled===true?'true':'false';
+companyInfo[MYPAGE_CALENDAR_SOURCE_CONFIG_KEY]=JSON.stringify(normalizeMypageCalendarSourceCatalog(data?.source_catalog));
+mypageCalendarIcsSettings={enabled:data?.enabled===true,feedToken:String(data?.feed_token||'').trim(),sourceCatalog:normalizeMypageCalendarSourceCatalog(data?.source_catalog)};
+syncMypageCalendarSettingsUi();
+showAlert('캘린더 구독 설정이 저장되었습니다.');
+}catch(error){
+showAlert('캘린더 구독 설정 저장 실패: '+(error?.message||error));
+}
+}
+function shouldIncludeMypageCalendarSource(scope,key){
+const safeScope=scope==='google_ics'?'google_ics':'erp';
+const catalog=getMypageCalendarSourceCatalog();
+return catalog?.[safeScope]?.[key]===true;
 }
 function normalizeMypageLeaveTypeAliases(value){
 const source=Array.isArray(value)?value:(()=>{if(typeof value!=='string'||!value.trim()) return [];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed:[]}catch(_){return []}})();
@@ -335,6 +532,16 @@ const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent
 if(!response.ok) return false;
 const openapi=await response.json();
 return !!openapi?.definitions?.ref_approval?.properties?.leave_snapshot;
+}catch(_){
+return false;
+}
+}
+async function detectMypageBusinessTripSnapshotSupport(){
+try{
+const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`,{headers:{Accept:'application/openapi+json'}});
+if(!response.ok) return false;
+const openapi=await response.json();
+return !!openapi?.definitions?.ref_approval?.properties?.business_trip_snapshot;
 }catch(_){
 return false;
 }
@@ -596,8 +803,6 @@ noticeComposeModal=new bootstrap.Modal(document.getElementById('noticeComposeMod
 }
 }
 function applyMypageRuntimeProfileUi(){
-const dependentCol=document.getElementById('myDependents')?.closest('.col-md-6');
-if(dependentCol) dependentCol.classList.toggle('hidden',isMypageWorkforceLiteProfile());
 ensureNoticeComposeUi();
 ensureTelegramConnectUi();
 const toolbar=document.getElementById('mypageNoticeToolbar');
@@ -712,6 +917,7 @@ if (!hasMypageView) {
     setTimeout(() => location.href = 'index.html', 1200);
     return;
 }
+syncMypageCalendarSettingsCardVisibility();
 const mypageRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
     moduleKey: 'mypage',
     moduleLabel: '마이페이지',
@@ -724,6 +930,7 @@ applyMypageRuntimeProfileUi();
 document.getElementById("salaryMonth").value=formatMypageKstMonth();
 document.getElementById('tab-calendar-btn').addEventListener('shown.bs.tab',function(e){renderCalendar()});
 await loadCompanyInfo();
+await loadMypageCalendarIcsSettings();
 await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave(),loadMypageTelegramLinkStatus(),loadMypageOvertimeSummary()]);
 applyMypageRuntimeProfileUi();
 };
@@ -765,7 +972,7 @@ async function loadPermissions(user) {
     }
     return result;
 }
-async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();companyInfo={};const coopId=String(myInfo?.coop_id||'').trim();if(!coopId){syncMypageLeaveTypeRuntime();companyInfo.chairman="이사장";return}const{data}=await _supabase.from('ref_company_info').select('*').eq('coop_id',coopId);if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
+async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();mypageBusinessTripSnapshotSupported=await detectMypageBusinessTripSnapshotSupport();companyInfo={};const coopId=String(myInfo?.coop_id||'').trim();if(!coopId){syncMypageLeaveTypeRuntime();companyInfo.chairman="이사장";return}const{data}=await _supabase.from('ref_company_info').select('*').eq('coop_id',coopId);if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
 async function loadProfile() {
     const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
     if (data) {
@@ -782,7 +989,6 @@ async function loadProfile() {
     // 입력 폼 값 채우기
     document.getElementById("myName").value = myInfo.emp_name;
     document.getElementById("myMemberId").value = myInfo.member_id || ""; // [추가]
-    document.getElementById("myDependents").value = myInfo.dependents || 0;
     document.getElementById("myPhone").value = myInfo.phone || "";
     document.getElementById("myEmail").value = myInfo.email || "";
     document.getElementById("myAddress").value = myInfo.address || "";
@@ -959,18 +1165,254 @@ const event={title:leaveTitle,start:startIso,color:(doc?.drafter_id===myInfo.emp
 if(endExclusive) event.end=endExclusive;
 return event;
 }
-async function renderCalendar(){
-const leaveStatuses=['완료','가승인','증빙확인중','실물결재대기','실물결재완료'];
-const{data:l}=await _supabase.from('ref_approval').select('*').ilike('doc_type','휴가%').in('status',leaveStatuses);
-const{data:e}=await _supabase.from('view_employees_calendar').select('*');
-const{data:c}=await _supabase.from('ref_calendar').select('*');
+function getMypageBusinessTripSnapshotMeta(doc){
+const raw=doc?.business_trip_snapshot;
+if(!raw) return null;
+if(raw&&typeof raw==='object'&&!Array.isArray(raw)) return raw;
+if(typeof raw!=='string') return null;
+try{
+const parsed=JSON.parse(raw);
+return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:null;
+}catch(_){
+return null;
+}
+}
+function formatMypageBusinessTripPeriodText(snapshot){
+const startDate=String(snapshot?.start_date||'').trim();
+const endDate=String(snapshot?.end_date||'').trim();
+const periodLabel=String(snapshot?.period_label||'').trim();
+if(!startDate&&!endDate) return '-';
+if(startDate&&endDate&&startDate!==endDate){
+return `${startDate} ~ ${endDate}${periodLabel?` (${periodLabel})`:''}`;
+}
+const baseDate=startDate||endDate;
+return `${baseDate}${periodLabel?` (${periodLabel})`:''}`;
+}
+function buildBusinessTripCalendarEvent(doc){
+const snapshot=getMypageBusinessTripSnapshotMeta(doc);
+const deptText=doc?.drafter_dept?`(${doc.drafter_dept})`:'';
+const title=`${doc?.drafter_name||''}${deptText} 출장`.trim();
+const memoLines=[`결재 완료된 출장 일정입니다.`,`상태: ${doc?.status||'-'}`,`기안자: ${doc?.drafter_name||'-'}`];
+if(doc?.title) memoLines.push(`문서 제목: ${doc.title}`);
+if(snapshot?.period_label){
+memoLines.push(`출장 기간: ${formatMypageBusinessTripPeriodText(snapshot)}`);
+}else{
+memoLines.push(`출장 시작: ${String(snapshot?.start_date||'-')} ${String(snapshot?.start_time||'-')}`.trim());
+memoLines.push(`출장 종료: ${String(snapshot?.end_date||'-')} ${String(snapshot?.end_time||'-')}`.trim());
+}
+if(snapshot.location) memoLines.push(`출장 장소: ${snapshot.location}`);
+if(snapshot?.period_label){
+const startDate=String(snapshot.start_date||'').trim();
+const endDate=String(snapshot.end_date||'').trim();
+if(!startDate||!endDate) return null;
+const isAllDay=snapshot.calendar_all_day===true||startDate!==endDate;
+if(isAllDay){
+const endExclusive=addDaysToIsoDate(endDate,1);
+return{title,start:startDate,end:endExclusive||undefined,color:(doc?.drafter_id===myInfo.emp_id?'#fd7e14':'#f59f00'),allDay:true,extendedProps:{origin:{title,start_date:startDate,end_date:endDate,type:'business_trip',visibility:'company',cal_memo:memoLines.join('\n')}}};
+}
+const startValue=String(snapshot.start_at||'').trim();
+const endValue=String(snapshot.end_at||'').trim();
+const startMs=new Date(startValue).getTime();
+const endMs=new Date(endValue).getTime();
+if(!Number.isFinite(startMs)||!Number.isFinite(endMs)||endMs<=startMs) return null;
+return{title,start:startValue,end:endValue,color:(doc?.drafter_id===myInfo.emp_id?'#fd7e14':'#f59f00'),allDay:false,extendedProps:{origin:{title,start_date:startValue,end_date:endValue,type:'business_trip',visibility:'company',cal_memo:memoLines.join('\n')}}};
+}
+if(!snapshot?.start_at||!snapshot?.end_at) return null;
+const startValue=String(snapshot.start_at||'').trim();
+const endValue=String(snapshot.end_at||'').trim();
+const startMs=new Date(startValue).getTime();
+const endMs=new Date(endValue).getTime();
+if(!Number.isFinite(startMs)||!Number.isFinite(endMs)||endMs<=startMs) return null;
+return{title,start:startValue,end:endValue,color:(doc?.drafter_id===myInfo.emp_id?'#fd7e14':'#f59f00'),allDay:false,extendedProps:{origin:{title,start_date:startValue,end_date:endValue,type:'business_trip',visibility:'company',cal_memo:memoLines.join('\n')}}};
+}
+async function loadMypageCalendarSourceData(scope='erp'){
+const safeScope=scope==='google_ics'?'google_ics':'erp';
+const coopId=String(myInfo?.coop_id||'').trim();
+const leaveStatuses=safeScope==='google_ics'?['완료','실물결재완료']:['완료','가승인','증빙확인중','실물결재대기','실물결재완료'];
+let leaveQuery=_supabase.from('ref_approval').select('*').ilike('doc_type','휴가%').in('status',leaveStatuses);
+if(coopId) leaveQuery=leaveQuery.eq('coop_id', coopId);
+const {data:l}=await leaveQuery;
+const approvedTripStatuses=['완료','실물결재완료'];
+const tripSelect=mypageBusinessTripSnapshotSupported?MYPAGE_BUSINESS_TRIP_SELECT_COLUMNS_WITH_SNAPSHOT:'id,title,content,status,created_at,drafter_id,drafter_name,business_trip_snapshot';
+let tripQuery=_supabase.from('ref_approval').select(tripSelect).eq('doc_type','출장신청').in('status',approvedTripStatuses);
+if(coopId) tripQuery=tripQuery.eq('coop_id', coopId);
+const {data:bt}=await tripQuery;
+const employeePromise=safeScope==='google_ics'
+?(() => {
+let query=_supabase.from('ref_employees').select('emp_id,emp_name,department,hire_date,birth_date,resign_date');
+if(coopId) query=query.eq('coop_id', coopId);
+return query;
+})()
+:_supabase.from('view_employees_calendar').select('*');
+let calendarQuery=_supabase.from('ref_calendar').select('*');
+if(coopId) calendarQuery=calendarQuery.eq('coop_id', coopId);
+const [{data:e},{data:c}]=await Promise.all([employeePromise,calendarQuery]);
+return {leaveDocs:Array.isArray(l)?l:[],businessTripDocs:Array.isArray(bt)?bt:[],employeeRows:Array.isArray(e)?e:[],calendarRows:Array.isArray(c)?c:[]};
+}
+function buildMypageCalendarDisplayEvents(source,scope='erp'){
 let evts=[];
 const bY=new Date().getFullYear();
 const yrs=[bY-2,bY-1,bY,bY+1,bY+2];
-if(l)l.forEach(x=>{const leaveEvent=buildLeaveCalendarEvent(x);if(leaveEvent) evts.push(leaveEvent);});
-if(e)e.forEach(p=>{const dn=p.department?`(${p.department})`:'';if(p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));if(p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}});
-if(c)c.forEach(x=>{if(x.visibility==='admin'&&!(myInfo.role==='admin' || myInfo.role==='admin_all'))return;if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;const bg=x.visibility==='admin'?'#6610f2':(x.visibility==='private'?'#198754':(x.type==='holiday'?'#dc3545':'#0d6efd'));const startParts=getMypageKstDateParts(x.start_date);const endParts=getMypageKstDateParts(x.end_date);const timeSuffix=startParts.hasTime&&startParts.time?`T${startParts.time}`:'';if(x.recurrence==='yearly'){yrs.forEach(y=>{const md=startParts.date?startParts.date.slice(5,10):'';if(!md) return;evts.push({id:x.id,title:x.title,start:`${y}-${md}${timeSuffix}`,color:bg,extendedProps:{origin:x}})});}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=startParts.date?startParts.date.slice(8,10):'';if(!dd) return;if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${timeSuffix}`,color:bg,extendedProps:{origin:x}})}}});}else{const startVal=startParts.date?`${startParts.date}${timeSuffix}`:x.start_date;const endSuffix=endParts.hasTime&&endParts.time?`T${endParts.time}`:'';const endVal=endParts.date?`${endParts.date}${endSuffix}`:x.end_date;evts.push({id:x.id,title:x.title,start:startVal,end:endVal,color:bg,extendedProps:{origin:x}})}}); 
-if(companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:"🎉 창립기념일",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true,extendedProps:{origin:{title:"🎉 창립기념일",start_date:`${y}-${companyInfo.estDate.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`}}})}}
+if(shouldIncludeMypageCalendarSource(scope,'leave')) source.leaveDocs.forEach(x=>{const leaveEvent=buildLeaveCalendarEvent(x);if(leaveEvent) evts.push(leaveEvent);});
+if(shouldIncludeMypageCalendarSource(scope,'business_trip')) source.businessTripDocs.forEach(x=>{const tripEvent=buildBusinessTripCalendarEvent(x);if(tripEvent) evts.push(tripEvent);});
+source.employeeRows.forEach(p=>{
+const dn=p.department?`(${p.department})`:'';
+if(shouldIncludeMypageCalendarSource(scope,'birthdays')&&p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));
+if(shouldIncludeMypageCalendarSource(scope,'hire_anniversaries')&&p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}
+});
+source.calendarRows.forEach(x=>{
+if(scope==='google_ics'){
+if(!shouldIncludeMypageCalendarSource(scope,'manual_company')) return;
+if(x.visibility!=='company') return;
+}else{
+if(!shouldIncludeMypageCalendarSource(scope,'manual_events')) return;
+if(x.visibility==='admin'&&!(myInfo.role==='admin' || myInfo.role==='admin_all'))return;
+if(x.visibility==='private'&&x.created_by!==myInfo.emp_id)return;
+}
+const bg=x.visibility==='admin'?'#6610f2':(x.visibility==='private'?'#198754':(x.type==='holiday'?'#dc3545':'#0d6efd'));const startParts=getMypageKstDateParts(x.start_date);const endParts=getMypageKstDateParts(x.end_date);const timeSuffix=startParts.hasTime&&startParts.time?`T${startParts.time}`:'';if(x.recurrence==='yearly'){yrs.forEach(y=>{const md=startParts.date?startParts.date.slice(5,10):'';if(!md) return;evts.push({id:x.id,title:x.title,start:`${y}-${md}${timeSuffix}`,color:bg,extendedProps:{origin:x}})});}else if(x.recurrence==='monthly'){yrs.forEach(y=>{for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0'),dd=startParts.date?startParts.date.slice(8,10):'';if(!dd) return;if(new Date(`${y}-${mm}-${dd}`).getDate()==dd){evts.push({id:x.id,title:x.title,start:`${y}-${mm}-${dd}${timeSuffix}`,color:bg,extendedProps:{origin:x}})}}});}else{const startVal=startParts.date?`${startParts.date}${timeSuffix}`:x.start_date;const endSuffix=endParts.hasTime&&endParts.time?`T${endParts.time}`:'';const endVal=endParts.date?`${endParts.date}${endSuffix}`:x.end_date;evts.push({id:x.id,title:x.title,start:startVal,end:endVal,color:bg,extendedProps:{origin:x}})}}); 
+if(shouldIncludeMypageCalendarSource(scope,'company_anniversary')&&companyInfo.estDate){const tY=new Date().getFullYear();for(let y=tY-50;y<=tY+50;y++){evts.push({title:"🎉 창립기념일",start:`${y}-${companyInfo.estDate.slice(5,10)}`,color:'#ff4081',allDay:true,extendedProps:{origin:{title:"🎉 창립기념일",start_date:`${y}-${companyInfo.estDate.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`}}})}}
+return evts;
+}
+function escapeMypageIcsText(value){
+return String(value??'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+}
+function formatMypageIcsUtcDateTime(value){
+const date=value instanceof Date?value:new Date(value);
+if(Number.isNaN(date.getTime())) return '';
+const y=String(date.getUTCFullYear());
+const mm=String(date.getUTCMonth()+1).padStart(2,'0');
+const dd=String(date.getUTCDate()).padStart(2,'0');
+const hh=String(date.getUTCHours()).padStart(2,'0');
+const mi=String(date.getUTCMinutes()).padStart(2,'0');
+const ss=String(date.getUTCSeconds()).padStart(2,'0');
+return `${y}${mm}${dd}T${hh}${mi}${ss}Z`;
+}
+function formatMypageIcsDateValue(value){
+const raw=String(value||'').trim();
+const normalized=raw.includes('T')?raw.slice(0,10):raw;
+return normalized.replace(/[^0-9]/g,'').slice(0,8);
+}
+function addOneDayToMypageDateValue(value){
+const raw=String(value||'').trim();
+const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+if(!m) return '';
+const date=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3])));
+if(Number.isNaN(date.getTime())) return '';
+date.setUTCDate(date.getUTCDate()+1);
+const y=String(date.getUTCFullYear());
+const mm=String(date.getUTCMonth()+1).padStart(2,'0');
+const dd=String(date.getUTCDate()).padStart(2,'0');
+return `${y}${mm}${dd}`;
+}
+function foldMypageIcsLine(line){
+const raw=String(line||'');
+if(raw.length<=73) return raw;
+const chunks=[];
+let index=0;
+while(index<raw.length){
+chunks.push(index===0?raw.slice(index,index+73):` ${raw.slice(index,index+72)}`);
+index+=index===0?73:72;
+}
+return chunks.join('\r\n');
+}
+function appendMypageIcsEvent(lines,eventLines){
+eventLines.forEach(line=>lines.push(foldMypageIcsLine(line)));
+}
+function buildMypageIcsEventLines(options){
+const lines=['BEGIN:VEVENT',`UID:${escapeMypageIcsText(options.uid)}`,`DTSTAMP:${formatMypageIcsUtcDateTime(new Date())}`,`SUMMARY:${escapeMypageIcsText(options.title)}`];
+if(options.description) lines.push(`DESCRIPTION:${escapeMypageIcsText(options.description)}`);
+if(options.location) lines.push(`LOCATION:${escapeMypageIcsText(options.location)}`);
+if(options.allDay){
+const startDate=formatMypageIcsDateValue(options.start);
+if(!startDate) return [];
+const endDate=formatMypageIcsDateValue(options.end)||addOneDayToMypageDateValue(String(options.start||'').slice(0,10));
+lines.push(`DTSTART;VALUE=DATE:${startDate}`);
+if(endDate) lines.push(`DTEND;VALUE=DATE:${endDate}`);
+}else{
+const startDateTime=formatMypageIcsUtcDateTime(options.start);
+if(!startDateTime) return [];
+lines.push(`DTSTART:${startDateTime}`);
+const endDateTime=formatMypageIcsUtcDateTime(options.end||options.start);
+if(endDateTime) lines.push(`DTEND:${endDateTime}`);
+}
+if(options.rrule) lines.push(`RRULE:${options.rrule}`);
+lines.push('END:VEVENT');
+return lines;
+}
+function buildMypageCalendarIcsContent(source,scope='google_ics'){
+const companyName=String(companyInfo.company_name||companyInfo.orgName||'협동조합').trim()||'협동조합';
+const lines=['BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',`PRODID:-//${escapeMypageIcsText(companyName)}//ERP Calendar//KO`,`X-WR-CALNAME:${escapeMypageIcsText(`${companyName} ERP 일정`)}`,'X-WR-TIMEZONE:Asia/Seoul'];
+if(shouldIncludeMypageCalendarSource(scope,'leave')) source.leaveDocs.forEach(doc=>{
+const event=buildLeaveCalendarEvent(doc);
+if(!event?.start) return;
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`leave-${doc.id}@erp.yonginsolar.kr`,title:event.title,description:event?.extendedProps?.origin?.cal_memo||'',start:event.start,end:event.end||'',allDay:true}));
+});
+if(shouldIncludeMypageCalendarSource(scope,'business_trip')) source.businessTripDocs.forEach(doc=>{
+const event=buildBusinessTripCalendarEvent(doc);
+if(!event?.start||!event?.end) return;
+const snapshot=getMypageBusinessTripSnapshotMeta(doc)||{};
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`business-trip-${doc.id}@erp.yonginsolar.kr`,title:event.title,description:event?.extendedProps?.origin?.cal_memo||'',location:snapshot.location||'',start:event.start,end:event.end,allDay:false}));
+});
+source.employeeRows.forEach(row=>{
+const deptLabel=row.department?`(${row.department})`:'';
+if(shouldIncludeMypageCalendarSource(scope,'birthdays')&&row.birth_date){
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`birthday-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 생일 🎂`,description:`${row.emp_name}님의 생일입니다.\n사번: ${row.emp_id}\n부서: ${row.department||'-'}`,start:`${new Date().getFullYear()}-${String(row.birth_date).slice(5,10)}`,allDay:true,rrule:'FREQ=YEARLY'}));
+}
+if(shouldIncludeMypageCalendarSource(scope,'hire_anniversaries')&&row.hire_date){
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`hire-anniversary-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 입사기념일 🎉`,description:`${row.emp_name}님의 입사기념일입니다.\n사번: ${row.emp_id}\n입사일: ${row.hire_date}`,start:row.hire_date,allDay:true,rrule:'FREQ=YEARLY'}));
+}
+});
+source.calendarRows.forEach(row=>{
+if(scope==='google_ics'){
+if(!shouldIncludeMypageCalendarSource(scope,'manual_company')) return;
+if(row.visibility!=='company') return;
+}else{
+if(!shouldIncludeMypageCalendarSource(scope,'manual_events')) return;
+if(row.visibility==='admin'&&!(myInfo.role==='admin' || myInfo.role==='admin_all')) return;
+if(row.visibility==='private'&&row.created_by!==myInfo.emp_id) return;
+}
+const startParts=getMypageKstDateParts(row.start_date);
+const endParts=getMypageKstDateParts(row.end_date);
+const isAllDay=!startParts.hasTime;
+let rrule='';
+if(row.recurrence==='yearly') rrule='FREQ=YEARLY';
+if(row.recurrence==='monthly'){
+const day=startParts.date?String(Number(startParts.date.slice(8,10))):'';
+if(day) rrule=`FREQ=MONTHLY;BYMONTHDAY=${day}`;
+}
+const startValue=isAllDay?(startParts.date||String(row.start_date||'').slice(0,10)):(row.start_date||'');
+const endValue=isAllDay?(endParts.date||startParts.date||''):(row.end_date||'');
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`manual-calendar-${row.id}@erp.yonginsolar.kr`,title:row.title||'일정',description:row.cal_memo||'',start:startValue,end:endValue,allDay:isAllDay,rrule}));
+});
+if(shouldIncludeMypageCalendarSource(scope,'company_anniversary')&&companyInfo.estDate){
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`company-anniversary-${String(myInfo?.coop_id||'global')}@erp.yonginsolar.kr`,title:'🎉 창립기념일',description:`우리 회사의 창립기념일입니다.\n설립일: ${companyInfo.estDate}`,start:companyInfo.estDate,allDay:true,rrule:'FREQ=YEARLY'}));
+}
+lines.push('END:VCALENDAR');
+return `${lines.join('\r\n')}\r\n`;
+}
+async function downloadGoogleCalendarIcs(){
+try{
+const source=await loadMypageCalendarSourceData('google_ics');
+const content=buildMypageCalendarIcsContent(source,'google_ics');
+const blob=new Blob([content],{type:'text/calendar;charset=utf-8'});
+const companyName=String(companyInfo.company_name||companyInfo.orgName||'coop').trim().replace(/[\\/:*?"<>|]+/g,'_');
+const today=formatMypageKstDate(new Date(),'').replace(/-/g,'');
+const link=document.createElement('a');
+link.href=URL.createObjectURL(blob);
+link.download=`${companyName||'coop'}_google_calendar_${today||'export'}.ics`;
+document.body.appendChild(link);
+link.click();
+link.remove();
+setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+showAlert("Google Calendar용 .ics 파일을 내려받았습니다.\nGoogle Calendar > 설정 > 가져오기 및 내보내기 > 가져오기에서 추가할 수 있습니다.");
+}catch(error){
+console.error('downloadGoogleCalendarIcs failed:',error);
+showAlert(`Google Calendar 내보내기 실패: ${error?.message||'알 수 없는 오류'}`);
+}
+} // End of downloadGoogleCalendarIcs
+async function renderCalendar(){
+const source=await loadMypageCalendarSourceData('erp');
+const evts=buildMypageCalendarDisplayEvents(source,'erp');
 const el=document.getElementById('calendar');
 const cal=new FullCalendar.Calendar(el,{initialView:'dayGridMonth',locale:'ko',height:600,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},dayMaxEvents:true,events:evts,selectable:true,dateClick:function(i){openEventModal(null,i.dateStr)},eventClick:function(i){if(i.event.extendedProps.origin){openEventModal(i.event.extendedProps.origin,null)}}});
 cal.render()}

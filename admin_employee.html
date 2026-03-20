@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.13
-Change: 2026-03-17 - 조합원/임원 값 불러오기, 결재레벨(auth_level) 편집, ref_settings category 저장 보강.
+Version: v1.0.16
+Change: 2026-03-19 - 직원 및 설정 관리 명칭 통일, 전자결재 옵션 탭 상시 노출 및 저장 지원.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.11 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.16 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
-  <title>임직원 관리 v2.7 (최종)</title>
+  <title>직원 및 설정 관리 v2.7 (최종)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,7 +52,7 @@ Change: 2026-03-17 - 조합원/임원 값 불러오기, 결재레벨(auth_level)
 
 <div class="main-card">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <div><h4 class="fw-bold m-0" id="hrPageTitle">👥 임직원 관리</h4><small class="text-muted" id="hrPageSubtitle">직원 정보 및 급여/근태 통합 관리</small></div>
+    <div><h4 class="fw-bold m-0" id="hrPageTitle">👥 직원 및 설정 관리</h4><small class="text-muted" id="hrPageSubtitle">직원 정보와 급여·근태, 전자결재 설정 통합 관리</small></div>
     <div>
       <button class="btn btn-light btn-sm btn-rounded me-1" onclick="location.href='index.html'">🏠 홈으로</button>
       <button class="btn btn-outline-secondary btn-sm btn-rounded me-1" onclick="openOrgChartModal()">🏢 조직도</button>
@@ -64,8 +64,8 @@ Change: 2026-03-17 - 조합원/임원 값 불러오기, 결재레벨(auth_level)
   </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle" style="font-size: 0.95rem;">
-      <thead class="table-light text-secondary small"><tr><th>사번</th><th>이름 / 부서</th><th>직급</th><th>상태</th><th>시스템 권한</th></tr></thead>
-      <tbody id="empListBody"><tr><td colspan="5" class="text-center p-4 text-muted">로딩 중... ⏳</td></tr></tbody>
+      <thead class="table-light text-secondary small"><tr><th>사번</th><th>이름 / 부서</th><th>직급</th><th>상태</th><th>Telegram</th><th>시스템 권한</th></tr></thead>
+      <tbody id="empListBody"><tr><td colspan="6" class="text-center p-4 text-muted">로딩 중... ⏳</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -430,6 +430,12 @@ let hasCheckedExpired = false;
 let myInfo = null;
 let permissionSet = new Set();
 let hrRuntimeProfile = 'legacy_full';
+let telegramApprovalLinkStatusMap = {};
+let calendarIcsSettings = {
+    enabled: false,
+    feedToken: '',
+    sourceCatalog: null
+};
 const WORKFORCE_LITE_APPROVAL_SETTING_CATALOG = Object.freeze([
     { key: 'approval_doc_general_proposal_enabled', inputId: 'set_approval_doc_general_proposal_enabled', label: '일반품의서', description: '일반 품의 및 내부 결재용 문서', docType: '일반품의', rulePrefix: 'general_proposal', defaultEnabled: true, ruleOptions: ['require_attachment'] },
     { key: 'approval_doc_expense_enabled', inputId: 'set_approval_doc_expense_enabled', label: '지출결의서', description: '지출 집행 결재 문서', docType: '지출결의', rulePrefix: 'expense', defaultEnabled: true, ruleOptions: ['require_attachment', 'require_amount'] },
@@ -477,6 +483,33 @@ const HR_DEFAULT_POSITION_CATALOG = Object.freeze([
 const HR_DEFAULT_OVERTIME_POLICY = Object.freeze({
     default_mode: 'allowance'
 });
+const HR_CALENDAR_SOURCE_ITEM_CATALOG = Object.freeze([
+    { key: 'leave', label: '승인된 휴가', description: '승인 또는 실물결재 완료된 휴가 문서를 일정으로 표시합니다.' },
+    { key: 'business_trip', label: '승인된 출장', description: '승인 또는 실물결재 완료된 출장신청 문서를 일정으로 표시합니다.' },
+    { key: 'manual_events', label: 'ERP 수동 일정', description: 'ERP에서 등록한 수동 일정을 내부 캘린더에 표시합니다.' },
+    { key: 'manual_company', label: '공용 수동 일정', description: '회사 공개 수동 일정만 Google Calendar 구독 피드에 포함합니다.' },
+    { key: 'birthdays', label: '직원 생일', description: '직원 생일을 반복 일정으로 표시합니다.' },
+    { key: 'hire_anniversaries', label: '입사기념일', description: '직원 입사기념일을 반복 일정으로 표시합니다.' },
+    { key: 'company_anniversary', label: '창립기념일', description: '회사 창립기념일을 반복 일정으로 표시합니다.' }
+]);
+const HR_DEFAULT_CALENDAR_SOURCE_CATALOG = Object.freeze({
+    erp: Object.freeze({
+        leave: true,
+        business_trip: true,
+        manual_events: true,
+        birthdays: true,
+        hire_anniversaries: true,
+        company_anniversary: true
+    }),
+    google_ics: Object.freeze({
+        leave: true,
+        business_trip: true,
+        manual_company: true,
+        birthdays: false,
+        hire_anniversaries: false,
+        company_anniversary: true
+    })
+});
 let hrLeaveTypeCatalog = [];
 let hrDepartmentCatalog = [];
 let hrPositionCatalog = [];
@@ -513,6 +546,50 @@ function getHrDefaultLeaveTypeCatalog() {
         aliases: Array.from(new Set((Array.isArray(item.aliases) ? item.aliases : []).map((alias) => String(alias || '').trim()).filter(Boolean)))
     }));
 }
+
+function getHrDefaultCalendarSourceCatalog() {
+    return JSON.parse(JSON.stringify(HR_DEFAULT_CALENDAR_SOURCE_CATALOG));
+} // End of getHrDefaultCalendarSourceCatalog
+
+function normalizeHrCalendarScopeCatalog(rawValue, defaults) {
+    const normalized = {};
+    const defaultEntries = defaults && typeof defaults === 'object' ? defaults : {};
+    Object.keys(defaultEntries).forEach((key) => {
+        normalized[key] = rawValue && typeof rawValue === 'object'
+            ? parseAdminEmployeeBoolean(rawValue[key], defaultEntries[key] === true)
+            : (defaultEntries[key] === true);
+    });
+    return normalized;
+} // End of normalizeHrCalendarScopeCatalog
+
+function normalizeHrCalendarSourceCatalog(rawValue) {
+    const defaults = getHrDefaultCalendarSourceCatalog();
+    let parsed = rawValue;
+    if (typeof parsed === 'string') {
+        try {
+            parsed = JSON.parse(parsed);
+        } catch (_) {
+            parsed = {};
+        }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        parsed = {};
+    }
+    return {
+        erp: normalizeHrCalendarScopeCatalog(parsed.erp, defaults.erp),
+        google_ics: normalizeHrCalendarScopeCatalog(parsed.google_ics, defaults.google_ics)
+    };
+} // End of normalizeHrCalendarSourceCatalog
+
+function getHrCalendarSourceItemInfo(key) {
+    return HR_CALENDAR_SOURCE_ITEM_CATALOG.find((item) => item.key === key) || null;
+} // End of getHrCalendarSourceItemInfo
+
+function getAdminCalendarIcsFeedUrl(feedToken) {
+    const safeToken = String(feedToken || '').trim();
+    if (!safeToken) return '';
+    return `${SUPABASE_URL}/functions/v1/erp-calendar-ics-feed?token=${encodeURIComponent(safeToken)}`;
+} // End of getAdminCalendarIcsFeedUrl
 
 function normalizeHrLeaveTypeDurationMode(value) {
     const safe = String(value || '').trim();
@@ -1285,7 +1362,7 @@ function buildWorkforceLiteApprovalSettingsMarkup() {
           </div>
         </div>
         <div class="col-12"><hr class="my-2"></div>
-        <div class="col-12">
+        <div class="col-12" id="workforceLiteLeaveTypeSection">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <div>
               <div class="fw-bold">휴가 종류 관리</div>
@@ -1438,6 +1515,208 @@ function collectTelegramApprovalSettingsFromUi() {
     };
 } // End of collectTelegramApprovalSettingsFromUi
 
+function buildCalendarScopeSwitchesHtml(scopeKey, catalog) {
+    const entries = Object.entries(catalog || {});
+    return entries.map(([key]) => {
+        const info = getHrCalendarSourceItemInfo(key);
+        if (!info) return '';
+        const inputId = `set_calendar_${scopeKey}_${key}`;
+        return `
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="${inputId}">
+              <label class="form-check-label fw-bold" for="${inputId}">${info.label}</label>
+            </div>
+            <div class="small text-muted ms-4">${info.description}</div>
+          </div>
+        `;
+    }).join('');
+} // End of buildCalendarScopeSwitchesHtml
+
+function ensureCalendarSettingsFields() {
+    const tabList = document.getElementById('settingTab');
+    const tabContent = document.querySelector('#settingsModal .tab-content');
+    if (!tabList || !tabContent) return;
+
+    let tabItem = document.getElementById('setCalendarTabItem');
+    if (!tabItem) {
+        tabItem = document.createElement('li');
+        tabItem.className = 'nav-item';
+        tabItem.id = 'setCalendarTabItem';
+        tabItem.innerHTML = '<a class="nav-link" data-bs-toggle="tab" href="#setCalendar" id="setCalendarTabLink">📅 캘린더</a>';
+        tabList.appendChild(tabItem);
+    }
+
+    let pane = document.getElementById('setCalendar');
+    if (!pane) {
+        pane = document.createElement('div');
+        pane.className = 'tab-pane fade';
+        pane.id = 'setCalendar';
+        tabContent.appendChild(pane);
+    }
+
+    pane.innerHTML = `
+      <div class="row g-3" id="calendarSettingsPanel">
+        <div class="col-12">
+          <div class="fw-bold">Google Calendar 구독</div>
+          <div class="small text-muted">조합별 비공개 URL을 발급해 Google Calendar에서 URL로 구독할 수 있습니다. Google 측 새로고침은 즉시가 아니라 수 시간 지연될 수 있습니다.</div>
+        </div>
+        <div class="col-12">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="set_calendar_ics_enabled" onchange="syncCalendarIcsActionState()">
+            <label class="form-check-label fw-bold" for="set_calendar_ics_enabled">Google Calendar ICS 구독 사용</label>
+          </div>
+        </div>
+        <div class="col-12 col-lg-8">
+          <label class="small text-muted">구독 URL</label>
+          <input type="text" class="form-control form-control-sm" id="set_calendar_ics_feed_url" readonly placeholder="저장 후 구독 URL이 생성됩니다.">
+          <div class="form-text" id="calendarIcsFeedHelp">Google Calendar에서 “URL로 추가”로 붙이면 승인 일정이 주기적으로 동기화됩니다.</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="small text-muted d-block">&nbsp;</label>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCopyCalendarIcsUrl" onclick="copyCalendarIcsFeedUrl()">URL 복사</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnRegenerateCalendarIcsUrl" onclick="regenerateCalendarIcsFeedToken()">URL 재발급</button>
+          </div>
+        </div>
+        <div class="col-12"><hr class="my-1"></div>
+        <div class="col-12 col-xl-6">
+          <div class="fw-bold mb-2">ERP 캘린더 표시</div>
+          <div class="small text-muted mb-2">내부 ERP 일정 탭에 표시할 항목을 설정합니다.</div>
+          <div class="row g-2">
+            ${buildCalendarScopeSwitchesHtml('erp', getHrDefaultCalendarSourceCatalog().erp)}
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="fw-bold mb-2">Google ICS 포함 항목</div>
+          <div class="small text-muted mb-2">직원들이 구독하는 Google Calendar 피드에 포함할 항목을 설정합니다.</div>
+          <div class="row g-2">
+            ${buildCalendarScopeSwitchesHtml('google_ics', getHrDefaultCalendarSourceCatalog().google_ics)}
+          </div>
+        </div>
+      </div>
+    `;
+} // End of ensureCalendarSettingsFields
+
+function syncCalendarIcsActionState() {
+    const enabledInput = document.getElementById('set_calendar_ics_enabled');
+    const urlInput = document.getElementById('set_calendar_ics_feed_url');
+    const copyButton = document.getElementById('btnCopyCalendarIcsUrl');
+    const regenerateButton = document.getElementById('btnRegenerateCalendarIcsUrl');
+    const helpText = document.getElementById('calendarIcsFeedHelp');
+    const isEnabled = !!enabledInput?.checked;
+    const hasUrl = !!String(urlInput?.value || '').trim();
+    if (copyButton) copyButton.disabled = !hasUrl;
+    if (regenerateButton) regenerateButton.disabled = !isEnabled;
+    if (helpText) {
+        helpText.textContent = isEnabled
+            ? 'Google Calendar에서 “URL로 추가”로 붙이면 승인 일정이 주기적으로 동기화됩니다.'
+            : '비활성화하면 공개 구독 URL이 동작하지 않습니다. ERP 내부 캘린더 설정은 그대로 저장됩니다.';
+    }
+} // End of syncCalendarIcsActionState
+
+function renderCalendarIcsFeedUrl() {
+    const urlInput = document.getElementById('set_calendar_ics_feed_url');
+    if (!urlInput) return;
+    const feedUrl = getAdminCalendarIcsFeedUrl(calendarIcsSettings.feedToken);
+    urlInput.value = feedUrl;
+    syncCalendarIcsActionState();
+} // End of renderCalendarIcsFeedUrl
+
+function syncCalendarSettingsUi() {
+    ensureCalendarSettingsFields();
+    const enabledInput = document.getElementById('set_calendar_ics_enabled');
+    const sourceCatalog = normalizeHrCalendarSourceCatalog(
+        calendarIcsSettings.sourceCatalog || companyInfo['calendar_ics_source_catalog_json']
+    );
+    const enabled = calendarIcsSettings.enabled === true
+        || parseAdminEmployeeBoolean(companyInfo['calendar_ics_enabled'], false);
+    if (enabledInput) enabledInput.checked = enabled;
+
+    Object.entries(sourceCatalog.erp || {}).forEach(([key, value]) => {
+        const input = document.getElementById(`set_calendar_erp_${key}`);
+        if (input) input.checked = value === true;
+    });
+    Object.entries(sourceCatalog.google_ics || {}).forEach(([key, value]) => {
+        const input = document.getElementById(`set_calendar_google_ics_${key}`);
+        if (input) input.checked = value === true;
+    });
+
+    renderCalendarIcsFeedUrl();
+} // End of syncCalendarSettingsUi
+
+function collectCalendarSettingsFromUi() {
+    const catalog = getHrDefaultCalendarSourceCatalog();
+    Object.keys(catalog.erp).forEach((key) => {
+        catalog.erp[key] = !!document.getElementById(`set_calendar_erp_${key}`)?.checked;
+    });
+    Object.keys(catalog.google_ics).forEach((key) => {
+        catalog.google_ics[key] = !!document.getElementById(`set_calendar_google_ics_${key}`)?.checked;
+    });
+    return {
+        enabled: !!document.getElementById('set_calendar_ics_enabled')?.checked,
+        sourceCatalog: catalog
+    };
+} // End of collectCalendarSettingsFromUi
+
+async function loadCalendarIcsSettings() {
+    const fallbackSourceCatalog = normalizeHrCalendarSourceCatalog(companyInfo['calendar_ics_source_catalog_json']);
+    calendarIcsSettings = {
+        enabled: parseAdminEmployeeBoolean(companyInfo['calendar_ics_enabled'], false),
+        feedToken: '',
+        sourceCatalog: fallbackSourceCatalog
+    };
+    try {
+        const { data, error } = await _supabase.rpc('erp_get_calendar_ics_settings');
+        if (error) throw error;
+        calendarIcsSettings = {
+            enabled: data?.enabled === true,
+            feedToken: String(data?.feed_token || '').trim(),
+            sourceCatalog: normalizeHrCalendarSourceCatalog(data?.source_catalog)
+        };
+    } catch (error) {
+        console.warn('calendar ICS settings load failed:', error?.message || error);
+    }
+    syncCalendarSettingsUi();
+} // End of loadCalendarIcsSettings
+
+async function copyCalendarIcsFeedUrl() {
+    const feedUrl = getAdminCalendarIcsFeedUrl(calendarIcsSettings.feedToken);
+    if (!feedUrl) {
+        showAlert('먼저 캘린더 설정을 저장해 구독 URL을 생성해 주세요.');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(feedUrl);
+        showAlert('Google Calendar 구독 URL을 복사했습니다.');
+    } catch (error) {
+        showAlert('구독 URL 복사 실패: ' + (error?.message || error));
+    }
+} // End of copyCalendarIcsFeedUrl
+
+async function regenerateCalendarIcsFeedToken() {
+    try {
+        const currentConfig = collectCalendarSettingsFromUi();
+        const { data, error } = await _supabase.rpc('erp_upsert_calendar_ics_settings', {
+            p_enabled: currentConfig.enabled,
+            p_source_catalog: currentConfig.sourceCatalog,
+            p_regenerate_token: true
+        });
+        if (error) throw error;
+        companyInfo['calendar_ics_enabled'] = data?.enabled === true ? 'true' : 'false';
+        companyInfo['calendar_ics_source_catalog_json'] = JSON.stringify(normalizeHrCalendarSourceCatalog(data?.source_catalog));
+        calendarIcsSettings = {
+            enabled: data?.enabled === true,
+            feedToken: String(data?.feed_token || '').trim(),
+            sourceCatalog: normalizeHrCalendarSourceCatalog(data?.source_catalog)
+        };
+        syncCalendarSettingsUi();
+        showAlert('캘린더 구독 URL을 재발급했습니다. 기존 URL은 더 이상 동작하지 않습니다.');
+    } catch (error) {
+        showAlert('캘린더 구독 URL 재발급 실패: ' + (error?.message || error));
+    }
+} // End of regenerateCalendarIcsFeedToken
+
 function syncApprovalLineSettingsUi() {
     ensureApprovalLineSettingsFields();
     const middleSelect = document.getElementById('set_approval_default_middle_approver');
@@ -1480,6 +1759,7 @@ function syncHrProfileCompanySettingsUi() {
     syncSecretaryJeongyeolFieldState();
     syncApprovalLineSettingsUi();
     syncTelegramApprovalSettingsUi();
+    syncCalendarSettingsUi();
 } // End of syncHrProfileCompanySettingsUi
 
 function syncWorkforceLiteApprovalRuleFieldState() {
@@ -1523,6 +1803,7 @@ function syncSecretaryJeongyeolFieldState() {
 function applyHrRuntimeProfileUi() {
     ensureWorkforceLiteSettingsFields();
     ensureTelegramApprovalSettingsFields();
+    ensureCalendarSettingsFields();
     const isLite = isHrWorkforceLiteProfile();
     const pageTitle = document.getElementById('hrPageTitle');
     const pageSubtitle = document.getElementById('hrPageSubtitle');
@@ -1531,15 +1812,19 @@ function applyHrRuntimeProfileUi() {
     const advancedTabLink = document.querySelector('a[href="#setAdvanced"]');
     const companyTabLink = document.querySelector('a[href="#setCompany"]');
     const approvalTabLink = document.getElementById('setApprovalLiteTabLink');
+    const approvalTabItem = document.getElementById('setApprovalLiteTabItem');
+    const calendarTabItem = document.getElementById('setCalendarTabItem');
     const taxPane = document.getElementById('setTax');
     const advancedPane = document.getElementById('setAdvanced');
     const companyPane = document.getElementById('setCompany');
     const approvalPane = document.getElementById('setApprovalLite');
+    const calendarPane = document.getElementById('setCalendar');
+    const leaveTypeSection = document.getElementById('workforceLiteLeaveTypeSection');
     const durunuriEmpEl = document.getElementById('durunuriEmpSupport');
     const durunuriRow = durunuriEmpEl ? durunuriEmpEl.closest('.row.g-2.mt-1') : null;
 
-    if (pageTitle) pageTitle.textContent = isLite ? '👥 직원 및 설정 관리' : '👥 임직원 관리';
-    if (pageSubtitle) pageSubtitle.textContent = isLite ? '직원 정보와 전자결재 설정 관리' : '직원 정보 및 급여/근태 통합 관리';
+    if (pageTitle) pageTitle.textContent = '👥 직원 및 설정 관리';
+    if (pageSubtitle) pageSubtitle.textContent = isLite ? '직원 정보와 전자결재 설정 관리' : '직원 정보와 급여·근태, 전자결재 설정 통합 관리';
     if (settingYearRow) settingYearRow.classList.toggle('d-none', isLite);
 
     if (taxTabLink && taxTabLink.parentElement) {
@@ -1548,12 +1833,13 @@ function applyHrRuntimeProfileUi() {
     if (advancedTabLink && advancedTabLink.parentElement) {
         advancedTabLink.parentElement.classList.toggle('d-none', isLite);
     }
-    if (approvalTabLink && approvalTabLink.parentElement) {
-        approvalTabLink.parentElement.classList.toggle('d-none', !isLite);
-    }
+    if (approvalTabItem) approvalTabItem.classList.remove('d-none');
     if (approvalPane) {
-        approvalPane.classList.toggle('d-none', !isLite);
+        approvalPane.classList.remove('d-none');
     }
+    if (calendarTabItem) calendarTabItem.classList.remove('d-none');
+    if (calendarPane) calendarPane.classList.remove('d-none');
+    if (leaveTypeSection) leaveTypeSection.classList.toggle('d-none', !isLite);
     if (durunuriRow) {
         durunuriRow.classList.toggle('d-none', isLite);
     }
@@ -1773,14 +2059,63 @@ async function loadPermissions(user) {
     return result;
 }
 
+function formatAdminEmployeeTelegramLinkedAt(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return raw;
+    return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+} // End of formatAdminEmployeeTelegramLinkedAt
+
+async function loadTelegramApprovalLinkStatusMap() {
+    telegramApprovalLinkStatusMap = {};
+    try {
+        const { data, error } = await _supabase.rpc('erp_admin_list_telegram_link_statuses');
+        if (error) throw error;
+        (Array.isArray(data) ? data : []).forEach((row) => {
+            const empId = String(row?.emp_id || '').trim();
+            if (!empId) return;
+            telegramApprovalLinkStatusMap[empId] = {
+                linked: true,
+                linked_at: String(row?.linked_at || '').trim()
+            };
+        });
+    } catch (error) {
+        console.warn('erp telegram admin status load failed:', error?.message || error);
+        telegramApprovalLinkStatusMap = {};
+    }
+} // End of loadTelegramApprovalLinkStatusMap
+
+function buildEmployeeTelegramStatusHtml(empId) {
+    const safeEmpId = String(empId || '').trim();
+    const status = telegramApprovalLinkStatusMap[safeEmpId];
+    if (!status?.linked) {
+        return '<span class="badge bg-secondary">미연결</span>';
+    }
+    const linkedAtLabel = formatAdminEmployeeTelegramLinkedAt(status.linked_at);
+    return `
+        <div class="d-flex flex-column gap-1">
+            <span class="badge bg-success">연결됨</span>
+            ${linkedAtLabel ? `<div class="small text-muted">${escapeHtml(linkedAtLabel)}</div>` : ''}
+        </div>
+    `;
+} // End of buildEmployeeTelegramStatusHtml
+
 async function loadList() {
     const tbody = document.getElementById("empListBody");
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">로딩 중...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">로딩 중...</td></tr>';
     const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id');
     if (error || !list) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">데이터 없음</td></tr>';
         return;
     }
+    await loadTelegramApprovalLinkStatusMap();
     employeeCache = Array.isArray(list) ? list.slice() : [];
     tbody.innerHTML = "";
     const threeYearsAgo = new Date();
@@ -1800,7 +2135,8 @@ async function loadList() {
         const safeName = escapeHtml(u.emp_name);
         const safeDept = escapeHtml(u.department || '-');
         const safePos = escapeHtml(u.position || '');
-        tr.innerHTML = `<td class="fw-bold text-secondary">${safeEmpId}</td><td><div class="fw-bold">${safeName}</div><div class="small text-muted">${safeDept}</div></td><td>${safePos}</td><td>${statusBadge}</td><td>${roleBadge}</td>`;
+        const telegramStatusHtml = buildEmployeeTelegramStatusHtml(u.emp_id);
+        tr.innerHTML = `<td class="fw-bold text-secondary">${safeEmpId}</td><td><div class="fw-bold">${safeName}</div><div class="small text-muted">${safeDept}</div></td><td>${safePos}</td><td>${statusBadge}</td><td>${telegramStatusHtml}</td><td>${roleBadge}</td>`;
         tbody.appendChild(tr);
     });
     if (expiredCount > 0 && !hasCheckedExpired) {
@@ -2154,6 +2490,7 @@ async function loadSettings() {
     document.getElementById("set_bizNum").value = companyInfo['bizNum'] || "";
     document.getElementById("set_address").value = companyInfo['company_address'] || "";
     document.getElementById("set_memberShareUnitAmount").value = companyInfo['member_export_share_unit_amount'] || "";
+    await loadCalendarIcsSettings();
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
     syncHrStructureSettingsUi();
@@ -2169,6 +2506,7 @@ async function saveSettings() {
         const advancedSettingsMap = new Map((Array.isArray(advancedSettingsRaw) ? advancedSettingsRaw : []).map((row) => [String(row?.item_key || '').trim(), row]));
         const telegramApprovalConfig = collectTelegramApprovalSettingsFromUi();
         const approvalLineConfig = collectApprovalLineSettingsFromUi();
+        const calendarSettingsConfig = collectCalendarSettingsFromUi();
 
         if (!coopId) throw new Error("조합 정보가 없어 저장할 수 없습니다. 다시 로그인해 주세요.");
 
@@ -2275,9 +2613,32 @@ async function saveSettings() {
             { coop_id: coopId, key: HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY, value: approvalLineConfig.middleApproverEmpId },
             { coop_id: coopId, key: HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY, value: approvalLineConfig.finalApproverEmpId }
         ];
+        const approvalRuleCatalog = collectWorkforceLiteApprovalRuleCatalogFromUi();
+        WORKFORCE_LITE_APPROVAL_SETTING_CATALOG.forEach((item) => {
+            cUpdates.push({
+                coop_id: coopId,
+                key: item.key,
+                value: document.getElementById(item.inputId)?.checked ? 'true' : 'false'
+            });
+        });
+        cUpdates.push({
+            coop_id: coopId,
+            key: 'approval_secretary_jeongyeol_enabled',
+            value: document.getElementById('set_secretary_jeongyeol_enabled')?.checked ? 'true' : 'false'
+        });
+        cUpdates.push({
+            coop_id: coopId,
+            key: 'approval_secretary_attendance_enabled',
+            value: document.getElementById('set_secretary_attendance_enabled')?.checked ? 'true' : 'false'
+        });
+        cUpdates.push({
+            coop_id: coopId,
+            key: HR_WORKFORCE_LITE_APPROVAL_RULE_CONFIG_KEY,
+            value: JSON.stringify(approvalRuleCatalog)
+        });
+
         if (isHrWorkforceLiteProfile()) {
             const leaveTypeCatalog = collectWorkforceLiteLeaveTypeCatalogFromUi();
-            const approvalRuleCatalog = collectWorkforceLiteApprovalRuleCatalogFromUi();
             const leaveDocEnabled = !!document.getElementById('set_approval_doc_leave_enabled')?.checked;
             const leaveLabels = leaveTypeCatalog.map((item) => String(item.label || '').trim()).filter(Boolean);
             if (new Set(leaveLabels).size !== leaveLabels.length) {
@@ -2286,32 +2647,10 @@ async function saveSettings() {
             if (leaveDocEnabled && !leaveTypeCatalog.some((item) => item.enabled !== false)) {
                 throw new Error('휴가신청서를 사용하려면 활성화된 휴가 종류가 1개 이상 필요합니다.');
             }
-            WORKFORCE_LITE_APPROVAL_SETTING_CATALOG.forEach((item) => {
-                cUpdates.push({
-                    coop_id: coopId,
-                    key: item.key,
-                    value: document.getElementById(item.inputId)?.checked ? 'true' : 'false'
-                });
-            });
-            cUpdates.push({
-                coop_id: coopId,
-                key: 'approval_secretary_jeongyeol_enabled',
-                value: document.getElementById('set_secretary_jeongyeol_enabled')?.checked ? 'true' : 'false'
-            });
-            cUpdates.push({
-                coop_id: coopId,
-                key: 'approval_secretary_attendance_enabled',
-                value: document.getElementById('set_secretary_attendance_enabled')?.checked ? 'true' : 'false'
-            });
             cUpdates.push({
                 coop_id: coopId,
                 key: HR_WORKFORCE_LITE_LEAVE_CONFIG_KEY,
                 value: JSON.stringify(leaveTypeCatalog)
-            });
-            cUpdates.push({
-                coop_id: coopId,
-                key: HR_WORKFORCE_LITE_APPROVAL_RULE_CONFIG_KEY,
-                value: JSON.stringify(approvalRuleCatalog)
             });
         }
         await _supabase.from('ref_company_info').upsert(cUpdates, { onConflict: 'coop_id,key' });
@@ -2322,6 +2661,20 @@ async function saveSettings() {
             p_bot_token: null
         });
         if (telegramSettingsError) throw telegramSettingsError;
+
+        const { data: calendarSettingsData, error: calendarSettingsError } = await _supabase.rpc('erp_upsert_calendar_ics_settings', {
+            p_enabled: calendarSettingsConfig.enabled,
+            p_source_catalog: calendarSettingsConfig.sourceCatalog,
+            p_regenerate_token: false
+        });
+        if (calendarSettingsError) throw calendarSettingsError;
+        companyInfo['calendar_ics_enabled'] = calendarSettingsData?.enabled === true ? 'true' : 'false';
+        companyInfo['calendar_ics_source_catalog_json'] = JSON.stringify(normalizeHrCalendarSourceCatalog(calendarSettingsData?.source_catalog));
+        calendarIcsSettings = {
+            enabled: calendarSettingsData?.enabled === true,
+            feedToken: String(calendarSettingsData?.feed_token || '').trim(),
+            sourceCatalog: normalizeHrCalendarSourceCatalog(calendarSettingsData?.source_catalog)
+        };
 
         // 마무리
         await loadSettings(); // 화면 갱신

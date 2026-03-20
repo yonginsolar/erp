@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.47 | Change: 2026-03-18 - 이사장이 실물결재대기 문서를 전자 승인/반려할 수 있도록 조정. -->
+<!-- Version: v1.1.53 | Change: 2026-03-20 - approval.html?doc=ID 진입 시 기존 바로보기 모달이 자동으로 열리도록 연결. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.47 | approval.html');</script>
+  <script>console.log('[Version] v1.1.53 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -277,7 +277,6 @@
             <optgroup label="인사/근태">
                 <option value="휴가">🏖️ 휴가 신청</option>
                 <option value="시간외근로">⏱️ 시간외 근로 신청서</option>
-                <option value="부양가족">👨‍👩‍👧‍👦 부양가족 등재/해제 신청</option>
             </optgroup>
             <optgroup label="대외/공지">
                 <option value="공문">📢 공문</option>
@@ -298,15 +297,36 @@
             </select>
         </div>
 
-        <div class="col-12 hidden mb-3" id="divDependentOption">
-            <label class="small text-muted fw-bold">신청 구분</label>
-            <div class="d-flex gap-2">
-                <input type="radio" class="btn-check" name="depOption" id="depAdd" value="add" checked onchange="updateDepTemplate()">
-                <label class="btn btn-outline-primary flex-fill" for="depAdd">➕ 등재 신청</label>
-                
-                <input type="radio" class="btn-check" name="depOption" id="depRemove" value="remove" onchange="updateDepTemplate()">
-                <label class="btn btn-outline-danger flex-fill" for="depRemove">➖ 해제 신청</label>
+        <div class="col-12 hidden mb-3" id="divBusinessTripSection">
+          <div class="p-3 bg-light border rounded">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="small text-muted fw-bold">출장 시작일</label>
+                <input type="date" class="form-control" id="businessTripStartDate" onchange="syncApprovalBusinessTripSummary()">
+              </div>
+              <div class="col-md-6">
+                <label class="small text-muted fw-bold">출장 종료일</label>
+                <input type="date" class="form-control" id="businessTripEndDate" onchange="syncApprovalBusinessTripSummary()">
+              </div>
+              <div class="col-12">
+                <label class="small text-muted fw-bold d-block mb-2">출장 구분</label>
+                <div class="d-flex flex-wrap gap-2">
+                  <input type="checkbox" class="btn-check" id="businessTripSlotAm" autocomplete="off" onchange="syncApprovalBusinessTripSummary()">
+                  <label class="btn btn-outline-primary btn-sm" for="businessTripSlotAm">오전</label>
+                  <input type="checkbox" class="btn-check" id="businessTripSlotPm" autocomplete="off" onchange="syncApprovalBusinessTripSummary()">
+                  <label class="btn btn-outline-primary btn-sm" for="businessTripSlotPm">오후</label>
+                </div>
+                <div class="small text-muted mt-2">오전과 오후를 모두 선택하면 종일로 처리됩니다.</div>
+              </div>
+              <div class="col-12">
+                <label class="small text-muted fw-bold">출장 장소</label>
+                <input type="text" class="form-control" id="businessTripLocation" placeholder="예: 서울시 마포구 공덕동" oninput="syncApprovalBusinessTripSummary()">
+              </div>
+              <div class="col-12">
+                <div class="small text-muted" id="businessTripSummaryText">출장 기간, 구분, 장소를 입력하면 승인 완료 후 전사 일정에 자동 표시됩니다.</div>
+              </div>
             </div>
+          </div>
         </div>
 
         <div class="col-12 mb-3 hidden" id="divRelDoc">
@@ -613,7 +633,6 @@
           <option value="EXPENSE">지출결의</option>
           <option value="LEAVE">휴가</option>
           <option value="ATTENDANCE">시간외근로</option>
-          <option value="DEPENDENT">부양가족</option>
           <option value="NOTICE">공문</option>
         </select>
       </div>
@@ -643,8 +662,9 @@
 <div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="modalTitle">직원 선택</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="userSelectList"></div></div><div class="modal-footer justify-content-between"><span class="small text-muted ms-2"><span id="selCount">0</span>명 선택됨</span><button type="button" class="btn btn-primary" onclick="confirmSelection()">선택 완료</button></div></div></div></div>
 <div class="modal fade" id="alertModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-body text-center py-4" id="alertBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">확인</button></div></div></div></div>
 <div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header py-2"><h6 class="modal-title fw-bold" id="confirmTitle">확인</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-4" id="confirmBody" style="white-space: pre-wrap;"></div><div class="modal-footer justify-content-center p-1 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-danger btn-sm" id="confirmOkBtn">확인</button></div></div></div></div>
+<div class="modal fade" id="approvalActionModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="approvalActionModalTitle">결재 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="small text-muted mb-2" id="approvalActionModalGuide">결재 메모를 남길 수 있습니다.</div><textarea id="approvalActionReason" class="form-control" rows="5" placeholder="처리 메모를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button type="button" class="btn btn-primary btn-sm" id="btnApprovalActionSubmit" onclick="submitApprovalActionModal()">처리</button></div></div></div></div>
 <div class="modal fade" id="relSearchModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">관련 품의서 검색</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group mb-3"><input type="text" class="form-control" id="relKeyword" placeholder="제목, 내용 또는 작성자" onkeyup="if(event.key==='Enter') runRelSearch()"><button class="btn btn-outline-secondary" onclick="runRelSearch()">검색</button></div><div class="list-group" id="relResultList" style="max-height:400px; overflow-y:auto;"></div></div></div></div></div>
-<div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="relViewModalTitle">📄 문서 내용</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div></div></div></div>
+<div class="modal fade" id="relViewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold" id="relViewModalTitle">📄 문서 내용</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="relViewContent" class="p-3">Loading...</div></div><div class="modal-footer justify-content-between p-2 border-0 hidden" id="relViewModalFooter"><div class="small text-muted" id="relViewActionHint"></div><div class="d-flex gap-2" id="relViewActionButtons"></div></div></div></div></div>
 <div class="modal fade" id="physicalRejectModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">⛔ 실물결재 반려</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">반려 사유</label><textarea id="physicalRejectReason" class="form-control" rows="5" placeholder="반려 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-danger btn-sm" id="btnPhysicalRejectSubmit" onclick="submitPhysicalReject()">반려 처리</button></div></div></div></div>
 <div class="modal fade" id="cancelDraftModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">🗑️ 상신 취소</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="small text-muted fw-bold mb-2">취소 사유</label><textarea id="cancelDraftReason" class="form-control" rows="4" placeholder="취소 사유를 입력하세요."></textarea></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button><button class="btn btn-danger btn-sm" id="btnCancelDraftSubmit" onclick="submitDraftCancel()">취소 확정</button></div></div></div></div>
 <div class="modal fade" id="evidenceUploadModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📁 증빙제출</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="small text-muted fw-bold mb-2">증빙 파일</label><input type="file" id="evidenceDocInput" class="form-control" multiple accept=".pdf,.png,.jpg,.jpeg"><div class="small text-muted mt-2">업로드는 PDF 또는 이미지(PNG, JPG, JPEG) 파일만 가능합니다. 파일당 최대 10MB.</div></div><div><label class="small text-muted fw-bold mb-2">제출 메모</label><textarea id="evidenceNote" class="form-control" rows="3" placeholder="필요한 설명이 있으면 입력하세요."></textarea></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-primary btn-sm" id="btnEvidenceUploadSubmit" onclick="submitEvidenceUpload()">제출하기</button></div></div></div></div>
@@ -673,6 +693,7 @@ let salaryExpenseState = null;
 let physicalRejectModalInstance = null;
 let cancelDraftModalInstance = null;
 let evidenceUploadModalInstance = null;
+let approvalActionModalInstance = null;
 let appDescPreviewModalInstance = null;
 let approvalTemplateModalInstance = null;
 let attachmentPreviewModalInstance = null;
@@ -710,8 +731,10 @@ let approvalLeaveTypeCatalog = null;
 let approvalDocRuleCatalog = {};
 let approvalLeaveSnapshotSupported = false;
 let approvalAttendanceSnapshotSupported = false;
+let approvalBusinessTripSnapshotSupported = false;
 let approvalOvertimePolicy = null;
 let approvalLastCategory = '';
+let pendingApprovalAction = null;
 const APPROVAL_LEAVE_TYPE_CONFIG_KEY = 'approval_leave_type_catalog_json';
 const APPROVAL_DOC_RULE_CONFIG_KEY = 'approval_doc_rule_catalog_json';
 const APPROVAL_OVERTIME_POLICY_KEY = 'approval_overtime_policy_json';
@@ -849,7 +872,7 @@ function parseApprovalDocRuleCatalog(rawValue) {
 
 function getApprovalDocRuleConfig(docType) {
     const safeDocType = String(docType || '').trim();
-    if (!safeDocType || !isApprovalWorkforceLiteProfile()) return {};
+    if (!safeDocType) return {};
     if (!approvalDocRuleCatalog || typeof approvalDocRuleCatalog !== 'object') {
         approvalDocRuleCatalog = parseApprovalDocRuleCatalog(approvalCompanyInfo[APPROVAL_DOC_RULE_CONFIG_KEY]);
     }
@@ -867,12 +890,10 @@ function parseApprovalNumber(value, fallback = 0) {
 }
 
 function isApprovalJeongyeolFeatureEnabled() {
-    if (!isApprovalWorkforceLiteProfile()) return true;
     return approvalSecretaryJeongyeolEnabled === true;
 }
 
 function isApprovalAttendanceJeongyeolEnabled() {
-    if (!isApprovalWorkforceLiteProfile()) return true;
     return approvalSecretaryAttendanceEnabled === true;
 }
 
@@ -1157,21 +1178,21 @@ function getFirstAvailableWorkforceLiteApprovalDocType() {
 function isApprovalDocEnabledForCurrentProfile(docType) {
     const safeDocType = String(docType || '').trim();
     if (!safeDocType) return false;
-    if (!isApprovalWorkforceLiteProfile()) return true;
     for (const group of WORKFORCE_LITE_APPROVAL_DOC_GROUPS) {
         const hit = group.items.find((item) => item.value === safeDocType);
         if (hit) return parseApprovalBoolean(approvalCompanyInfo[hit.key], hit.defaultEnabled !== false);
     }
-    return false;
+    return true;
 }
 
 function renderApprovalCategoryOptions() {
     const categoryEl = document.getElementById('appCategory');
-    if (!categoryEl || !isApprovalWorkforceLiteProfile()) return;
+    if (!categoryEl) return;
 
     const previousValue = String(categoryEl.value || '').trim();
     const groups = getWorkforceLiteApprovalDocGroups();
     const enabledValues = [];
+    const isLite = isApprovalWorkforceLiteProfile();
 
     categoryEl.innerHTML = '';
     groups.forEach((group) => {
@@ -1206,11 +1227,11 @@ function getApprovalSubjectConfig(docType) {
             return {
                 label: '출장 제목',
                 placeholder: '예: 2026년 3월 서울 협동조합 간담회 출장',
-                defaultBody: '위와 같이 출장을 신청하오니 승인하여 주시기 바랍니다.',
+                defaultBody: '1. 출장 목적:\n2. 상세 일정:\n3. 방문 기관/담당자:\n4. 비고:\n\n위와 같이 출장을 신청하오니 승인하여 주시기 바랍니다.',
                 amountLabel: '금액 (원)',
                 amountPlaceholder: '0',
                 showAmount: false,
-                htmlHelp: '출장신청서는 출장 목적, 일정, 장소를 본문에 작성해 결재합니다.'
+                htmlHelp: '출장신청서는 제목과 본문 외에 출장 기간, 오전/오후/종일 구분, 장소를 입력하면 승인 완료 후 전사 일정에 자동 표시됩니다.'
             };
         case '구매요청':
             return {
@@ -1304,11 +1325,6 @@ function buildApprovalOvertimeDefaultBody(docType) {
     ].join('');
 }
 
-function isApprovalDependentTemplateContent(content) {
-    const raw = String(content || '').trim();
-    return raw.startsWith('[부양가족 ') && raw.includes('위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.');
-}
-
 function isApprovalAutoGeneratedTemplateContent(content) {
     const raw = String(content || '').trim();
     if (!raw) return false;
@@ -1317,7 +1333,6 @@ function isApprovalAutoGeneratedTemplateContent(content) {
         raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     ].filter(Boolean)));
     for (const value of normalizedCandidates) {
-        if (isApprovalDependentTemplateContent(value)) return true;
         if (getApprovalAutoGeneratedBodyList().includes(value)) return true;
         if (value.includes('[급여대장 연동]')) return true;
         if (value.includes('급여 지급을 위해 지출결의를 상신합니다.')) return true;
@@ -1339,26 +1354,16 @@ function applyApprovalRuntimeProfileUi() {
     const isLite = isApprovalWorkforceLiteProfile();
     const categoryEl = document.getElementById('appCategory');
     const historyTypeEl = document.getElementById('historyDocTypeFilter');
-    const dependentSection = document.getElementById('divDependentOption');
     const jeongyeolCard = document.getElementById('chkSecretaryJeongyeol')?.closest('.mb-3');
     const monthlyPanel = document.getElementById('secretaryMonthlyReportPanel');
 
+    renderApprovalCategoryOptions();
     if (isLite) {
-        renderApprovalCategoryOptions();
         renderApprovalLeaveTypeOptions();
-    } else {
-        setSelectOptionHidden(categoryEl, '부양가족', false);
     }
-    setSelectOptionHidden(historyTypeEl, 'DEPENDENT', isLite);
 
     if (isLite && categoryEl && !isApprovalDocEnabledForCurrentProfile(categoryEl.value)) {
         categoryEl.value = getFirstAvailableWorkforceLiteApprovalDocType();
-    }
-    if (isLite && historyTypeEl && historyTypeEl.value === 'DEPENDENT') {
-        historyTypeEl.value = 'ALL';
-    }
-    if (dependentSection) {
-        dependentSection.classList.toggle('hidden', isLite);
     }
     if (jeongyeolCard) {
         const currentType = String(categoryEl?.value || '').trim();
@@ -1381,6 +1386,11 @@ async function loadApprovalCompanyInfo() {
         approvalAttendanceSnapshotSupported = await detectApprovalAttendanceSnapshotSupport();
     } catch (_) {
         approvalAttendanceSnapshotSupported = false;
+    }
+    try {
+        approvalBusinessTripSnapshotSupported = await detectApprovalBusinessTripSnapshotSupport();
+    } catch (_) {
+        approvalBusinessTripSnapshotSupported = false;
     }
     const coopId = String(myInfo?.coop_id || '').trim();
     if (!coopId) {
@@ -1430,6 +1440,19 @@ async function detectApprovalAttendanceSnapshotSupport() {
         if (!response.ok) return false;
         const openapi = await response.json();
         return !!openapi?.definitions?.ref_approval?.properties?.attendance_snapshot;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function detectApprovalBusinessTripSnapshotSupport() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
+            headers: { Accept: 'application/openapi+json' }
+        });
+        if (!response.ok) return false;
+        const openapi = await response.json();
+        return !!openapi?.definitions?.ref_approval?.properties?.business_trip_snapshot;
     } catch (_) {
         return false;
     }
@@ -1515,6 +1538,104 @@ function buildApprovalOvertimeSnapshot(docType) {
         saved_at: new Date().toISOString()
     };
 }
+
+function buildApprovalBusinessTripDateTime(dateValue, timeValue) {
+    const safeDate = String(dateValue || '').trim();
+    const safeTime = String(timeValue || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDate)) return '';
+    if (!/^\d{2}:\d{2}$/.test(safeTime)) return '';
+    return `${safeDate}T${safeTime}`;
+} // End of buildApprovalBusinessTripDateTime
+
+function formatApprovalBusinessTripDateTimeLabel(dateValue, timeValue) {
+    const safeDate = String(dateValue || '').trim();
+    const safeTime = String(timeValue || '').trim();
+    if (!safeDate) return '-';
+    if (!safeTime) return safeDate;
+    return `${safeDate} ${safeTime}`;
+} // End of formatApprovalBusinessTripDateTimeLabel
+
+function getApprovalBusinessTripSlotState() {
+    const am = !!document.getElementById('businessTripSlotAm')?.checked;
+    const pm = !!document.getElementById('businessTripSlotPm')?.checked;
+    return { am, pm };
+} // End of getApprovalBusinessTripSlotState
+
+function getApprovalBusinessTripPeriodLabel(slotState) {
+    if (slotState?.am && slotState?.pm) return '종일';
+    if (slotState?.am) return '오전';
+    if (slotState?.pm) return '오후';
+    return '';
+} // End of getApprovalBusinessTripPeriodLabel
+
+function getApprovalBusinessTripApproxTimeRange(startDate, endDate, slotState) {
+    const safeStartDate = String(startDate || '').trim();
+    const safeEndDate = String(endDate || '').trim();
+    const isMultiDay = !!safeStartDate && !!safeEndDate && safeStartDate !== safeEndDate;
+    if (isMultiDay || (slotState?.am && slotState?.pm)) {
+        return { startTime: '09:00', endTime: '18:00', calendarAllDay: true };
+    }
+    if (slotState?.am) {
+        return { startTime: '09:00', endTime: '13:00', calendarAllDay: false };
+    }
+    if (slotState?.pm) {
+        return { startTime: '13:00', endTime: '18:00', calendarAllDay: false };
+    }
+    return { startTime: '', endTime: '', calendarAllDay: false };
+} // End of getApprovalBusinessTripApproxTimeRange
+
+function formatApprovalBusinessTripPeriodText(snapshot) {
+    const startDate = String(snapshot?.start_date || '').trim();
+    const endDate = String(snapshot?.end_date || '').trim();
+    const periodLabel = String(snapshot?.period_label || '').trim();
+    if (!startDate && !endDate) return '-';
+    if (startDate && endDate && startDate !== endDate) {
+        return `${startDate} ~ ${endDate}${periodLabel ? ` (${periodLabel})` : ''}`;
+    }
+    const baseDate = startDate || endDate;
+    return `${baseDate}${periodLabel ? ` (${periodLabel})` : ''}`;
+} // End of formatApprovalBusinessTripPeriodText
+
+function buildApprovalBusinessTripSnapshot() {
+    const startDate = String(document.getElementById('businessTripStartDate')?.value || '').trim();
+    const endDate = String(document.getElementById('businessTripEndDate')?.value || '').trim();
+    const location = String(document.getElementById('businessTripLocation')?.value || '').trim();
+    const slotState = getApprovalBusinessTripSlotState();
+    const periodLabel = getApprovalBusinessTripPeriodLabel(slotState);
+    const timeRange = getApprovalBusinessTripApproxTimeRange(startDate, endDate, slotState);
+    const startTime = timeRange.startTime;
+    const endTime = timeRange.endTime;
+    const startAt = buildApprovalBusinessTripDateTime(startDate, startTime);
+    const endAt = buildApprovalBusinessTripDateTime(endDate, endTime);
+    return {
+        kind: 'business_trip',
+        start_date: startDate,
+        end_date: endDate,
+        slot_am: slotState.am,
+        slot_pm: slotState.pm,
+        period_label: periodLabel,
+        calendar_all_day: timeRange.calendarAllDay,
+        start_time: startTime,
+        end_time: endTime,
+        start_at: startAt,
+        end_at: endAt,
+        location,
+        saved_at: new Date().toISOString()
+    };
+} // End of buildApprovalBusinessTripSnapshot
+
+function syncApprovalBusinessTripSummary() {
+    const summaryEl = document.getElementById('businessTripSummaryText');
+    if (!summaryEl) return;
+    const snapshot = buildApprovalBusinessTripSnapshot();
+    const hasPeriod = snapshot.start_date && snapshot.end_date && snapshot.period_label;
+    const locationText = snapshot.location ? ` / 장소: ${snapshot.location}` : '';
+    if (!hasPeriod) {
+        summaryEl.textContent = '출장 기간, 구분, 장소를 입력하면 승인 완료 후 전사 일정에 자동 표시됩니다.';
+        return;
+    }
+    summaryEl.textContent = `출장 일정: ${formatApprovalBusinessTripPeriodText(snapshot)}${locationText}`;
+} // End of syncApprovalBusinessTripSummary
 
 function syncApprovalOvertimeFieldState() {
     const workDate = String(document.getElementById('overtimeWorkDate')?.value || '').trim();
@@ -1781,6 +1902,23 @@ function toPositiveDocId(value) {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed <= 0) return null;
     return parsed;
+}
+
+function getApprovalDocIdFromLocation() {
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        return toPositiveDocId(params.get('doc'));
+    } catch (_) {
+        return null;
+    }
+}
+
+async function openApprovalDocFromLocationIfNeeded() {
+    const docId = getApprovalDocIdFromLocation();
+    if (!docId) return;
+    if (window.__approvalDocOpenedFromLocation === docId) return;
+    window.__approvalDocOpenedFromLocation = docId;
+    await openRelView(docId);
 }
 
 function getUserByEmpId(empId) {
@@ -3140,56 +3278,94 @@ function applySelectedApprovalTemplate() {
     showAlert(`양식을 불러왔습니다.\n제목: ${selected.title || '제목 없음'}`);
 }
 
-async function sendTelegramApprovalNotification(notificationRow) {
+function buildApprovalNotificationEventKey(targetEmpId, title, linkUrl, meta = null) {
+    const safeTargetEmpId = String(targetEmpId || '').trim();
+    const safeTitle = String(title || '').trim();
+    const safeLinkUrl = String(linkUrl || '').trim();
+    const metaObj = meta && typeof meta === 'object' ? meta : {};
+    const docId = String(metaObj.doc_id || '').trim();
+    const reason = String(metaObj.reason || '').trim();
+    const delegateEmpId = String(metaObj.delegate_emp_id || '').trim();
+    return [
+        'approval',
+        safeTargetEmpId || '-',
+        safeTitle || '-',
+        safeLinkUrl || '-',
+        docId || '-',
+        reason || '-',
+        delegateEmpId || '-'
+    ].join('::');
+} // End of buildApprovalNotificationEventKey
+
+async function sendTelegramApprovalNotification(payload) {
     try {
-        const notificationId = Number(notificationRow?.id || 0);
-        if (!Number.isFinite(notificationId) || notificationId <= 0) return;
-        const { data: sessionData } = await _supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token || '';
-        if (!accessToken) return;
+        const targetEmpId = String(payload?.targetEmpId || '').trim();
+        if (!targetEmpId) return false;
+        let accessToken = await getApprovalFunctionAccessToken(false);
+        if (!accessToken) return false;
         const erpBaseUrl = new URL('./', window.location.href).toString();
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/erp-approval-telegram-dm`, {
+        const runRequest = async (token) => fetch(`${SUPABASE_URL}/functions/v1/erp-approval-telegram-dm`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${token}`,
                 'apikey': SUPABASE_KEY
             },
             body: JSON.stringify({
-                notificationId,
+                mode: 'create_and_dispatch',
+                targetEmpId,
+                title: String(payload?.title || '알림'),
+                message: String(payload?.message || ''),
+                linkUrl: String(payload?.linkUrl || 'approval.html'),
+                meta: payload?.meta && typeof payload.meta === 'object' ? payload.meta : {},
                 erpBaseUrl
             })
         });
+        let response = await runRequest(accessToken);
+        if (response.status === 401) {
+            accessToken = await getApprovalFunctionAccessToken(true);
+            if (accessToken) response = await runRequest(accessToken);
+        }
         if (!response.ok) {
             const errText = await response.text().catch(() => '');
             console.warn('[telegram] approval notification skipped:', response.status, errText);
+            return false;
         }
+        return true;
     } catch (e) {
         console.warn('[telegram] approval notification failed:', e);
+        return false;
     }
 } // End of sendTelegramApprovalNotification
 
 async function createNotification(targetEmpId, title, message, linkUrl, meta = null) {
     try {
         if (!targetEmpId) return;
-        const { data: insertedRows, error: insertError } = await _supabase
-            .from('erp_notifications')
-            .insert({
-                user_emp_id: targetEmpId,
-                title: title || '알림',
-                message: message || '',
-                type: 'approval',
-                link_url: linkUrl || 'approval.html',
-                meta: meta,
-                created_by: myInfo?.emp_id || null
-            })
-            .select('id, user_emp_id, title, message, link_url, meta, coop_id')
-            .limit(1);
-        if (insertError) throw insertError;
+        const safeMeta = meta && typeof meta === 'object' ? { ...meta } : {};
+        if (!String(safeMeta.event_key || '').trim()) {
+            safeMeta.event_key = buildApprovalNotificationEventKey(targetEmpId, title, linkUrl, safeMeta);
+        }
 
-        const insertedRow = Array.isArray(insertedRows) ? insertedRows[0] : null;
-        if (insertedRow) {
-            await sendTelegramApprovalNotification(insertedRow);
+        const serverDispatched = await sendTelegramApprovalNotification({
+            targetEmpId,
+            title,
+            message,
+            linkUrl,
+            meta: safeMeta
+        });
+        if (!serverDispatched) {
+            const { error: insertError } = await _supabase
+                .from('erp_notifications')
+                .insert({
+                    user_emp_id: targetEmpId,
+                    title: title || '알림',
+                    message: message || '',
+                    type: 'approval',
+                    link_url: linkUrl || 'approval.html',
+                    meta: safeMeta,
+                    created_by: myInfo?.emp_id || null
+                });
+            if (insertError) throw insertError;
         }
     } catch (e) { /* noop */ }
 } // End of createNotification
@@ -3606,10 +3782,12 @@ window.onload = async function() {
     const userModalEl = document.getElementById('userModal');
     const alertModalEl = document.getElementById('alertModal');
     const confirmModalEl = document.getElementById('confirmModal');
+    const approvalActionModalEl = document.getElementById('approvalActionModal');
     const attachmentPreviewModalEl = document.getElementById('attachmentPreviewModal');
     modalInstance = new bootstrap.Modal(userModalEl);
     alertModalInstance = new bootstrap.Modal(alertModalEl);
     confirmModalInstance = new bootstrap.Modal(confirmModalEl);
+    approvalActionModalInstance = new bootstrap.Modal(approvalActionModalEl);
     physicalRejectModalInstance = new bootstrap.Modal(document.getElementById('physicalRejectModal'));
     cancelDraftModalInstance = new bootstrap.Modal(document.getElementById('cancelDraftModal'));
     evidenceUploadModalInstance = new bootstrap.Modal(document.getElementById('evidenceUploadModal'));
@@ -3623,6 +3801,9 @@ window.onload = async function() {
     document.querySelectorAll('.modal').forEach((modalEl) => {
         bindModalFocusGuard(modalEl, document.getElementById('tab1'));
     });
+    if (approvalActionModalEl) {
+        approvalActionModalEl.addEventListener('hidden.bs.modal', resetApprovalActionModal);
+    }
     if (attachmentPreviewModalEl) {
         attachmentPreviewModalEl.addEventListener('hidden.bs.modal', () => {
             resetAttachmentPreviewObjectUrl();
@@ -3636,6 +3817,17 @@ window.onload = async function() {
     const stored = localStorage.getItem('erp_user');
     if (!stored) { location.href = 'index.html'; return; }
     myInfo = JSON.parse(stored);
+    const { data: authData, error: authError } = await _supabase.auth.getUser();
+    if (authError || !authData?.user) {
+        showAlert("로그인 세션이 만료되었습니다.\n다시 로그인해 주세요.", () => {
+            try {
+                localStorage.removeItem('erp_user');
+                localStorage.removeItem('erp_permissions');
+            } catch (_) { /* noop */ }
+            location.href = 'index.html';
+        });
+        return;
+    }
     permissionSet = await loadPermissions(myInfo);
     localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
     const hasApprovalView = permissionSet.size > 0
@@ -3740,6 +3932,7 @@ window.onload = async function() {
     }
     applyApprovalRuntimeProfileUi();
     handleCategoryChange(); // UI 초기화
+    await openApprovalDocFromLocationIfNeeded();
 };
 
 async function loadPermissions(user) {
@@ -4087,6 +4280,144 @@ function showConfirm(msg, options = {}) {
     });
 }
 
+async function getApprovalFunctionAccessToken(forceRefresh = false) {
+    if (forceRefresh) {
+        const { data: refreshedData } = await _supabase.auth.refreshSession().catch(() => ({ data: null }));
+        const refreshedToken = refreshedData?.session?.access_token || '';
+        if (refreshedToken) return refreshedToken;
+    }
+
+    const { data: sessionData } = await _supabase.auth.getSession().catch(() => ({ data: null }));
+    let accessToken = sessionData?.session?.access_token || '';
+    if (!accessToken && !forceRefresh) {
+        const { data: refreshedData } = await _supabase.auth.refreshSession().catch(() => ({ data: null }));
+        accessToken = refreshedData?.session?.access_token || '';
+    }
+    return accessToken || '';
+} // End of getApprovalFunctionAccessToken
+
+function getApprovalDocProcessContext(doc) {
+    const approvalLine = Array.isArray(doc?.approval_line) ? doc.approval_line : [];
+    const currentApproverEmpId = String(doc?.current_approver || '').trim();
+    const actorEmpId = String(myInfo?.emp_id || '').trim();
+    const delegatedFrom = (currentApproverEmpId && currentApproverEmpId !== actorEmpId)
+        ? delegationIncomingMap.get(currentApproverEmpId)
+        : null;
+
+    if (!canPerform('approval.process') && !delegatedFrom) {
+        return { canProcess: false, reason: '처리 권한이 없습니다.', approvalLine, delegatedFrom: null, idx: -1 };
+    }
+    if ((String(doc?.status || '') === '실물결재대기' || doc?._physical_pending) && !isChairmanApprovalUser()) {
+        return { canProcess: false, reason: '실물결재 대기 문서는 이사장만 이 화면에서 처리할 수 있습니다.', approvalLine, delegatedFrom, idx: -1 };
+    }
+    if (!delegatedFrom && currentApproverEmpId && currentApproverEmpId !== actorEmpId) {
+        return { canProcess: false, reason: '현재 결재 차례가 아닙니다.', approvalLine, delegatedFrom: null, idx: -1 };
+    }
+
+    const effectiveApproverEmpId = delegatedFrom ? currentApproverEmpId : actorEmpId;
+    const idx = approvalLine.findIndex(item => String(item?.emp_id || '') === effectiveApproverEmpId);
+    if (idx === -1) {
+        return { canProcess: false, reason: '현재 결재선이 아닙니다.', approvalLine, delegatedFrom, idx: -1 };
+    }
+    if (idx > 0 && String(approvalLine[idx - 1]?.status || '') !== '승인') {
+        return { canProcess: false, reason: '이전 결재자가 아직 처리하지 않았습니다.', approvalLine, delegatedFrom, idx };
+    }
+
+    return {
+        canProcess: true,
+        reason: '',
+        approvalLine,
+        delegatedFrom,
+        idx,
+        effectiveApproverEmpId
+    };
+} // End of getApprovalDocProcessContext
+
+function resetApprovalActionModal() {
+    pendingApprovalAction = null;
+    const reasonEl = document.getElementById('approvalActionReason');
+    const titleEl = document.getElementById('approvalActionModalTitle');
+    const guideEl = document.getElementById('approvalActionModalGuide');
+    const submitBtn = document.getElementById('btnApprovalActionSubmit');
+    if (reasonEl) reasonEl.value = '';
+    if (titleEl) titleEl.textContent = '결재 처리';
+    if (guideEl) guideEl.textContent = '결재 메모를 남길 수 있습니다.';
+    if (submitBtn) {
+        submitBtn.textContent = '처리';
+        submitBtn.className = 'btn btn-primary btn-sm';
+        submitBtn.disabled = false;
+    }
+} // End of resetApprovalActionModal
+
+function openApprovalActionModal(docId, action) {
+    if (!approvalActionModalInstance) return;
+    const safeDocId = toPositiveDocId(docId);
+    if (!safeDocId) return showAlert('처리할 문서를 찾을 수 없습니다.');
+
+    pendingApprovalAction = {
+        docId: safeDocId,
+        action: String(action || '').trim() === '반려' ? '반려' : '승인'
+    };
+
+    const titleEl = document.getElementById('approvalActionModalTitle');
+    const guideEl = document.getElementById('approvalActionModalGuide');
+    const reasonEl = document.getElementById('approvalActionReason');
+    const submitBtn = document.getElementById('btnApprovalActionSubmit');
+    const isReject = pendingApprovalAction.action === '반려';
+
+    if (titleEl) titleEl.textContent = isReject ? '문서 반려' : '문서 승인';
+    if (guideEl) {
+        guideEl.textContent = isReject
+            ? '반려 사유를 남길 수 있습니다. 비워두고 반려할 수도 있습니다.'
+            : '승인 메모를 남길 수 있습니다. 비워두고 승인해도 됩니다.';
+    }
+    if (reasonEl) {
+        reasonEl.value = '';
+        reasonEl.placeholder = isReject ? '반려 사유를 입력하세요.' : '승인 메모를 입력하세요.';
+    }
+    if (submitBtn) {
+        submitBtn.textContent = isReject ? '반려 처리' : '승인 처리';
+        submitBtn.className = `btn ${isReject ? 'btn-danger' : 'btn-success'} btn-sm`;
+        submitBtn.disabled = false;
+    }
+    approvalActionModalInstance.show();
+    setTimeout(() => {
+        if (reasonEl) reasonEl.focus();
+    }, 120);
+} // End of openApprovalActionModal
+
+function syncRelViewActionArea(doc) {
+    const footerEl = document.getElementById('relViewModalFooter');
+    const hintEl = document.getElementById('relViewActionHint');
+    const buttonsEl = document.getElementById('relViewActionButtons');
+    if (!footerEl || !hintEl || !buttonsEl) return;
+
+    hintEl.textContent = '';
+    buttonsEl.innerHTML = '';
+    footerEl.classList.add('hidden');
+
+    if (!doc) return;
+    const context = getApprovalDocProcessContext(doc);
+    if (!context.canProcess) return;
+
+    const isPhysicalPending = String(doc?.status || '') === '실물결재대기' || doc?._physical_pending;
+    if (isPhysicalPending && !isChairmanApprovalUser()) return;
+
+    if (context.delegatedFrom) {
+        hintEl.textContent = `${context.delegatedFrom.delegator_name || context.delegatedFrom.delegator_emp_id || '결재권자'} 대신 처리하는 문서입니다.`;
+    } else if (isPhysicalPending) {
+        hintEl.textContent = '실물결재 대기 문서를 이 상세 화면에서 바로 전자 승인 또는 반려할 수 있습니다.';
+    } else {
+        hintEl.textContent = '이 문서는 현재 이 화면에서 바로 승인 또는 반려할 수 있습니다.';
+    }
+
+    buttonsEl.innerHTML = `
+        <button type="button" class="btn btn-success btn-sm" onclick="procDoc(${Number(doc.id)}, '승인')">승인</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="procDoc(${Number(doc.id)}, '반려')">반려</button>
+    `;
+    footerEl.classList.remove('hidden');
+} // End of syncRelViewActionArea
+
 function canDrafterCancelPendingDoc(doc) {
     if (!doc || doc.drafter_id !== myInfo?.emp_id) return false;
     const status = String(doc.status || '');
@@ -4205,10 +4536,6 @@ function buildApprovalGeneratedTitle(mainType) {
         }
         return `${safeType} 신청`;
     }
-    if (safeType === '부양가족') {
-        const mode = document.querySelector('input[name="depOption"]:checked')?.value || 'add';
-        return `부양가족 ${mode === 'add' ? '등재' : '해제'} 신청`;
-    }
     if (safeType === '지출결의') {
         const expenseMode = String(document.getElementById('expenseSubType')?.value || '일반').trim();
         const payrollMonthValue = String(document.getElementById('payrollMonth')?.value || '').trim();
@@ -4280,11 +4607,7 @@ function handleCategoryChange() {
     let type = categoryEl.value;
     const previousType = String(approvalLastCategory || '').trim();
     const typeChanged = previousType !== String(type || '').trim();
-    if (isApprovalWorkforceLiteProfile() && type === '부양가족') {
-        type = '휴가';
-        categoryEl.value = type;
-    }
-    if (isApprovalWorkforceLiteProfile() && type && !isApprovalDocEnabledForCurrentProfile(type)) {
+    if (type && !isApprovalDocEnabledForCurrentProfile(type)) {
         type = getFirstAvailableWorkforceLiteApprovalDocType();
         categoryEl.value = type;
     }
@@ -4296,7 +4619,7 @@ function handleCategoryChange() {
     const divLeave = document.getElementById("divLeaveSection");
     const divLeaveType = document.getElementById("divLeaveType");
     const divOvertime = document.getElementById("divOvertimeSection");
-    const divDep = document.getElementById("divDependentOption");
+    const divBusinessTrip = document.getElementById("divBusinessTripSection");
     const divAmt = document.getElementById("divAmount");
     const divRel = document.getElementById("divRelDoc"); // [New]
     const divSalaryExpense = document.getElementById("divSalaryExpense");
@@ -4315,7 +4638,7 @@ function handleCategoryChange() {
     divLeave.classList.add("hidden");
     divLeaveType.classList.add("hidden");
     divOvertime.classList.add("hidden");
-    divDep.classList.add("hidden");
+    divBusinessTrip.classList.add("hidden");
     divRel.classList.add("hidden"); // [New]
     divSalaryExpense.classList.add("hidden");
     divNoticeReceiver.classList.add("hidden");
@@ -4372,14 +4695,37 @@ function handleCategoryChange() {
         }
         recalcApprovalOvertimeSummary();
     }
-    else if (type === '부양가족') {
-        divDep.classList.remove("hidden");
+    else if (type === '출장신청') {
+        const subjectConfig = getApprovalSubjectConfig(type);
+        divBusinessTrip.classList.remove("hidden");
         divProposalSubject.classList.remove("hidden");
-        amtLabel.innerText = "변동 인원 (명)";
-        amountInput.placeholder = "예: 1";
-        amountInput.value = "1";
-        fileHelp.classList.remove("hidden");
-        updateDepTemplate();
+        btnAppDescPreview.classList.remove("hidden");
+        appDescHtmlHelp.classList.remove("hidden");
+        if (proposalSubjectLabel) proposalSubjectLabel.textContent = subjectConfig.label;
+        if (proposalSubjectInput) proposalSubjectInput.placeholder = subjectConfig.placeholder;
+        appDescHtmlHelp.textContent = subjectConfig.htmlHelp;
+        divAmt.classList.add("hidden");
+        const startDateEl = document.getElementById('businessTripStartDate');
+        const endDateEl = document.getElementById('businessTripEndDate');
+        const slotAmEl = document.getElementById('businessTripSlotAm');
+        const slotPmEl = document.getElementById('businessTripSlotPm');
+        if (typeChanged || !String(startDateEl?.value || '').trim()) {
+            if (startDateEl) startDateEl.value = formatApprovalKstDateISO(new Date());
+        }
+        if (typeChanged || !String(endDateEl?.value || '').trim()) {
+            if (endDateEl) endDateEl.value = formatApprovalKstDateISO(new Date());
+        }
+        if (typeChanged || (!slotAmEl?.checked && !slotPmEl?.checked)) {
+            if (slotAmEl) slotAmEl.checked = true;
+            if (slotPmEl) slotPmEl.checked = true;
+        }
+        if (typeChanged && document.getElementById('businessTripLocation')) {
+            document.getElementById('businessTripLocation').value = '';
+        }
+        if (!String(getApprovalEditorContent() || '').trim() || isApprovalAutoGeneratedTemplateContent(String(getApprovalEditorContent() || '').trim())) {
+            setApprovalEditorContent(subjectConfig.defaultBody);
+        }
+        syncApprovalBusinessTripSummary();
     }
     else if (type === '지출결의') { // [New] 지출결의일 때 관련문서 UI 오픈
         divRel.classList.remove("hidden");
@@ -4474,15 +4820,6 @@ function openAppDescPreview() {
         : '줄바꿈 기준 본문 미리보기';
     modalBody.innerHTML = renderApprovalContent(rawContent, allowHtml);
     if (appDescPreviewModalInstance) appDescPreviewModalInstance.show();
-}
-
-// [기능] 부양가족 템플릿 업데이트
-function updateDepTemplate() {
-    if (isApprovalWorkforceLiteProfile()) return;
-    const mode = document.querySelector('input[name="depOption"]:checked').value;
-    const actionText = mode === 'add' ? "등재" : "해제";
-    setApprovalEditorContent(`[부양가족 ${actionText} 신청]\n\n1. 대상자 성명 : \n2. 관계 : \n3. 주민등록번호(앞자리) : \n4. 변동 사유 : \n\n--------------------------------\n위와 같이 가족수당 지급 및 공제 대상자 변경을 신청합니다.`);
-    syncApprovalTitleInput('부양가족');
 }
 
 function getApprovalLeaveTargetEmpInfo() {
@@ -5163,11 +5500,8 @@ async function handleDraftSubmit(e) {
     if (!canPerform('approval.submit')) return showAlert("상신 권한이 없습니다.");
 
     const mainType = document.getElementById("appCategory").value;
-    if (isApprovalWorkforceLiteProfile() && !isApprovalDocEnabledForCurrentProfile(mainType)) {
+    if (!isApprovalDocEnabledForCurrentProfile(mainType)) {
         return showAlert('현재 조합에서 사용하지 않는 문서유형입니다. 설정에서 사용 여부를 확인하세요.');
-    }
-    if (isApprovalWorkforceLiteProfile() && mainType === '부양가족') {
-        return showAlert('workforce_lite 프로필에서는 부양가족 신청을 사용하지 않습니다.');
     }
     const expenseSubType = document.getElementById("expenseSubType")?.value || '일반';
     const payrollMonth = document.getElementById("payrollMonth")?.value || '';
@@ -5187,6 +5521,7 @@ async function handleDraftSubmit(e) {
     let jeongyeolDecision = { mode: 'NONE', applied: false, ruleCode: '', ruleLabel: '' };
     let leaveSnapshotPayload = null;
     let attendanceSnapshotPayload = null;
+    let businessTripSnapshotPayload = null;
     
     if (isProxy) {
         const targetSel = document.getElementById("proxyTargetSelect");
@@ -5246,18 +5581,6 @@ async function handleDraftSubmit(e) {
         finalAmt = attendanceSnapshotPayload.total_hours;
         title = getApprovalResolvedTitle(mainType, `시간외근로 신청 (${attendanceSnapshotPayload.work_date} · ${attendanceSnapshotPayload.total_hours}시간)`);
     }
-    else if (mainType === '부양가족') {
-        const mode = document.querySelector('input[name="depOption"]:checked').value; // add or remove
-        const modeTxt = mode === 'add' ? '등재' : '해제';
-        subType = `부양가족(${mode})`;
-        
-        // 대리 상신이 아닐 때만 파일 필수
-        if(!isProxy && document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류 필수입니다.");
-        
-        if (mode === 'remove') finalAmt = -Math.abs(finalAmt);
-        title = getApprovalResolvedTitle(mainType, `부양가족 ${modeTxt} 신청`);
-    }
-
     else if (mainType === '지출결의') {
         if (expenseSubType === '급여') {
             if (!canUseSalaryExpense()) return showAlert("급여 연동 권한이 없습니다.");
@@ -5305,7 +5628,34 @@ async function handleDraftSubmit(e) {
         if (!proposalTitle) return showAlert(`${subjectConfig.label}을 입력하세요.`);
         title = getApprovalResolvedTitle(mainType, proposalTitle);
         subType = mainType;
-        if (mainType === '구매요청') {
+        if (mainType === '출장신청') {
+            businessTripSnapshotPayload = buildApprovalBusinessTripSnapshot();
+            if (!businessTripSnapshotPayload.start_date) {
+                return showAlert("출장 시작일을 입력하세요.");
+            }
+            if (!businessTripSnapshotPayload.end_date) {
+                return showAlert("출장 종료일을 입력하세요.");
+            }
+            if (!businessTripSnapshotPayload.period_label) {
+                return showAlert("출장 구분(오전/오후/종일)을 선택하세요.");
+            }
+            if (!businessTripSnapshotPayload.location) {
+                return showAlert("출장 장소를 입력하세요.");
+            }
+            if (!approvalBusinessTripSnapshotSupported) {
+                return showAlert("출장 일정 저장 설정을 아직 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            }
+            if (!businessTripSnapshotPayload.start_at || !businessTripSnapshotPayload.end_at) {
+                return showAlert("출장 일정 형식을 확인하세요.");
+            }
+            const startAtMs = new Date(businessTripSnapshotPayload.start_at).getTime();
+            const endAtMs = new Date(businessTripSnapshotPayload.end_at).getTime();
+            if (!Number.isFinite(startAtMs) || !Number.isFinite(endAtMs) || endAtMs <= startAtMs) {
+                return showAlert("출장 종료일은 시작일보다 빠를 수 없습니다.");
+            }
+            appendDesc += `\n\n[출장 일정]\n- 기간: ${formatApprovalBusinessTripPeriodText(businessTripSnapshotPayload)}\n- 장소: ${businessTripSnapshotPayload.location}`;
+            finalAmt = 0;
+        } else if (mainType === '구매요청') {
             finalAmt = Number(document.getElementById("appAmount").value || 0);
             if (finalAmt <= 0) return showAlert("예상 금액을 입력하세요.");
         } else {
@@ -5329,16 +5679,14 @@ async function handleDraftSubmit(e) {
 
     const draftBodyForValidation = getApprovalEditorContent();
     if (!String(draftBodyForValidation || '').trim()) return showAlert("내용을 입력하세요.");
-    if (isApprovalWorkforceLiteProfile()) {
-        if (isApprovalDocRuleEnabled(mainType, 'require_amount') && !(Number(finalAmt) > 0)) {
-            return showAlert(`${getApprovalSubjectConfig(mainType).amountLabel}을 입력하세요.`);
-        }
-        if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_receiver') && !String(receiver || '').trim()) {
-            return showAlert('수신을 입력하세요.');
-        }
-        if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_via') && !String(via || '').trim()) {
-            return showAlert('경유를 입력하세요.');
-        }
+    if (isApprovalDocRuleEnabled(mainType, 'require_amount') && !(Number(finalAmt) > 0)) {
+        return showAlert(`${getApprovalSubjectConfig(mainType).amountLabel}을 입력하세요.`);
+    }
+    if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_receiver') && !String(receiver || '').trim()) {
+        return showAlert('수신을 입력하세요.');
+    }
+    if (mainType === '공문' && isApprovalDocRuleEnabled(mainType, 'require_via') && !String(via || '').trim()) {
+        return showAlert('경유를 입력하세요.');
     }
     
     // 증빙 필수 체크 (경조사, 병가) - 대리상신 제외
@@ -5351,7 +5699,7 @@ async function handleDraftSubmit(e) {
 
     // 첨부파일 형식/용량 검증
     const fileInput = document.getElementById("attachFile");
-    if (isApprovalWorkforceLiteProfile() && isApprovalDocRuleEnabled(mainType, 'require_attachment') && fileInput.files.length === 0) {
+    if (isApprovalDocRuleEnabled(mainType, 'require_attachment') && fileInput.files.length === 0) {
         return showAlert('첨부파일이 필수입니다.');
     }
     const validation = validateAttachments(fileInput.files);
@@ -5489,7 +5837,8 @@ async function handleDraftSubmit(e) {
         receiver: receiver || null,
         via: via || null,
         ...(approvalLeaveSnapshotSupported && leaveSnapshotPayload ? { leave_snapshot: leaveSnapshotPayload } : {}),
-        ...(approvalAttendanceSnapshotSupported && attendanceSnapshotPayload ? { attendance_snapshot: attendanceSnapshotPayload } : {})
+        ...(approvalAttendanceSnapshotSupported && attendanceSnapshotPayload ? { attendance_snapshot: attendanceSnapshotPayload } : {}),
+        ...(approvalBusinessTripSnapshotSupported && businessTripSnapshotPayload ? { business_trip_snapshot: businessTripSnapshotPayload } : {})
     };
 
     let insertedDoc = null;
@@ -5521,11 +5870,23 @@ async function handleDraftSubmit(e) {
     });
 }
 
-// [핵심] 결재 처리
-async function procDoc(docId, action) {
-    const reason = prompt(`${action} 사유 (선택):`);
-    if (reason === null) return;
+async function submitApprovalActionModal() {
+    if (!pendingApprovalAction) return;
+    const submitBtn = document.getElementById('btnApprovalActionSubmit');
+    const reasonEl = document.getElementById('approvalActionReason');
+    const reason = String(reasonEl?.value || '').trim();
+    if (submitBtn) submitBtn.disabled = true;
+    const ok = await processApprovalDoc(pendingApprovalAction.docId, pendingApprovalAction.action, reason);
+    if (submitBtn) submitBtn.disabled = false;
+    if (ok && approvalActionModalInstance) approvalActionModalInstance.hide();
+} // End of submitApprovalActionModal
 
+function procDoc(docId, action) {
+    openApprovalActionModal(docId, action);
+} // End of procDoc
+
+// [핵심] 결재 처리
+async function processApprovalDoc(docId, action, reason = '') {
     if (!canProcessApprovals()) return showAlert("처리 권한이 없습니다.");
     if (!canPerform('approval.process')) {
         await loadDelegationContext({ refreshTodo: false });
@@ -5533,27 +5894,16 @@ async function procDoc(docId, action) {
 
     const { data: doc, error: docError } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
     if (docError || !doc) return showAlert("문서를 불러오지 못했습니다.");
-    let line = Array.isArray(doc.approval_line) ? doc.approval_line : [];
+    const context = getApprovalDocProcessContext(doc);
+    if (!context.canProcess) return showAlert(context.reason || "처리 권한이 없습니다.");
+
+    let line = context.approvalLine.map(item => ({ ...item }));
     let nextUser = null;
     let newStatus = '진행중';
-    let dependentsRollback = null;
-    const currentApproverEmpId = String(doc.current_approver || '').trim();
     const actorEmpId = String(myInfo?.emp_id || '').trim();
-    const delegatedFrom = (currentApproverEmpId && currentApproverEmpId !== actorEmpId)
-        ? delegationIncomingMap.get(currentApproverEmpId)
-        : null;
-
-    if (!canPerform('approval.process') && !delegatedFrom) {
-        return showAlert("처리 권한이 없습니다.");
-    }
-    if (!delegatedFrom && currentApproverEmpId && currentApproverEmpId !== actorEmpId) {
-        return showAlert("현재 결재 차례가 아닙니다.");
-    }
-
-    const effectiveApproverEmpId = delegatedFrom ? currentApproverEmpId : actorEmpId;
-    const idx = line.findIndex(p => String(p?.emp_id || '') === effectiveApproverEmpId);
-    if (idx === -1) return showAlert("권한 없음");
-    if (idx > 0 && String(line[idx - 1]?.status || '') !== '승인') return showAlert("이전 결재자가 처리 안 함");
+    const delegatedFrom = context.delegatedFrom || null;
+    const effectiveApproverEmpId = String(context.effectiveApproverEmpId || actorEmpId || '').trim();
+    const idx = Number(context.idx);
 
     line[idx].status = action;
     line[idx].comment = reason;
@@ -5572,39 +5922,11 @@ async function procDoc(docId, action) {
         else newStatus = '완료'; 
     }
 
-    // [부양가족 자동 반영]
-    if (doc.doc_type.startsWith('부양가족') && newStatus === '완료') {
-        const changeVal = Number(doc.amount); 
-        const drafterId = doc.drafter_id;
-        const { data: empData, error: empLoadError } = await _supabase
-            .from('ref_employees')
-            .select('dependents')
-            .eq('emp_id', drafterId)
-            .single();
-        if (empLoadError) return showAlert("부양가족 정보 조회 실패: " + empLoadError.message);
-        if(empData) {
-            const current = empData.dependents || 0;
-            const newVal = Math.max(0, current + changeVal);
-            const { error: depUpdateError } = await _supabase
-                .from('ref_employees')
-                .update({ dependents: newVal })
-                .eq('emp_id', drafterId);
-            if (depUpdateError) return showAlert("부양가족 반영 실패: " + depUpdateError.message);
-            dependentsRollback = { empId: drafterId, prev: current };
-        }
-    }
-
     const { error: approvalUpdateError } = await _supabase
         .from('ref_approval')
         .update({ approval_line: line, current_approver: nextUser, status: newStatus })
         .eq('id', docId);
     if (approvalUpdateError) {
-        if (dependentsRollback) {
-            await _supabase
-                .from('ref_employees')
-                .update({ dependents: dependentsRollback.prev })
-                .eq('emp_id', dependentsRollback.empId);
-        }
         return showAlert("결재 상태 저장 실패: " + approvalUpdateError.message);
     }
     try {
@@ -5637,8 +5959,13 @@ async function procDoc(docId, action) {
         );
     }
 
-    showAlert("처리되었습니다."); loadTodoList();
-}
+    if (currentViewingDocId && Number(currentViewingDocId) === Number(docId) && relViewModal) {
+        relViewModal.hide();
+    }
+    await Promise.all([loadTodoList(), loadHistoryList()]);
+    showAlert("처리되었습니다.");
+    return true;
+} // End of processApprovalDoc
 
 function startDraftCancel(docId) {
     pendingCancelDocId = docId;
@@ -6227,7 +6554,7 @@ function onHistoryAdvancedFilterChange() {
     const docTypeEl = document.getElementById('historyDocTypeFilter');
     const periodEl = document.getElementById('historyPeriodFilter');
     const processEl = document.getElementById('historyProcessFilter');
-    const allowedDocType = ['ALL', 'GENERAL_PROPOSAL', 'EXPENSE', 'LEAVE', 'DEPENDENT', 'NOTICE'];
+    const allowedDocType = ['ALL', 'GENERAL_PROPOSAL', 'EXPENSE', 'LEAVE', 'NOTICE'];
     const allowedPeriod = ['ALL', 'D7', 'D30', 'THIS_MONTH', 'THIS_YEAR'];
     const allowedProcess = ['ALL', 'ELECTRONIC', 'PHYSICAL'];
 
@@ -7022,6 +7349,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (relViewModalEl) {
         relViewModalEl.addEventListener('hidden.bs.modal', () => {
             resetRelViewObjectUrls();
+            currentViewingDocId = null;
+            syncRelViewActionArea(null);
         });
     }
 });
@@ -7293,6 +7622,7 @@ async function openRelView(docId) {
     const modalTitleEl = document.getElementById("relViewModalTitle");
     if (modalTitleEl) modalTitleEl.textContent = "📄 문서 내용";
     contentEl.textContent = "Loading...";
+    syncRelViewActionArea(null);
     relViewModal.show();
 
     const { data, error } = await _supabase.from('ref_approval').select('*').eq('id', safeDocId).maybeSingle();
@@ -7356,6 +7686,7 @@ async function openRelView(docId) {
     }
     const attachmentViewerEl = await buildRelAttachmentViewer(attachmentRefs);
     contentEl.appendChild(attachmentViewerEl);
+    syncRelViewActionArea(data);
 }
 
   </script>
