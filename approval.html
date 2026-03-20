@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.53 | Change: 2026-03-20 - approval.html?doc=ID 진입 시 기존 바로보기 모달이 자동으로 열리도록 연결. -->
+<!-- Version: v1.1.56 | Change: 2026-03-20 - 문서보관함 기본 조회를 최근 30일로 제한하고 검색만 전체 문서에서 수행하도록 보강. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.53 | approval.html');</script>
+  <script>console.log('[Version] v1.1.56 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -227,7 +227,8 @@
   <ul class="nav nav-pills nav-fill mb-4">
     <li class="nav-item"><button class="nav-link active" id="tab1" onclick="switchTab('draft')">✍️ 기안 작성</button></li>
     <li class="nav-item"><button class="nav-link" id="tab2" onclick="switchTab('todo')">📬 결재 대기함</button></li>
-    <li class="nav-item"><button class="nav-link" id="tab3" onclick="switchTab('history')">🗂️ 문서 보관함</button></li>
+    <li class="nav-item"><button class="nav-link" id="tab3" onclick="switchTab('pending')">⏳ 승인 대기중</button></li>
+    <li class="nav-item"><button class="nav-link" id="tab4" onclick="switchTab('history')">🗂️ 문서 보관함</button></li>
   </ul>
 
   <div id="delegateBanner" class="delegate-banner hidden"></div>
@@ -611,12 +612,14 @@
   </div>
 
   <div id="view-todo" class="hidden"><div id="todoList" class="list-group"></div></div>
+  <div id="view-pending" class="hidden"><div id="pendingList" class="list-group"></div></div>
   <div id="view-history" class="hidden">
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="searchKeyword" placeholder="제목 또는 내용 검색" onkeyup="filterHistory()">
-      <button class="btn btn-outline-secondary">🔍</button>
+      <input type="text" class="form-control" id="searchKeyword" placeholder="제목 또는 내용 검색 (최근 30일 외 문서는 검색 시 조회)" onkeyup="filterHistory()">
+      <button class="btn btn-outline-secondary" type="button" onclick="filterHistory(true)">🔍</button>
       <button class="btn btn-outline-success" onclick="exportHistoryCsv()">⬇ CSV</button>
     </div>
+    <div class="small text-muted mb-3" id="historyScopeHint">문서보관함 기본 목록은 최근 30일만 표시됩니다. 이전 문서는 검색 시 서버에서 불러옵니다.</div>
     <div class="d-flex flex-wrap gap-2 mb-3" id="historyStatusFilterBar">
       <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn active" data-history-filter="ALL" onclick="setHistoryStatusFilter('ALL')">전체 <span class="badge text-bg-light ms-1" id="historyCountAll">0</span></button>
       <button type="button" class="btn btn-sm btn-outline-secondary history-filter-btn" data-history-filter="PENDING" onclick="setHistoryStatusFilter('PENDING')">대기 <span class="badge text-bg-light ms-1" id="historyCountPending">0</span></button>
@@ -683,7 +686,7 @@ let myInfo = null;
 let allUsers = [];
 let modalInstance, alertModalInstance, confirmModalInstance;
 let modalType = ''; 
-let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [];
+let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [], historySearchCache = [], pendingSubmissionCache = [], todoCache = [];
 let permissionSet = new Set();
 let pendingPhysicalDocId = null;
 let pendingPhysicalRejectDocId = null;
@@ -711,6 +714,9 @@ let historyStatusFilter = 'ALL';
 let historyDocTypeFilter = 'ALL';
 let historyPeriodFilter = 'ALL';
 let historyProcessFilter = 'ALL';
+let historySearchDebounceTimer = null;
+let historySearchRequestSeq = 0;
+let historySearchActive = false;
 let delegationOutgoing = null;
 let delegationIncoming = [];
 let delegationIncomingMap = new Map();
@@ -735,6 +741,7 @@ let approvalBusinessTripSnapshotSupported = false;
 let approvalOvertimePolicy = null;
 let approvalLastCategory = '';
 let pendingApprovalAction = null;
+let modalStackSequence = 0;
 const APPROVAL_LEAVE_TYPE_CONFIG_KEY = 'approval_leave_type_catalog_json';
 const APPROVAL_DOC_RULE_CONFIG_KEY = 'approval_doc_rule_catalog_json';
 const APPROVAL_OVERTIME_POLICY_KEY = 'approval_overtime_policy_json';
@@ -801,6 +808,7 @@ const HISTORY_STATUS_GROUPS = Object.freeze({
     REJECTED: ['반려'],
     CANCELED: ['결재취소']
 });
+const HISTORY_ARCHIVE_DEFAULT_DAYS = 30;
 const KST_TZ_APPROVAL = 'Asia/Seoul';
 const formatApprovalKstDateISO = (value, fallback = '') => {
     if (!value) return fallback;
@@ -3340,7 +3348,7 @@ async function sendTelegramApprovalNotification(payload) {
 
 async function createNotification(targetEmpId, title, message, linkUrl, meta = null) {
     try {
-        if (!targetEmpId) return;
+        if (!targetEmpId) return { ok: false, telegramSent: false, fallbackInserted: false };
         const safeMeta = meta && typeof meta === 'object' ? { ...meta } : {};
         if (!String(safeMeta.event_key || '').trim()) {
             safeMeta.event_key = buildApprovalNotificationEventKey(targetEmpId, title, linkUrl, safeMeta);
@@ -3366,8 +3374,13 @@ async function createNotification(targetEmpId, title, message, linkUrl, meta = n
                     created_by: myInfo?.emp_id || null
                 });
             if (insertError) throw insertError;
+            return { ok: true, telegramSent: false, fallbackInserted: true };
         }
-    } catch (e) { /* noop */ }
+        return { ok: true, telegramSent: true, fallbackInserted: false };
+    } catch (e) {
+        console.warn('[notification] createNotification failed:', e);
+        return { ok: false, telegramSent: false, fallbackInserted: false, error: e };
+    }
 } // End of createNotification
 
 async function logAudit(action, entityId, summary, detail = null) {
@@ -3508,6 +3521,47 @@ function bindModalFocusGuard(modalEl, fallbackEl) {
     modalEl.addEventListener('pointerdown', earlyGuard, true);
     modalEl.addEventListener('click', earlyGuard, true);
 }
+
+function normalizeModalStacking() {
+    const openModals = Array.from(document.querySelectorAll('.modal.show'))
+        .sort((a, b) => Number(a.dataset.modalStackOrder || 0) - Number(b.dataset.modalStackOrder || 0));
+    openModals.forEach((modalEl, index) => {
+        modalEl.style.zIndex = String(1055 + (index * 20));
+    });
+    const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+    backdrops.forEach((backdropEl, index) => {
+        backdropEl.style.zIndex = String(1050 + (index * 20));
+    });
+    if (openModals.length > 0) {
+        document.body.classList.add('modal-open');
+    }
+} // End of normalizeModalStacking
+
+function bindModalStackingBehavior() {
+    if (!document.body || document.body.dataset.modalStackingBound === '1') return;
+    document.body.dataset.modalStackingBound = '1';
+
+    document.addEventListener('show.bs.modal', (event) => {
+        const modalEl = event.target;
+        if (!(modalEl instanceof HTMLElement) || !modalEl.classList.contains('modal')) return;
+        modalEl.dataset.modalStackOrder = String(++modalStackSequence);
+        setTimeout(normalizeModalStacking, 0);
+    }, true);
+
+    document.addEventListener('hidden.bs.modal', (event) => {
+        const modalEl = event.target;
+        if (modalEl instanceof HTMLElement && modalEl.classList.contains('modal')) {
+            modalEl.style.zIndex = '';
+            modalEl.removeAttribute('data-modal-stack-order');
+        }
+        setTimeout(() => {
+            normalizeModalStacking();
+            if (document.querySelectorAll('.modal.show').length > 0) {
+                document.body.classList.add('modal-open');
+            }
+        }, 0);
+    }, true);
+} // End of bindModalStackingBehavior
 
 async function loadDelegationContext(options = {}) {
     if (!isApprovalWorkforceLiteProfile()) {
@@ -3795,6 +3849,7 @@ window.onload = async function() {
     approvalTemplateModalInstance = new bootstrap.Modal(document.getElementById('approvalTemplateModal'));
     attachmentPreviewModalInstance = new bootstrap.Modal(attachmentPreviewModalEl);
     delegationModalInstance = new bootstrap.Modal(document.getElementById('delegationModal'));
+    bindModalStackingBehavior();
     bindModalFocusGuard(userModalEl, document.getElementById('tab1'));
     bindModalFocusGuard(alertModalEl, document.getElementById('tab1'));
     bindModalFocusGuard(confirmModalEl, document.getElementById('tab1'));
@@ -3858,9 +3913,9 @@ window.onload = async function() {
         await loadDelegationContext({ refreshTodo: false });
     }
     applyChairmanApprovalTabLayout();
-    if (getApprovalInitialTab() === 'todo') {
-        switchTab('todo');
-    }
+    await loadHistoryList({ render: false });
+    await loadTodoList({ render: false });
+    switchTab(getApprovalInitialTab());
 
     const payrollMonthInput = document.getElementById("payrollMonth");
     if (payrollMonthInput) payrollMonthInput.value = formatApprovalKstMonth();
@@ -3979,19 +4034,48 @@ function applyChairmanApprovalTabLayout() {
     const navEl = document.querySelector('.nav.nav-pills.nav-fill.mb-4');
     const draftItem = document.getElementById('tab1')?.closest('.nav-item');
     const todoItem = document.getElementById('tab2')?.closest('.nav-item');
-    const historyItem = document.getElementById('tab3')?.closest('.nav-item');
+    const pendingItem = document.getElementById('tab3')?.closest('.nav-item');
+    const historyItem = document.getElementById('tab4')?.closest('.nav-item');
 
-    if (!navEl || !draftItem || !todoItem || !historyItem) return false;
+    if (!navEl || !draftItem || !todoItem || !pendingItem || !historyItem) return false;
 
     navEl.appendChild(todoItem);
+    navEl.appendChild(pendingItem);
     navEl.appendChild(historyItem);
     navEl.appendChild(draftItem);
     return true;
 } // End of applyChairmanApprovalTabLayout
 
+function isSubmittedApprovalPending(doc) {
+    const safeDoc = doc && typeof doc === 'object' ? doc : null;
+    if (!safeDoc) return false;
+    return normalizeApprovalEmpId(safeDoc.drafter_id) === normalizeApprovalEmpId(myInfo?.emp_id)
+        && mapHistoryStatusGroup(safeDoc.status) === 'PENDING';
+} // End of isSubmittedApprovalPending
+
+function syncTodoTabVisibility() {
+    const tabBtn = document.getElementById('tab2');
+    const navItem = tabBtn?.closest('.nav-item');
+    if (!tabBtn || !navItem) return;
+
+    const canSeeTodo = canPerform('approval.process') && Array.isArray(todoCache) && todoCache.length > 0;
+    navItem.classList.toggle('hidden', !canSeeTodo);
+
+    if (!canSeeTodo && tabBtn.classList.contains('active')) {
+        if (pendingSubmissionCache.length > 0) {
+            switchTab('pending');
+            return;
+        }
+        switchTab('draft');
+    }
+} // End of syncTodoTabVisibility
+
 function getApprovalInitialTab() {
-    if (isChairmanApprovalUser() && canPerform('approval.process')) {
+    if (canPerform('approval.process') && Array.isArray(todoCache) && todoCache.length > 0) {
         return 'todo';
+    }
+    if (Array.isArray(pendingSubmissionCache) && pendingSubmissionCache.length > 0) {
+        return 'pending';
     }
     return 'draft';
 } // End of getApprovalInitialTab
@@ -4280,19 +4364,27 @@ function showConfirm(msg, options = {}) {
     });
 }
 
+function isSessionNearExpiry(session, thresholdMs = 2 * 60 * 1000) {
+    const expiresAtSec = Number(session?.expires_at || 0);
+    if (!Number.isFinite(expiresAtSec) || expiresAtSec <= 0) return true;
+    return (expiresAtSec * 1000) <= (Date.now() + thresholdMs);
+} // End of isSessionNearExpiry
+
 async function getApprovalFunctionAccessToken(forceRefresh = false) {
-    if (forceRefresh) {
-        const { data: refreshedData } = await _supabase.auth.refreshSession().catch(() => ({ data: null }));
-        const refreshedToken = refreshedData?.session?.access_token || '';
-        if (refreshedToken) return refreshedToken;
-    }
+    const { data: authData, error: authError } = await _supabase.auth.getUser().catch(() => ({ data: null, error: null }));
+    if (authError || !authData?.user) return '';
 
     const { data: sessionData } = await _supabase.auth.getSession().catch(() => ({ data: null }));
-    let accessToken = sessionData?.session?.access_token || '';
-    if (!accessToken && !forceRefresh) {
+    let session = sessionData?.session || null;
+    let accessToken = session?.access_token || '';
+    const needsRefresh = !!forceRefresh || !accessToken || isSessionNearExpiry(session);
+
+    if (needsRefresh) {
         const { data: refreshedData } = await _supabase.auth.refreshSession().catch(() => ({ data: null }));
-        accessToken = refreshedData?.session?.access_token || '';
+        session = refreshedData?.session || session;
+        accessToken = session?.access_token || accessToken;
     }
+
     return accessToken || '';
 } // End of getApprovalFunctionAccessToken
 
@@ -4482,7 +4574,16 @@ function switchTab(tab) {
         document.getElementById('tab2').classList.add('active'); 
         loadTodoList(); 
     }
-    else { document.getElementById('view-history').classList.remove('hidden'); document.getElementById('tab3').classList.add('active'); loadHistoryList(); }
+    else if (tab === 'pending') {
+        document.getElementById('view-pending').classList.remove('hidden');
+        document.getElementById('tab3').classList.add('active');
+        loadHistoryList();
+    }
+    else {
+        document.getElementById('view-history').classList.remove('hidden');
+        document.getElementById('tab4').classList.add('active');
+        loadHistoryList();
+    }
 }
 
 function getApprovalTitleInputElement(mainType) {
@@ -5859,14 +5960,18 @@ async function handleDraftSubmit(e) {
             jeongyeol_mode: jeongyeolDecision.applied ? jeongyeolDecision.mode : null,
             jeongyeol_rule_code: jeongyeolDecision.applied ? jeongyeolDecision.ruleCode : null
         });
-        await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        const notificationResult = await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        insertedDoc._notificationResult = notificationResult;
     }
     const firstApprover = finalApprovers[0];
     const firstApproverName = firstApprover ? `${firstApprover.emp_name} ${firstApprover.position || ''}`.trim() : '-';
-    showAlert(`상신이 완료되었습니다.
-첫 결재자: ${firstApproverName}
-결재 요청 알림을 전송했습니다.`, () => {
-        switchTab('history');
+    const submitNotice = insertedDoc?._notificationResult?.ok
+        && insertedDoc?._notificationResult?.telegramSent === false
+        && insertedDoc?._notificationResult?.fallbackInserted === true
+        ? `상신이 완료되었습니다.\n첫 결재자: ${firstApproverName}\n앱 알림은 저장했지만 Telegram 전송은 실패했습니다.`
+        : `상신이 완료되었습니다.\n첫 결재자: ${firstApproverName}\n결재 요청 알림을 전송했습니다.`;
+    showAlert(submitNotice, () => {
+        switchTab('pending');
     });
 }
 
@@ -5876,9 +5981,20 @@ async function submitApprovalActionModal() {
     const reasonEl = document.getElementById('approvalActionReason');
     const reason = String(reasonEl?.value || '').trim();
     if (submitBtn) submitBtn.disabled = true;
-    const ok = await processApprovalDoc(pendingApprovalAction.docId, pendingApprovalAction.action, reason);
+    const result = await processApprovalDoc(pendingApprovalAction.docId, pendingApprovalAction.action, reason);
     if (submitBtn) submitBtn.disabled = false;
-    if (ok && approvalActionModalInstance) approvalActionModalInstance.hide();
+    if (!result?.ok) return;
+
+    const finishNotice = String(result.notice || '처리되었습니다.');
+    const modalEl = document.getElementById('approvalActionModal');
+    if (approvalActionModalInstance && modalEl && modalEl.classList.contains('show')) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            showAlert(finishNotice);
+        }, { once: true });
+        approvalActionModalInstance.hide();
+        return;
+    }
+    showAlert(finishNotice);
 } // End of submitApprovalActionModal
 
 function procDoc(docId, action) {
@@ -5887,15 +6003,30 @@ function procDoc(docId, action) {
 
 // [핵심] 결재 처리
 async function processApprovalDoc(docId, action, reason = '') {
-    if (!canProcessApprovals()) return showAlert("처리 권한이 없습니다.");
+    if (!canProcessApprovals()) {
+        showAlert("처리 권한이 없습니다.");
+        return { ok: false };
+    }
     if (!canPerform('approval.process')) {
         await loadDelegationContext({ refreshTodo: false });
     }
 
+    const approvalFunctionToken = await getApprovalFunctionAccessToken(true);
+    if (!approvalFunctionToken) {
+        showAlert("로그인 세션이 만료되었습니다.\n새로고침 후 다시 로그인해 주세요.");
+        return { ok: false };
+    }
+
     const { data: doc, error: docError } = await _supabase.from('ref_approval').select('*').eq('id', docId).single();
-    if (docError || !doc) return showAlert("문서를 불러오지 못했습니다.");
+    if (docError || !doc) {
+        showAlert("문서를 불러오지 못했습니다.");
+        return { ok: false };
+    }
     const context = getApprovalDocProcessContext(doc);
-    if (!context.canProcess) return showAlert(context.reason || "처리 권한이 없습니다.");
+    if (!context.canProcess) {
+        showAlert(context.reason || "처리 권한이 없습니다.");
+        return { ok: false };
+    }
 
     let line = context.approvalLine.map(item => ({ ...item }));
     let nextUser = null;
@@ -5927,13 +6058,15 @@ async function processApprovalDoc(docId, action, reason = '') {
         .update({ approval_line: line, current_approver: nextUser, status: newStatus })
         .eq('id', docId);
     if (approvalUpdateError) {
-        return showAlert("결재 상태 저장 실패: " + approvalUpdateError.message);
+        showAlert("결재 상태 저장 실패: " + approvalUpdateError.message);
+        return { ok: false };
     }
     try {
         await applyApprovalAttendanceSettlement(doc, newStatus);
     } catch (settlementError) {
         console.error('시간외 근로 반영 실패:', settlementError);
-        return showAlert("결재는 완료되었지만 시간외 근로 반영에 실패했습니다. 설정을 확인해주세요.");
+        showAlert("결재는 완료되었지만 시간외 근로 반영에 실패했습니다. 설정을 확인해주세요.");
+        return { ok: false };
     }
     await logAudit('approval.process', docId, `${action} 처리`, {
         status: newStatus,
@@ -5942,29 +6075,35 @@ async function processApprovalDoc(docId, action, reason = '') {
         delegate_emp_id: delegatedFrom ? actorEmpId : null
     });
 
+    const notificationResults = [];
     if (action === '반려') {
-        await createNotification(doc.drafter_id, '결재 반려', `${doc.title} 문서가 반려되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        notificationResults.push(await createNotification(doc.drafter_id, '결재 반려', `${doc.title} 문서가 반려되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId }));
     } else if (newStatus === '완료') {
-        await createNotification(doc.drafter_id, '결재 완료', `${doc.title} 문서가 최종 승인되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        notificationResults.push(await createNotification(doc.drafter_id, '결재 완료', `${doc.title} 문서가 최종 승인되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId }));
     } else if (nextUser) {
-        await createNotification(nextUser, '결재 요청', `${doc.title} 문서 결재 차례입니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
+        notificationResults.push(await createNotification(nextUser, '결재 요청', `${doc.title} 문서 결재 차례입니다.`, `approval.html?doc=${docId}`, { doc_id: docId }));
     }
     if (delegatedFrom) {
-        await createNotification(
+        notificationResults.push(await createNotification(
             delegatedFrom.delegator_emp_id,
             '대결재 처리 알림',
             `${doc.title} 문서가 ${myInfo?.emp_name || '대결재자'}에 의해 ${action} 처리되었습니다.`,
             `approval.html?doc=${docId}`,
             { doc_id: docId, delegated_from: delegatedFrom.delegator_emp_id, delegate_emp_id: actorEmpId }
-        );
+        ));
     }
 
     if (currentViewingDocId && Number(currentViewingDocId) === Number(docId) && relViewModal) {
         relViewModal.hide();
     }
     await Promise.all([loadTodoList(), loadHistoryList()]);
-    showAlert("처리되었습니다.");
-    return true;
+    const hasTelegramFallback = notificationResults.some((result) => result?.ok && result?.telegramSent === false && result?.fallbackInserted === true);
+    return {
+        ok: true,
+        notice: hasTelegramFallback
+            ? "처리되었습니다.\n앱 알림은 저장했지만 Telegram 전송은 실패했습니다."
+            : "처리되었습니다."
+    };
 } // End of processApprovalDoc
 
 function startDraftCancel(docId) {
@@ -6318,9 +6457,10 @@ async function applyApprovalAttendanceSettlement(doc, newStatus) {
     return;
 }
 
-async function loadTodoList() {
+async function loadTodoList(options = {}) {
     const el = document.getElementById("todoList");
-    el.innerHTML = 'loading...';
+    const shouldRender = options?.render !== false;
+    if (el && shouldRender) el.innerHTML = 'loading...';
     if (!canPerform('approval.process')) {
         await loadDelegationContext({ refreshTodo: false });
     }
@@ -6330,8 +6470,10 @@ async function loadTodoList() {
             .filter(Boolean)
     ));
     if (approverIds.length === 0) {
-        renderDocs(el, [], true);
-        return;
+        todoCache = [];
+        syncTodoTabVisibility();
+        if (el && shouldRender) renderDocs(el, [], true);
+        return todoCache;
     }
     const coopId = String(myInfo?.coop_id || '').trim();
     const [approvalRes, physicalRes] = await Promise.all([
@@ -6361,7 +6503,10 @@ async function loadTodoList() {
             }
         });
     const list = Array.from(todoMap.values()).sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
-    renderDocs(el, list, true);
+    todoCache = list;
+    syncTodoTabVisibility();
+    if (el && shouldRender) renderDocs(el, list, true);
+    return todoCache;
 }
 
 function extractAuditReason(detail) {
@@ -6399,39 +6544,208 @@ async function loadCancelReasonMap(docIds) {
     return out;
 }
 
-async function loadHistoryList() {
-    const el = document.getElementById("historyList");
-    el.innerHTML = 'loading...';
+function renderPendingList() {
+    const el = document.getElementById("pendingList");
+    if (!el) return;
+    renderDocs(el, pendingSubmissionCache, false);
+} // End of renderPendingList
+
+function getHistorySearchKeyword() {
+    return String(document.getElementById('searchKeyword')?.value || '').trim();
+}
+
+function getHistoryArchiveCutoffIso(days = HISTORY_ARCHIVE_DEFAULT_DAYS) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - Number(days || HISTORY_ARCHIVE_DEFAULT_DAYS));
+    return cutoff.toISOString();
+}
+
+function getActiveHistoryBaseList() {
+    return historySearchActive ? historySearchCache : historyCache;
+}
+
+function setHistoryListLoading(message = 'loading...') {
+    const el = document.getElementById('historyList');
+    if (el) el.innerHTML = `<div class="p-3 text-center text-muted">${escapeHtml(String(message || 'loading...'))}</div>`;
+}
+
+function mergeApprovalDocsById(lists) {
+    const map = new Map();
+    (Array.isArray(lists) ? lists : []).forEach((list) => {
+        (Array.isArray(list) ? list : []).forEach((doc) => {
+            map.set(String(doc?.id || ''), doc);
+        });
+    });
+    return Array.from(map.values()).filter((doc) => String(doc?.id || '').trim());
+}
+
+function sortApprovalDocsByCreatedAt(list) {
+    return (Array.isArray(list) ? list : []).slice().sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
+}
+
+function buildApprovalDraftHistoryQuery(recentSinceIso = '') {
+    let query = _supabase
+        .from('ref_approval')
+        .select('*')
+        .eq('drafter_id', myInfo.emp_id);
+    if (recentSinceIso) query = query.gte('created_at', recentSinceIso);
+    return query;
+}
+
+function buildApprovalCoopHistoryQuery(coopId, recentSinceIso = '') {
+    let query = _supabase
+        .from('ref_approval')
+        .select('*')
+        .eq('coop_id', coopId);
+    if (recentSinceIso) query = query.gte('created_at', recentSinceIso);
+    return query;
+}
+
+async function fetchApprovalHistorySearchMatches(queryFactory, keyword) {
+    const safeKeyword = String(keyword || '').trim();
+    if (!safeKeyword) return [];
+    const pattern = `%${safeKeyword}%`;
+    const [titleRes, contentRes] = await Promise.all([
+        queryFactory().ilike('title', pattern).order('created_at', { ascending: false }),
+        queryFactory().ilike('content', pattern).order('created_at', { ascending: false })
+    ]);
+    if (titleRes.error) throw titleRes.error;
+    if (contentRes.error) throw contentRes.error;
+    return mergeApprovalDocsById([titleRes.data, contentRes.data]);
+}
+
+async function normalizeHistoryDocsWithCancelReason(rawList) {
+    const safeList = sortApprovalDocsByCreatedAt(rawList);
+    const cancelDocIds = safeList.filter(doc => String(doc?.status || '') === '결재취소').map(doc => doc.id);
+    const cancelReasonMap = await loadCancelReasonMap(cancelDocIds);
+    return safeList.map(doc => ({
+        ...doc,
+        _cancel_reason: cancelReasonMap[String(doc.id)] || ''
+    }));
+}
+
+async function fetchPendingSubmissionDocs() {
+    const { data, error } = await _supabase
+        .from('ref_approval')
+        .select('*')
+        .eq('drafter_id', myInfo.emp_id)
+        .in('status', HISTORY_STATUS_GROUPS.PENDING)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return sortApprovalDocsByCreatedAt(data);
+}
+
+async function fetchHistoryArchiveDocs(options = {}) {
     const coopId = String(myInfo?.coop_id || '').trim();
     const safeEmpId = normalizeApprovalEmpId(myInfo?.emp_id);
     const canViewWholeCoopHistory = isChairmanApprovalUser() && canPerform('approval.process');
-    const [draftRes, coopRes] = await Promise.all([
-        _supabase.from('ref_approval').select('*').eq('drafter_id', myInfo.emp_id).order('created_at', {ascending: false}),
-        _supabase.from('ref_approval').select('*').eq('coop_id', coopId).order('created_at', {ascending: false})
-    ]);
+    const recentSinceIso = String(options?.recentSinceIso || '').trim();
+    const keyword = String(options?.keyword || '').trim();
+
+    let draftDocs = [];
+    let coopDocs = [];
+
+    if (keyword) {
+        const tasks = [
+            fetchApprovalHistorySearchMatches(() => buildApprovalDraftHistoryQuery(''), keyword)
+        ];
+        if (coopId) {
+            tasks.push(fetchApprovalHistorySearchMatches(() => buildApprovalCoopHistoryQuery(coopId, ''), keyword));
+        }
+        const [draftMatches, coopMatches = []] = await Promise.all(tasks);
+        draftDocs = draftMatches;
+        coopDocs = coopMatches;
+    } else {
+        const tasks = [
+            buildApprovalDraftHistoryQuery(recentSinceIso).order('created_at', { ascending: false })
+        ];
+        if (coopId) {
+            tasks.push(buildApprovalCoopHistoryQuery(coopId, recentSinceIso).order('created_at', { ascending: false }));
+        }
+        const [draftRes, coopRes = { data: [], error: null }] = await Promise.all(tasks);
+        if (draftRes.error) throw draftRes.error;
+        if (coopRes.error) throw coopRes.error;
+        draftDocs = Array.isArray(draftRes.data) ? draftRes.data : [];
+        coopDocs = Array.isArray(coopRes.data) ? coopRes.data : [];
+    }
+
     const rawMap = new Map();
     if (canViewWholeCoopHistory) {
-        (Array.isArray(coopRes.data) ? coopRes.data : []).forEach((doc) => {
+        mergeApprovalDocsById([draftDocs, coopDocs]).forEach((doc) => {
             rawMap.set(String(doc.id), doc);
         });
     } else {
-        (Array.isArray(draftRes.data) ? draftRes.data : []).forEach((doc) => {
+        (Array.isArray(draftDocs) ? draftDocs : []).forEach((doc) => {
             rawMap.set(String(doc.id), doc);
         });
-        (Array.isArray(coopRes.data) ? coopRes.data : [])
+        (Array.isArray(coopDocs) ? coopDocs : [])
             .filter((doc) => isApprovalParticipantDoc(doc, safeEmpId))
             .forEach((doc) => {
                 rawMap.set(String(doc.id), doc);
             });
     }
-    const rawList = Array.from(rawMap.values()).sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
-    const cancelDocIds = rawList.filter(doc => String(doc?.status || '') === '결재취소').map(doc => doc.id);
-    const cancelReasonMap = await loadCancelReasonMap(cancelDocIds);
-    historyCache = rawList.map(doc => ({
-        ...doc,
-        _cancel_reason: cancelReasonMap[String(doc.id)] || ''
-    }));
-    renderFilteredHistoryList();
+
+    const normalizedList = await normalizeHistoryDocsWithCancelReason(Array.from(rawMap.values()));
+    return normalizedList.filter((doc) => !isSubmittedApprovalPending(doc));
+}
+
+async function runHistorySearch(keyword, options = {}) {
+    const safeKeyword = String(keyword || '').trim();
+    const shouldRender = options?.render !== false;
+    if (!safeKeyword) {
+        historySearchActive = false;
+        historySearchCache = [];
+        if (shouldRender) renderFilteredHistoryList();
+        return { historyCache };
+    }
+
+    const requestSeq = ++historySearchRequestSeq;
+    if (shouldRender) setHistoryListLoading('검색 중...');
+    try {
+        const searchDocs = await fetchHistoryArchiveDocs({ keyword: safeKeyword });
+        if (requestSeq !== historySearchRequestSeq) return { historySearchCache };
+        historySearchCache = searchDocs;
+        historySearchActive = true;
+        if (shouldRender) renderFilteredHistoryList();
+        return { historySearchCache };
+    } catch (error) {
+        if (requestSeq !== historySearchRequestSeq) return { historySearchCache };
+        historySearchActive = false;
+        historySearchCache = [];
+        if (shouldRender) renderFilteredHistoryList();
+        showAlert("문서 검색 실패: " + (error?.message || error));
+        return { historySearchCache };
+    }
+}
+
+async function loadHistoryList(options = {}) {
+    const shouldRender = options?.render !== false;
+    if (shouldRender) setHistoryListLoading('loading...');
+    const keyword = getHistorySearchKeyword();
+    const recentSinceIso = getHistoryArchiveCutoffIso(HISTORY_ARCHIVE_DEFAULT_DAYS);
+    try {
+        const [pendingDocs, recentHistoryDocs] = await Promise.all([
+            fetchPendingSubmissionDocs(),
+            fetchHistoryArchiveDocs({ recentSinceIso })
+        ]);
+        pendingSubmissionCache = pendingDocs;
+        historyCache = recentHistoryDocs;
+    } catch (error) {
+        if (shouldRender) setHistoryListLoading('불러오기 실패');
+        showAlert("문서 보관함 조회 실패: " + (error?.message || error));
+        return { pendingSubmissionCache, historyCache };
+    }
+
+    renderPendingList();
+    if (keyword) {
+        await runHistorySearch(keyword, { render: shouldRender });
+    } else {
+        historySearchRequestSeq += 1;
+        historySearchActive = false;
+        historySearchCache = [];
+        if (shouldRender) renderFilteredHistoryList();
+    }
+    return { pendingSubmissionCache, historyCache };
 }
 
 function mapHistoryStatusGroup(status) {
@@ -6513,7 +6827,7 @@ function applyHistoryFilters(list) {
 }
 
 function renderHistoryFilterMeta() {
-    const safeList = Array.isArray(historyCache) ? historyCache : [];
+    const safeList = Array.isArray(getActiveHistoryBaseList()) ? getActiveHistoryBaseList() : [];
     const counters = {
         ALL: safeList.length,
         PENDING: safeList.filter(d => mapHistoryStatusGroup(d?.status) === 'PENDING').length,
@@ -6539,7 +6853,7 @@ function renderHistoryFilterMeta() {
 function renderFilteredHistoryList() {
     const listEl = document.getElementById("historyList");
     if (!listEl) return;
-    const filtered = applyHistoryFilters(historyCache);
+    const filtered = applyHistoryFilters(getActiveHistoryBaseList());
     renderDocs(listEl, filtered, false);
     renderHistoryFilterMeta();
 }
@@ -6564,12 +6878,28 @@ function onHistoryAdvancedFilterChange() {
     renderFilteredHistoryList();
 }
 
-function filterHistory() {
-    renderFilteredHistoryList();
+function filterHistory(forceImmediate = false) {
+    if (historySearchDebounceTimer) {
+        clearTimeout(historySearchDebounceTimer);
+        historySearchDebounceTimer = null;
+    }
+    const keyword = getHistorySearchKeyword();
+    if (!keyword) {
+        historySearchRequestSeq += 1;
+        historySearchActive = false;
+        historySearchCache = [];
+        renderFilteredHistoryList();
+        return;
+    }
+    const runner = () => {
+        runHistorySearch(keyword, { render: true });
+    };
+    if (forceImmediate) runner();
+    else historySearchDebounceTimer = setTimeout(runner, 250);
 }
 
 function exportHistoryCsv() {
-    const list = applyHistoryFilters(historyCache);
+    const list = applyHistoryFilters(getActiveHistoryBaseList());
     if (!list || list.length === 0) return showAlert("내보낼 데이터가 없습니다.");
 
     const headers = ['id','doc_type','title','status','drafter_name','created_at','amount','current_approver','signed_doc_url'];

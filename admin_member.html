@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.37
-Change: 2026-03-18 - 임원 서명 관리를 임원 관리 전용 화면으로 분리하고 site_admin 메뉴에서 제거.
+Version: v1.0.38
+Change: 2026-03-20 - 조합원 엑셀 다운로드를 가입일 기준일 이하 조합원만 포함하도록 보정.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.37';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.38';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -2949,6 +2949,21 @@ async function fetchAllMembersForExport() {
     }));
 } // End of fetchAllMembersForExport
 
+function normalizeMemberExportDateValue(value) {
+    const safeValue = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(safeValue) ? safeValue : '';
+} // End of normalizeMemberExportDateValue
+
+function filterMemberExportRecordsByCutoffDate(records, cutoffDate) {
+    const safeRecords = Array.isArray(records) ? records : [];
+    const safeCutoffDate = normalizeMemberExportDateValue(cutoffDate);
+    if (!safeCutoffDate) return safeRecords.slice();
+    return safeRecords.filter((record) => {
+        const joinDate = normalizeMemberExportDateValue(record?.join_date);
+        return Boolean(joinDate) && joinDate <= safeCutoffDate;
+    });
+} // End of filterMemberExportRecordsByCutoffDate
+
 function buildMemberExportRows(records, options = {}) {
     const safeRecords = Array.isArray(records) ? records : [];
     const cutoffDate = String(options.cutoffDate || '').trim();
@@ -2956,8 +2971,9 @@ function buildMemberExportRows(records, options = {}) {
     const shareUnitAmount = normalizeMemberExportShareUnitAmount(options.shareUnitAmount);
     const snapshotMap = options.snapshotMap || {};
     const exportType = String(options.exportType || 'public');
+    const eligibleRecords = filterMemberExportRecordsByCutoffDate(safeRecords, cutoffDate);
 
-    const normalizedRecords = safeRecords.map((record) => {
+    const normalizedRecords = eligibleRecords.map((record) => {
         const memberId = String(record.member_id || '').trim();
         const capitalAmount = Number(snapshotMap[memberId] ?? record.total_capital ?? 0);
         return {
@@ -3512,7 +3528,7 @@ async function downloadExcel() {
             return myAlert(`다운로드되었습니다. 기준일 ${cutoffDate} 기준 30% 초과 조합원이 있습니다: ${warningText}`, 'warning');
         }
     } else {
-        // 2. 일반용/시청 신고용 엑셀 다운로드 (현재 조합 전체 명부 기준)
+        // 2. 일반용/시청 신고용 엑셀 다운로드 (가입일 기준일 이하 조합원 기준)
         const exportResult = buildMemberExportRows(exportSourceRecords, {
             cutoffDate,
             shareUnitAmount,

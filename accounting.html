@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.57 | Change: 2026-03-20 - 결산 완료 연도는 읽기 전용으로 표시하고, 결산 모달 기준값에서 기존 CLOSE 전표를 제외하도록 보정. -->
+<!-- Version: v1.0.62 | Change: 2026-03-20 - 기부금 연동에서 전표완료 후 금액이 바뀐 건도 정정 가능하게 보강하고 DON-55 과대계상 재발을 방지. -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.57 | accounting.html');</script>
+  <script>console.log('[Version] v1.0.62 | accounting.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -892,15 +892,33 @@ const LOCAL_CORPORATE_TAX_BRACKETS = [
 const ACCOUNTING_REPORT_ACCOUNT_ALIAS_BY_COMPACT = {
     '부가세대급금': '부가세대급금',
     '부가세예수금': '부가세예수금',
+    '임직원급여': '임직원급여',
+    '급여': '임직원급여',
     '잡이익': '잡이익',
     '잡손실': '잡손실'
 };
 const ACCOUNTING_REPORT_ASSET_ACCOUNTS = new Set(['부가세대급금', '보통예금', '현금', '선급금', '미수금']);
+const SALARY_EXPENSE_ACCOUNT = '임직원급여';
+const SALARY_EXPENSE_ACCOUNT_ALIASES = [SALARY_EXPENSE_ACCOUNT, '임직원 급여', '급여'];
+const SALARY_INSURANCE_EXPENSE_ACCOUNT = '4대보험회사분';
+const SALARY_INSURANCE_EXPENSE_ACCOUNT_ALIASES = [SALARY_INSURANCE_EXPENSE_ACCOUNT, '세금과공과'];
 
-function normalizeAccountingReportAccountName(name) {
-    const raw = String(name || '').trim();
+function normalizeAccountingReportAccountName(rowOrName, description = '') {
+    const isRowObject = rowOrName && typeof rowOrName === 'object';
+    const raw = String(isRowObject ? rowOrName?.Account : rowOrName || '').trim();
     if (!raw) return '';
+    const desc = String(isRowObject ? rowOrName?.Description : description || '').trim();
     const compact = raw.replace(/\s+/g, '');
+
+    if (compact === '세금과공과') {
+        if (desc.includes('4대보험') || desc.includes('회사부담분')) return SALARY_INSURANCE_EXPENSE_ACCOUNT;
+        if (desc.includes('등록면허세')) return '등록면허세';
+        if (desc.includes('주민세') || desc.includes('재산세')) return '주민세/재산세';
+        if (desc.includes('협회비')) return '협회비';
+        if (desc.includes('과태료') || desc.includes('벌금')) return '과태료/벌금';
+        if (desc.includes('법인세')) return '법인세비용';
+    }
+
     return ACCOUNTING_REPORT_ACCOUNT_ALIAS_BY_COMPACT[compact] || raw;
 }
 
@@ -924,7 +942,7 @@ function buildClosingIncomeSummary(rows) {
     (rows || []).forEach((row) => {
         const debit = Number(row?.Debit || 0);
         const credit = Number(row?.Credit || 0);
-        const account = normalizeAccountingReportAccountName(row?.Account);
+        const account = normalizeAccountingReportAccountName(row);
         const type = normalizeAccountingReportType(row?.Type, account);
         if (!account) return;
 
@@ -1037,13 +1055,13 @@ function buildTaxAdjustmentSummary(rows) {
         const debit = Number(row?.Debit || 0);
         if (!debit) return;
 
-        const account = normalizeAccountingReportAccountName(row?.Account);
+        const account = normalizeAccountingReportAccountName(row);
         const type = normalizeAccountingReportType(row?.Type, account);
         if (type !== '비용') return;
 
         const desc = String(row?.Description || '');
         const evidenceType = String(row?.Evidence_Type || '');
-        if (account === '세금과공과' && (desc.includes('과태료') || desc.includes('벌금'))) summary.fines += debit;
+        if (account === '과태료/벌금' || (account === '세금과공과' && (desc.includes('과태료') || desc.includes('벌금')))) summary.fines += debit;
         if (account === '접대비') summary.entertain += debit;
         if (account === '기부금') summary.donations += debit;
         if (debit > 30000 && evidenceType === '기타(영수증)') summary.noProof += debit;
@@ -1055,10 +1073,10 @@ function buildTaxAdjustmentSummary(rows) {
 function buildClosingTaxEstimate(preTaxNetIncome, addBackFines = 0, taxCredit = 0, prepaidTax = 0) {
     const taxableBase = Math.max(0, Math.round(Number(preTaxNetIncome || 0) + Number(addBackFines || 0)));
     const nationalGross = getProgressiveTaxFromBrackets(taxableBase, COOP_CORPORATE_TAX_BRACKETS);
-    const localTax = getProgressiveTaxFromBrackets(taxableBase, LOCAL_CORPORATE_TAX_BRACKETS);
     const creditRequested = Math.max(0, Math.round(Number(taxCredit || 0)));
     const creditApplied = Math.min(creditRequested, nationalGross);
     const nationalAfterCredit = Math.max(0, nationalGross - creditApplied);
+    const localTax = Math.round(nationalAfterCredit * 0.1);
     const recommendedExpense = nationalAfterCredit + localTax;
     const prepaidApplied = Math.max(0, Math.round(Number(prepaidTax || 0)));
     const expectedPayable = Math.max(0, recommendedExpense - prepaidApplied);
@@ -1161,6 +1179,61 @@ async function applyDurunuriAdjustmentsByMonth(rows, ym) {
         console.warn('Durunuri support load failed:', e?.message || e);
         return baseRows;
     }
+}
+
+async function getInsuranceLiabilitySummaryByMonths(targetMonths) {
+    const months = Array.isArray(targetMonths)
+        ? targetMonths.map((value) => normalizeAccountingYm(value)).filter(Boolean)
+        : [];
+    if (!months.length) {
+        return { data: null, error: new Error('귀속월 형식을 확인하세요.') };
+    }
+
+    const periodLabel = months.length === 1
+        ? months[0]
+        : `${months[0]}~${months[months.length - 1]}`;
+
+    const { data, error } = await _supabase
+        .from('hr_salary')
+        .select('year_month,emp_id,pay_total,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total,co_total')
+        .in('year_month', months);
+    if (error) return { data: null, error };
+    if (!data || data.length === 0) {
+        return { data: null, error: new Error(`${periodLabel} 급여대장 데이터가 없습니다. 급여 연동을 먼저 진행했는지 확인하세요.`) };
+    }
+
+    const adjustedRows = [];
+    for (const ym of months) {
+        const monthRows = (data || []).filter((row) => String(row.year_month || '') === ym);
+        if (!monthRows.length) continue;
+        const monthAdjustedRows = await applyDurunuriAdjustmentsByMonth(monthRows, ym);
+        adjustedRows.push(...monthAdjustedRows);
+    }
+    const rowsForSum = adjustedRows.length > 0 ? adjustedRows : data;
+
+    let totalYesu = 0;
+    let totalMigigeub = 0;
+    rowsForSum.forEach((row) => {
+        totalYesu += Number(row.ded_total || 0);
+        totalMigigeub += Number(row.co_total || 0);
+    });
+
+    const totalBook = totalYesu + totalMigigeub;
+    if (!(totalBook > 0)) {
+        return { data: null, error: new Error('조회된 미납 내역이 0원입니다.') };
+    }
+
+    return {
+        data: {
+            months,
+            periodLabel,
+            totalYesu,
+            totalMigigeub,
+            totalBook,
+            rows: rowsForSum
+        },
+        error: null
+    };
 }
 
 // 1. 초기화
@@ -2312,6 +2385,20 @@ function sumAccountSideAmount(rows, accountName, side) {
     }, 0);
 }
 
+function sumAccountSideAmountByNames(rows, accountNames, side) {
+    const names = Array.isArray(accountNames)
+        ? Array.from(new Set(accountNames.map((name) => String(name || '').replace(/\s+/g, '')).filter(Boolean)))
+        : [];
+    if (names.length === 0) return 0;
+
+    return (rows || []).reduce((sum, row) => {
+        const rowAccount = String(row?.Account || '').replace(/\s+/g, '');
+        if (!names.includes(rowAccount)) return sum;
+        const value = Number(row?.[side] || 0);
+        return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+}
+
 function appendSalaryAccrualEntries(entries, payload) {
     const common = {
         Date: payload.date,
@@ -2326,7 +2413,7 @@ function appendSalaryAccrualEntries(entries, payload) {
     const co = Math.max(0, Number(payload.co || 0));
 
     if (pay > 0) {
-        entries.push({ ...common, Type: '비용', Account: '급여', Description: `${desc} 정기급여`, Debit: pay, Credit: 0 });
+        entries.push({ ...common, Type: '비용', Account: SALARY_EXPENSE_ACCOUNT, Description: `${desc} 정기급여`, Debit: pay, Credit: 0 });
     }
     if (ded > 0) {
         entries.push({ ...common, Type: '부채', Account: '예수금', Description: `${desc} 직원공제분`, Debit: 0, Credit: ded });
@@ -2335,7 +2422,7 @@ function appendSalaryAccrualEntries(entries, payload) {
         entries.push({ ...common, Type: '부채', Account: '미지급금', Description: `${desc} 실지급액 (10일 지급예정)`, Debit: 0, Credit: net });
     }
     if (co > 0) {
-        entries.push({ ...common, Type: '비용', Account: '세금과공과', Description: `${desc} 4대보험 회사부담분`, Debit: co, Credit: 0 });
+        entries.push({ ...common, Type: '비용', Account: SALARY_INSURANCE_EXPENSE_ACCOUNT, Description: `${desc} 4대보험 회사부담분`, Debit: co, Credit: 0 });
         entries.push({ ...common, Type: '부채', Account: '미지급비용', Description: `${desc} 4대보험 회사부담분`, Debit: 0, Credit: co });
     }
 }
@@ -2354,7 +2441,7 @@ function appendSalaryAccrualReversalEntries(entries, payload) {
     const co = Math.max(0, Number(payload.co || 0));
 
     if (pay > 0) {
-        entries.push({ ...common, Type: '비용', Account: '급여', Description: `${desc} 정기급여`, Debit: 0, Credit: pay });
+        entries.push({ ...common, Type: '비용', Account: SALARY_EXPENSE_ACCOUNT, Description: `${desc} 정기급여`, Debit: 0, Credit: pay });
     }
     if (ded > 0) {
         entries.push({ ...common, Type: '부채', Account: '예수금', Description: `${desc} 직원공제분`, Debit: ded, Credit: 0 });
@@ -2363,7 +2450,7 @@ function appendSalaryAccrualReversalEntries(entries, payload) {
         entries.push({ ...common, Type: '부채', Account: '미지급금', Description: `${desc} 실지급액 (10일 지급예정)`, Debit: net, Credit: 0 });
     }
     if (co > 0) {
-        entries.push({ ...common, Type: '비용', Account: '세금과공과', Description: `${desc} 4대보험 회사부담분`, Debit: 0, Credit: co });
+        entries.push({ ...common, Type: '비용', Account: SALARY_INSURANCE_EXPENSE_ACCOUNT, Description: `${desc} 4대보험 회사부담분`, Debit: 0, Credit: co });
         entries.push({ ...common, Type: '부채', Account: '미지급비용', Description: `${desc} 4대보험 회사부담분`, Debit: co, Credit: 0 });
     }
 }
@@ -2411,9 +2498,229 @@ function appendApprovalPaymentEntries(entries, payload) {
     entries.push({ ...common, Type: '자산', Account: '보통예금', Debit: 0, Credit: amount });
 }
 
+function getApprovalMergedText(doc) {
+    return `${doc?.doc_type || ''} ${doc?.title || ''} ${doc?.content || ''}`.replace(/\s+/g, ' ').trim();
+}
+
+function isInsuranceApproval(doc) {
+    return /4대보험/.test(getApprovalMergedText(doc));
+}
+
 function isSalaryLikeApproval(doc) {
-    const merged = `${doc?.doc_type || ''} ${doc?.title || ''} ${doc?.content || ''}`.toLowerCase();
-    return /급여|salary|4대보험|원천세|퇴직연금|인건비/.test(merged);
+    const merged = getApprovalMergedText(doc).toLowerCase();
+    return !isInsuranceApproval(doc) && /급여|salary|원천세|퇴직연금|인건비/.test(merged);
+}
+
+function buildAccountingYmFromParts(year, month) {
+    const y = Number(year);
+    const m = Number(month);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return '';
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}`;
+}
+
+function getApprovalBaseKstInfo(doc) {
+    const baseYm = formatAccountingKstMonth(doc?.created_at || new Date(), formatAccountingKstMonth(new Date(), ''));
+    const year = Number(baseYm.slice(0, 4));
+    const month = Number(baseYm.slice(5, 7));
+    return { year, month, ym: baseYm };
+}
+
+function parseApprovalInsuranceMonthRange(doc) {
+    const merged = getApprovalMergedText(doc);
+    if (!merged) return null;
+
+    const explicitYearRange = merged.match(/(\d{4})\s*(?:년|[-./])\s*(\d{1,2})\s*월?\s*[~\-]\s*(\d{4})\s*(?:년|[-./])\s*(\d{1,2})\s*월?/);
+    if (explicitYearRange) {
+        const startYm = buildAccountingYmFromParts(explicitYearRange[1], explicitYearRange[2]);
+        const endYm = buildAccountingYmFromParts(explicitYearRange[3], explicitYearRange[4]);
+        if (startYm && endYm) return { startYm, endYm };
+    }
+
+    const monthRange = merged.match(/(\d{1,2})\s*월\s*[~\-]\s*(\d{1,2})\s*월/);
+    if (!monthRange) return null;
+
+    const startMonth = Number(monthRange[1]);
+    const endMonth = Number(monthRange[2]);
+    if (![startMonth, endMonth].every((value) => Number.isFinite(value) && value >= 1 && value <= 12)) {
+        return null;
+    }
+
+    const baseInfo = getApprovalBaseKstInfo(doc);
+    let endYear = baseInfo.year;
+    if (endMonth > (baseInfo.month + 1)) endYear -= 1;
+    let startYear = endYear;
+    if (startMonth > endMonth) startYear -= 1;
+
+    const startYm = buildAccountingYmFromParts(startYear, startMonth);
+    const endYm = buildAccountingYmFromParts(endYear, endMonth);
+    if (!startYm || !endYm) return null;
+    return { startYm, endYm };
+}
+
+function parseApprovalInsurancePaymentDate(doc, fallbackDate) {
+    const rawText = `${doc?.title || ''}\n${doc?.content || ''}`;
+    const explicitYearDate = rawText.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+    if (explicitYearDate) {
+        const explicit = `${String(explicitYearDate[1]).padStart(4, '0')}-${String(Number(explicitYearDate[2])).padStart(2, '0')}-${String(Number(explicitYearDate[3])).padStart(2, '0')}`;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+    }
+
+    const monthDay = rawText.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+    if (!monthDay) return fallbackDate;
+
+    const payMonth = Number(monthDay[1]);
+    const payDay = Number(monthDay[2]);
+    if (![payMonth, payDay].every((value) => Number.isFinite(value) && value > 0)) return fallbackDate;
+
+    const baseInfo = getApprovalBaseKstInfo(doc);
+    let payYear = baseInfo.year;
+    if (payMonth < (baseInfo.month - 1)) payYear += 1;
+
+    const parsed = `${String(payYear).padStart(4, '0')}-${String(payMonth).padStart(2, '0')}-${String(payDay).padStart(2, '0')}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(parsed) ? parsed : fallbackDate;
+}
+
+function buildApprovalInsuranceBaseDescription(doc) {
+    const firstLine = String(doc?.content || '')
+        .split(/\r?\n/)
+        .map((line) => String(line || '').trim())
+        .find(Boolean);
+    let base = firstLine || String(doc?.title || doc?.doc_type || '4대보험 납부').trim();
+    base = base.replace(/\s*입니다\.?$/u, '').trim();
+    base = base.replace(/\s*\([^)]*(?:자동\s*이체\s*예정|납부\s*예정)[^)]*\)\s*$/u, '').trim();
+    return base || '4대보험 납부';
+}
+
+function appendApprovalInsuranceEntries(entries, payload) {
+    const amount = Math.max(0, Number(payload.amount || 0));
+    const bookYesu = Math.max(0, Number(payload.bookYesu || 0));
+    const bookMigigeub = Math.max(0, Number(payload.bookMigigeub || 0));
+    const bookTotal = bookYesu + bookMigigeub;
+    if (!(amount > 0) || !(bookTotal > 0)) return;
+
+    const common = {
+        Date: payload.date,
+        Trans_ID: payload.transId,
+        Project: payload.project || '본사',
+        Operator: payload.operator
+    };
+    const description = String(payload.description || '4대보험 납부').trim() || '4대보험 납부';
+    const diff = amount - bookTotal;
+
+    if (bookYesu > 0) {
+        entries.push({ ...common, Type: '부채', Account: '예수금', Description: `${description} (직원분 상환)`, Debit: bookYesu, Credit: 0, Evidence_Type: '금융거래' });
+    }
+    if (bookMigigeub > 0) {
+        entries.push({ ...common, Type: '부채', Account: '미지급비용', Description: `${description} (회사분 상환)`, Debit: bookMigigeub, Credit: 0, Evidence_Type: '금융거래' });
+    }
+    if (diff > 0) {
+        entries.push({ ...common, Type: '자산', Account: '선급금', Description: `${INSURANCE_PENDING_TAG} ${description} (선급)`, Debit: diff, Credit: 0, Evidence_Type: '내부기표' });
+    } else if (diff < 0) {
+        entries.push({ ...common, Type: '부채', Account: '미지급금', Description: `${INSURANCE_PENDING_TAG} ${description} (미지급)`, Debit: 0, Credit: Math.abs(diff), Evidence_Type: '내부기표' });
+    }
+    entries.push({ ...common, Type: '자산', Account: '보통예금', Description: description, Debit: 0, Credit: amount, Evidence_Type: '금융거래' });
+}
+
+async function buildApprovalSyncPlans(docs, fallbackDate, writer) {
+    const plans = [];
+    let totalAmount = 0;
+    let insuranceCount = 0;
+    let paymentCount = 0;
+    let accrualCount = 0;
+
+    for (const doc of (docs || [])) {
+        const amount = Math.max(0, Number(doc?.amount || 0));
+        if (!(amount > 0)) continue;
+
+        const transId = `APR-${doc.id}`;
+        const operator = doc?.drafter_name || writer;
+
+        if (isInsuranceApproval(doc)) {
+            const monthRange = parseApprovalInsuranceMonthRange(doc);
+            if (!monthRange) {
+                const label = String(doc?.title || doc?.doc_type || `전자결재 ${doc?.id || ''}`).trim();
+                return {
+                    plans: [],
+                    totalAmount: 0,
+                    insuranceCount: 0,
+                    paymentCount: 0,
+                    accrualCount: 0,
+                    error: new Error(`${label} 문서에서 4대보험 납부분 월범위를 읽지 못했습니다. 예: 11월~1월 형식이 필요합니다.`)
+                };
+            }
+
+            const targetMonths = listAccountingMonthRange(monthRange.startYm, monthRange.endYm);
+            const summary = await getInsuranceLiabilitySummaryByMonths(targetMonths);
+            if (summary.error) {
+                const label = String(doc?.title || doc?.doc_type || `전자결재 ${doc?.id || ''}`).trim();
+                return {
+                    plans: [],
+                    totalAmount: 0,
+                    insuranceCount: 0,
+                    paymentCount: 0,
+                    accrualCount: 0,
+                    error: new Error(`${label} 보험 분개 계산 실패: ${summary.error.message}`)
+                };
+            }
+
+            plans.push({
+                kind: 'insurance',
+                amount,
+                date: parseApprovalInsurancePaymentDate(doc, fallbackDate),
+                description: buildApprovalInsuranceBaseDescription(doc),
+                transId,
+                project: '본사',
+                operator,
+                bookYesu: Number(summary.data.totalYesu || 0),
+                bookMigigeub: Number(summary.data.totalMigigeub || 0),
+                periodLabel: summary.data.periodLabel
+            });
+            insuranceCount += 1;
+            totalAmount += amount;
+            continue;
+        }
+
+        const descBase = doc?.title || doc?.doc_type || '지출결의';
+        if (isSalaryLikeApproval(doc)) {
+            plans.push({
+                kind: 'payment',
+                amount,
+                date: fallbackDate,
+                description: `[전자결재-지급] ${descBase}`,
+                transId,
+                project: '본사',
+                operator
+            });
+            paymentCount += 1;
+        } else {
+            plans.push({
+                kind: 'accrual',
+                amount,
+                date: fallbackDate,
+                description: `[전자결재-발생] ${descBase}`,
+                transId,
+                project: '본사',
+                operator
+            });
+            accrualCount += 1;
+        }
+        totalAmount += amount;
+    }
+
+    return { plans, totalAmount, insuranceCount, paymentCount, accrualCount, error: null };
+}
+
+function appendApprovalEntriesFromPlan(entries, plan) {
+    if (!plan || !plan.kind) return;
+    if (plan.kind === 'insurance') {
+        appendApprovalInsuranceEntries(entries, plan);
+        return;
+    }
+    if (plan.kind === 'payment') {
+        appendApprovalPaymentEntries(entries, plan);
+        return;
+    }
+    appendApprovalAccrualEntries(entries, plan);
 }
 
 function appendDividendCashDeltaEntries(entries, payload) {
@@ -3014,6 +3321,13 @@ function extractVendorName(desc) {
     return normalizeVendorName(cleaned);
 }
 
+function shouldIncludePrepayCacheRow(row) {
+    const desc = String(row?.Description || "");
+    if (desc.includes(INSURANCE_PENDING_TAG)) return false;
+    if (desc.startsWith('[') && !extractTagValue(desc, '선급금-')) return false;
+    return true;
+}
+
 function buildPrepayCache(data) {
     const balances = {};
     const costMap = {};
@@ -3023,7 +3337,7 @@ function buildPrepayCache(data) {
         const db = Number(r.Debit || 0);
         const cr = Number(r.Credit || 0);
         const desc = r.Description || "";
-        if (desc.includes(INSURANCE_PENDING_TAG)) return;
+        if (!shouldIncludePrepayCacheRow(r)) return;
 
         if (r.Account === '선급금' && r.Type === '자산') {
             const vendor = extractVendorName(desc);
@@ -3855,8 +4169,10 @@ function openYearModal(title, desc, defaultYear, cb) {
 async function openClosingModal() {
     const defaultYear = new Date().getFullYear() - 1;
     document.getElementById("closingYearInput").value = defaultYear;
+    document.getElementById("closingLegalInput").type = "number";
     document.getElementById("closingLegalInput").value = "";
     document.getElementById("closingVoluntaryInput").value = "0";
+    document.getElementById("closingTaxExpenseInput").type = "number";
     document.getElementById("closingTaxExpenseInput").value = "0";
     document.getElementById("closingTaxCreditInput").value = "0";
     document.getElementById("closingPrepaidTaxInput").value = "0";
@@ -3912,9 +4228,16 @@ async function buildClosingContext(targetYear) {
 
 function getClosingRoundedInputValue(id) {
     const inputEl = document.getElementById(id);
-    const raw = Number(inputEl?.value || 0);
+    const raw = Number(String(inputEl?.value || 0).replace(/,/g, '').trim() || 0);
     if (!Number.isFinite(raw) || raw < 0) return 0;
     return Math.round(raw);
+}
+
+function setClosingNumericInputDisplay(inputEl, value, readOnly = false) {
+    if (!inputEl) return;
+    const rounded = Math.round(Number(String(value ?? 0).replace(/,/g, '').trim() || 0));
+    inputEl.type = readOnly ? "text" : "number";
+    inputEl.value = readOnly ? rounded.toLocaleString() : String(rounded);
 }
 
 function getClosingTaxExpenseValue() {
@@ -3971,7 +4294,7 @@ function syncClosingFormState(resetReserveValues = false, options = {}) {
             prepaidTaxInput.disabled = true;
         }
         if (taxExpenseInput) {
-            taxExpenseInput.value = Math.round(Number(closingContext.taxExpense || 0));
+            setClosingNumericInputDisplay(taxExpenseInput, closingContext.taxExpense || 0, true);
             taxExpenseInput.disabled = true;
         }
         if (taxExpenseHintEl) {
@@ -3994,10 +4317,13 @@ function syncClosingFormState(resetReserveValues = false, options = {}) {
             if (prepaidTaxInput.value === '') prepaidTaxInput.value = '0';
         }
         if ((!options.preserveManualTax || !closingTaxExpenseManual) && taxExpenseInput) {
-            taxExpenseInput.value = estimate.recommendedExpense;
+            setClosingNumericInputDisplay(taxExpenseInput, estimate.recommendedExpense, false);
             closingTaxExpenseManual = false;
         }
-        if (taxExpenseInput) taxExpenseInput.disabled = false;
+        if (taxExpenseInput) {
+            taxExpenseInput.type = "number";
+            taxExpenseInput.disabled = false;
+        }
         if (taxExpenseHintEl) {
             taxExpenseHintEl.innerText = closingTaxExpenseManual
                 ? `자동 추천 ${estimate.recommendedExpense.toLocaleString()}원에서 수동 수정 중입니다. 기납부세액은 예상 납부세액에만 반영됩니다.`
@@ -4021,12 +4347,13 @@ function syncClosingFormState(resetReserveValues = false, options = {}) {
     if (afterTaxEl) afterTaxEl.value = Number(closingContext.netIncome || 0).toLocaleString();
 
     if (closingContext.isClosed) {
-        legalInput.value = Math.round(Number(closingContext.existingLegal || 0));
+        setClosingNumericInputDisplay(legalInput, closingContext.existingLegal || 0, true);
         volInput.value = Math.round(Number(closingContext.existingVoluntary || 0));
         legalInput.disabled = true;
         volInput.disabled = true;
         hint.innerText = "이미 결산 완료된 연도라 적립금 값이 읽기 전용으로 표시됩니다.";
     } else if (closingContext.netIncome <= 0) {
+        legalInput.type = "number";
         legalInput.value = 0;
         volInput.value = 0;
         legalInput.disabled = true;
@@ -4037,11 +4364,12 @@ function syncClosingFormState(resetReserveValues = false, options = {}) {
         volInput.max = 0;
         hint.innerText = "법인세 차감후 당기순손익이 0 이하이므로 적립금 입력이 비활성화됩니다.";
     } else {
-        const currentLegal = Number(legalInput.value || 0);
-        const currentVol = Number(volInput.value || 0);
+        const currentLegal = getClosingRoundedInputValue("closingLegalInput");
+        const currentVol = getClosingRoundedInputValue("closingVoluntaryInput");
         let nextLegal = resetReserveValues ? closingContext.autoLegal : currentLegal;
         let nextVol = resetReserveValues ? 0 : currentVol;
 
+        legalInput.type = "number";
         legalInput.disabled = false;
         volInput.disabled = false;
         legalInput.min = closingContext.minLegal;
@@ -4078,7 +4406,7 @@ async function refreshClosingContext() {
 function handleClosingLegalInputChange() {
     const warn = document.getElementById("closingLegalWarn");
     if (!closingContext) { warn.classList.add("hidden"); return; }
-    const current = Number(document.getElementById("closingLegalInput").value || 0);
+    const current = getClosingRoundedInputValue("closingLegalInput");
     if (closingContext.netIncome <= 0 || closingContext.thresholdMet || closingContext.minLegal <= 0) {
         warn.classList.add("hidden");
         return;
@@ -4097,8 +4425,8 @@ async function runClosingFromModal() {
     const taxCredit = getClosingTaxCreditValue();
     const prepaidTax = getClosingPrepaidTaxValue();
     const estimate = buildClosingTaxEstimate(ctx.preTaxNetIncome, ctx.taxAdjust?.fines || 0, taxCredit, prepaidTax);
-    const legal = Number(document.getElementById("closingLegalInput").value || 0);
-    const vol = Number(document.getElementById("closingVoluntaryInput").value || 0);
+    const legal = getClosingRoundedInputValue("closingLegalInput");
+    const vol = getClosingRoundedInputValue("closingVoluntaryInput");
 
     if (ctx.netIncome <= 0) {
         if (legal > 0 || vol > 0) return showAlert("오류", "순이익이 0 이하일 때는 적립금을 0으로 입력하세요.");
@@ -4278,10 +4606,10 @@ function confirmSync(type) {
             if (salError) return showAlert("오류", "기존 전표 확인 실패: " + salError.message);
 
             const current = {
-                pay: sumAccountSideAmount(salRows || [], '급여', 'Debit'),
+                pay: sumAccountSideAmountByNames(salRows || [], SALARY_EXPENSE_ACCOUNT_ALIASES, 'Debit'),
                 ded: sumAccountSideAmount(salRows || [], '예수금', 'Credit'),
                 net: sumAccountSideAmount(salRows || [], '미지급금', 'Credit'),
-                coExpense: sumAccountSideAmount(salRows || [], '세금과공과', 'Debit'),
+                coExpense: sumAccountSideAmountByNames(salRows || [], SALARY_INSURANCE_EXPENSE_ACCOUNT_ALIASES, 'Debit'),
                 coLiability: sumAccountSideAmount(salRows || [], '미지급비용', 'Credit')
             };
             const hasCurrentEntries = (salRows || []).length > 0;
@@ -4428,16 +4756,17 @@ function confirmSync(type) {
             const targetDocs = approvals.filter((doc) => !existingSet.has(`APR-${doc.id}`));
             if (targetDocs.length === 0) return showAlert("알림", "이미 모두 연동되었습니다.");
 
-            const salaryLikeCount = targetDocs.filter((doc) => isSalaryLikeApproval(doc)).length;
-            const accrualCount = targetDocs.length - salaryLikeCount;
-            const totalAmount = targetDocs.reduce((sum, doc) => sum + Math.max(0, Number(doc.amount || 0)), 0);
+            const previewPlanResult = await buildApprovalSyncPlans(targetDocs, today, writer);
+            if (previewPlanResult.error) return showAlert("오류", "전자결재 연동 미리보기 실패: " + previewPlanResult.error.message);
+            const totalAmount = previewPlanResult.totalAmount;
 
             const previewMsg = [
                 '전자결재 연동 미리보기',
                 `- 대상 건수: ${targetDocs.length}건`,
                 `- 예상 금액: ${totalAmount.toLocaleString()}원`,
-                `- 급여/인건비 집행전표: ${salaryLikeCount}건 (차)미지급금/(대)보통예금`,
-                `- 일반 지출 발생전표: ${accrualCount}건 (차)미분류비용/(대)미지급금`
+                `- 4대보험 납부전표: ${previewPlanResult.insuranceCount}건 (차)예수금/미지급비용/선급금, 대)보통예금`,
+                `- 급여/인건비 집행전표: ${previewPlanResult.paymentCount}건 (차)미지급금/(대)보통예금`,
+                `- 일반 지출 발생전표: ${previewPlanResult.accrualCount}건 (차)미분류비용/(대)미지급금`
             ].join('\n');
 
             showConfirm("전자결재 연동", previewMsg, async () => {
@@ -4458,38 +4787,11 @@ function confirmSync(type) {
                 const runTargetDocs = runApprovals.filter((doc) => !runExistingSet.has(`APR-${doc.id}`));
                 if (runTargetDocs.length === 0) return showAlert("알림", "이미 모두 연동되었습니다.");
 
+                const runPlanResult = await buildApprovalSyncPlans(runTargetDocs, today, writer);
+                if (runPlanResult.error) return showAlert("오류", "전자결재 연동 실패: " + runPlanResult.error.message);
+
                 let entries = [];
-                let runSalaryLikeCount = 0;
-                let runAccrualCount = 0;
-
-                runTargetDocs.forEach((doc) => {
-                    const amount = Math.max(0, Number(doc.amount || 0));
-                    if (!(amount > 0)) return;
-                    const transId = `APR-${doc.id}`;
-                    const descBase = doc.title || doc.doc_type || '지출결의';
-
-                    if (isSalaryLikeApproval(doc)) {
-                        runSalaryLikeCount += 1;
-                        appendApprovalPaymentEntries(entries, {
-                            amount,
-                            date: today,
-                            description: `[전자결재-지급] ${descBase}`,
-                            transId,
-                            project: '본사',
-                            operator: doc.drafter_name || writer
-                        });
-                    } else {
-                        runAccrualCount += 1;
-                        appendApprovalAccrualEntries(entries, {
-                            amount,
-                            date: today,
-                            description: `[전자결재-발생] ${descBase}`,
-                            transId,
-                            project: '본사',
-                            operator: doc.drafter_name || writer
-                        });
-                    }
-                });
+                runPlanResult.plans.forEach((plan) => appendApprovalEntriesFromPlan(entries, plan));
 
                 if (entries.length === 0) return showAlert("알림", "연동 대상 금액이 없어 생성할 전표가 없습니다.");
 
@@ -4503,7 +4805,7 @@ function confirmSync(type) {
                     trans_ids: collectTransIds(entries),
                     restores: []
                 });
-                showAlert("완료", `${runTargetDocs.length}건 연동 성공\n- 급여/인건비 집행전표 ${runSalaryLikeCount}건\n- 일반 발생전표 ${runAccrualCount}건`);
+                showAlert("완료", `${runTargetDocs.length}건 연동 성공\n- 4대보험 납부전표 ${runPlanResult.insuranceCount}건\n- 급여/인건비 집행전표 ${runPlanResult.paymentCount}건\n- 일반 발생전표 ${runPlanResult.accrualCount}건`);
                 refreshDashboard();
                 loadHistory();
                 loadApprovalUnclassifiedQueue();
@@ -4731,8 +5033,10 @@ function confirmSync(type) {
                 const desired = Math.max(0, Number(row.amount || 0));
                 const current = Number(previewCashNetMap.get(sourceId) || 0);
                 const hasDone = String(row.note || '').includes('[전표완료]');
-                if (hasDone) { previewSkipDone += 1; return; }
-                if (current === desired) return;
+                if (current === desired) {
+                    if (hasDone) previewSkipDone += 1;
+                    return;
+                }
                 if (current === 0 && !hasDone && desired > 0) previewNew += 1;
                 else previewCorrection += 1;
             });
@@ -4783,14 +5087,12 @@ function confirmSync(type) {
                 const descBase = `[기부금] ${donorLabel}${methodLabel}`;
                 const txDate = d.donation_date || today;
 
-                if (hasDone) {
-                    // 정책: 전표완료면 정정/재기표 금지. (수정은 새 row로 입력)
-                    legacySkipCount += 1;
-                    return;
-                }
-
                 if (currentNet === desired) {
-                    if (desired > 0 && !hasDone) markTargets.push({ id: sourceId, note: rawNote });
+                    if (hasDone) {
+                        legacySkipCount += 1;
+                    } else if (desired > 0) {
+                        markTargets.push({ id: sourceId, note: rawNote });
+                    }
                     return;
                 }
 
@@ -5920,7 +6222,7 @@ async function printReport() {
         const db = Number(r.Debit || 0), cr = Number(r.Credit || 0);
         const valDr = db - cr;
         const valCr = cr - db;
-        const account = normalizeAccountingReportAccountName(r.Account);
+        const account = normalizeAccountingReportAccountName(r);
         const type = normalizeAccountingReportType(r.Type, account);
 
         if(type === '자산') { asset[account] = (asset[account] || 0) + valDr; tAsset += valDr; }
@@ -5955,7 +6257,7 @@ async function printReport() {
 
     if (reportPeriodData) reportPeriodData.forEach(r => {
         const cr = Number(r.Credit || 0);
-        const account = normalizeAccountingReportAccountName(r.Account);
+        const account = normalizeAccountingReportAccountName(r);
         const type = normalizeAccountingReportType(r.Type, account);
 
         if(type === '자본') {
@@ -5980,23 +6282,33 @@ async function printReport() {
     const masterList = masterData || [];
     const codeMap = {};
     const typedCodeMap = {};
+    const typedStandardCodeBuckets = {};
     masterList.forEach(m => {
         const type = m.Type || m.type || "";
         const item = m.Item || m.item || "";
         const standard = m.Standard || m.standard || "";
-        const code = m.Code || m.code || m.Standard || "-";
+        const code = String(m.Code || m.code || "").trim();
 
         const itemCompact = item.replace(/\s+/g, '');
         const standardCompact = standard.replace(/\s+/g, '');
 
-        if (item && !codeMap[item]) codeMap[item] = code;
-        if (itemCompact && !codeMap[itemCompact]) codeMap[itemCompact] = code;
-        if (standard && !codeMap[standard]) codeMap[standard] = code;
-        if (standardCompact && !codeMap[standardCompact]) codeMap[standardCompact] = code;
-        if (type && item && !typedCodeMap[`${type}::${item}`]) typedCodeMap[`${type}::${item}`] = code;
-        if (type && standard && !typedCodeMap[`${type}::${standard}`]) typedCodeMap[`${type}::${standard}`] = code;
-        if (type && itemCompact && !typedCodeMap[`${type}::${itemCompact}`]) typedCodeMap[`${type}::${itemCompact}`] = code;
-        if (type && standardCompact && !typedCodeMap[`${type}::${standardCompact}`]) typedCodeMap[`${type}::${standardCompact}`] = code;
+        if (item && code && !codeMap[item]) codeMap[item] = code;
+        if (itemCompact && code && !codeMap[itemCompact]) codeMap[itemCompact] = code;
+        if (type && item && code && !typedCodeMap[`${type}::${item}`]) typedCodeMap[`${type}::${item}`] = code;
+        if (type && itemCompact && code && !typedCodeMap[`${type}::${itemCompact}`]) typedCodeMap[`${type}::${itemCompact}`] = code;
+
+        if (type && standard && code) {
+            const standardKey = `${type}::${standard}`;
+            const standardCompactKey = `${type}::${standardCompact}`;
+            if (!typedStandardCodeBuckets[standardKey]) typedStandardCodeBuckets[standardKey] = new Set();
+            if (!typedStandardCodeBuckets[standardCompactKey]) typedStandardCodeBuckets[standardCompactKey] = new Set();
+            typedStandardCodeBuckets[standardKey].add(code);
+            typedStandardCodeBuckets[standardCompactKey].add(code);
+        }
+    });
+
+    Object.entries(typedStandardCodeBuckets).forEach(([key, bucket]) => {
+        if (bucket.size === 1 && !typedCodeMap[key]) typedCodeMap[key] = Array.from(bucket)[0];
     });
 
     if (!codeMap['잡이익']) codeMap['잡이익'] = codeMap['기타수익'] || '910';
@@ -6009,7 +6321,7 @@ async function printReport() {
     if (!codeMap['기타예수금']) codeMap['기타예수금'] = codeMap['예수금'] || '254';
 
     const toStandard = (m) => (m.Standard || m.standard || "");
-    const toCode = (m) => (m.Code || m.code || m.Standard || "");
+    const toCode = (m) => String(m.Code || m.code || "").trim();
 
     function compareMaster(a, b) {
         const aStd = String(a.standard || "");
@@ -6389,39 +6701,13 @@ async function fetchLiabilitySum() {
     if(!startYm) return showAlert("알림", "귀속 시작월을 선택하세요.");
 
     const targetMonths = listAccountingMonthRange(startYm, endYm);
-    if (!targetMonths.length) return showAlert("알림", "귀속월 형식을 확인하세요.");
-    const periodLabel = targetMonths.length === 1
-        ? targetMonths[0]
-        : `${targetMonths[0]}~${targetMonths[targetMonths.length - 1]}`;
+    const summary = await getInsuranceLiabilitySummaryByMonths(targetMonths);
+    if (summary.error) return showAlert("오류", "조회 실패: " + summary.error.message);
 
-    // hr_salary에서 선택 기간의 [직원공제총액]과 [회사부담총액] 조회
-    const { data, error } = await _supabase.from('hr_salary')
-        .select('year_month,emp_id,pay_total,ded_pension,ded_health,ded_care,ded_employ,ded_income,ded_local,ded_advance,ded_capital,ded_total,co_total')
-        .in('year_month', targetMonths);
-    
-    if(error) return showAlert("오류", "조회 실패: " + error.message);
-    if(!data || data.length === 0) return showAlert("알림", `${periodLabel} 급여대장 데이터가 없습니다. 급여 연동을 먼저 진행했는지 확인하세요.`);
-
-    const adjustedRows = [];
-    for (const ym of targetMonths) {
-        const monthRows = (data || []).filter((row) => String(row.year_month || '') === ym);
-        if (!monthRows.length) continue;
-        const monthAdjustedRows = await applyDurunuriAdjustmentsByMonth(monthRows, ym);
-        adjustedRows.push(...monthAdjustedRows);
-    }
-    const rowsForSum = adjustedRows.length > 0 ? adjustedRows : data;
-
-    let totalYesu = 0;      // 예수금 (직원부담분)
-    let totalMigigeub = 0;  // 미지급비용 (회사부담분)
-
-    rowsForSum.forEach(row => {
-        totalYesu += Number(row.ded_total || 0);
-        totalMigigeub += Number(row.co_total || 0);
-    });
-
-    const totalBook = totalYesu + totalMigigeub;
-
-    if (totalBook === 0) return showAlert("알림", "조회된 미납 내역이 0원입니다.");
+    const totalYesu = Number(summary.data.totalYesu || 0);
+    const totalMigigeub = Number(summary.data.totalMigigeub || 0);
+    const totalBook = Number(summary.data.totalBook || 0);
+    const periodLabel = summary.data.periodLabel;
 
     // 화면 표시
     document.getElementById("txtBookVal").innerText = totalBook.toLocaleString() + "원";
