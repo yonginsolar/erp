@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.16
-Change: 2026-03-19 - 직원 및 설정 관리 명칭 통일, 전자결재 옵션 탭 상시 노출 및 저장 지원.
+Version: v1.0.17
+Change: 2026-03-21 - 직원관리 초기 화면을 부트 완료 뒤 한 번에 노출하도록 로딩 셸을 추가.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.16 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.17 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -45,12 +45,20 @@ Change: 2026-03-19 - 직원 및 설정 관리 명칭 통일, 전자결재 옵션
     .org-tree li::before { content: ''; position: absolute; left: 0; top: 12px; width: 8px; height: 1px; background: #adb5bd; }
     .org-tree-node { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 10px 12px; }
     .org-tree-employee { font-size: 0.82rem; color: #6c757d; }
+    .hr-loading-shell { max-width: 1000px; margin: 0 auto 20px; background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; }
+    .hr-loading-shell .spinner-border { width: 2.5rem; height: 2.5rem; }
   </style>
   <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
 <body class="erp-unified">
 
-<div class="main-card">
+<div id="hrLoadingScreen" class="hr-loading-shell">
+  <div class="spinner-border text-primary mb-3" role="status"></div>
+  <div class="fw-bold mb-1">직원관리 화면을 준비하고 있습니다</div>
+  <div class="small text-muted">권한과 설정 정보를 확인한 뒤 목록을 표시합니다.</div>
+</div>
+
+<div id="hrPageShell" class="main-card hidden">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div><h4 class="fw-bold m-0" id="hrPageTitle">👥 직원 및 설정 관리</h4><small class="text-muted" id="hrPageSubtitle">직원 정보와 급여·근태, 전자결재 설정 통합 관리</small></div>
     <div>
@@ -1866,6 +1874,13 @@ function applyHrRuntimeProfileUi() {
     }
 }
 
+function setHrBootStateReady() {
+    const loadingEl = document.getElementById('hrLoadingScreen');
+    const shellEl = document.getElementById('hrPageShell');
+    if (loadingEl) loadingEl.classList.add('hidden');
+    if (shellEl) shellEl.classList.remove('hidden');
+}
+
 window.onload = async function() {
     alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
     confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
@@ -1930,6 +1945,7 @@ window.onload = async function() {
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
     syncHrStructureSettingsUi();
+    setHrBootStateReady();
 };
 
 function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModal.show(); }

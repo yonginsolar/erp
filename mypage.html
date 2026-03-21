@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.25 | Change: 2026-03-19 - 마이페이지에서 관리자용 Google Calendar 구독 설정을 직접 관리할 수 있도록 보강. -->
+<!-- Version: v1.0.27 | Change: 2026-03-21 - 마이페이지 초기 화면을 부트 완료 뒤 한 번에 노출하도록 로딩 셸을 추가. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.25 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.27 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -61,12 +61,21 @@ body{padding:18px 14px 28px}
 .profile-card{padding:18px;align-items:flex-start}
 .profile-icon{width:58px;height:58px;font-size:24px;margin-right:14px}
 .leave-badge{margin-left:0;margin-top:10px}
+.mypage-loading-shell{background:white;border-radius:18px;padding:28px 24px;margin:0 auto 24px;box-shadow:0 8px 24px rgba(15,23,42,0.06);border:1px solid rgba(148,163,184,.16);text-align:center}
+.mypage-loading-shell .spinner-border{width:2.5rem;height:2.5rem}
 }
 </style>
   <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
 <body class="erp-unified">
-<div class="main-container">
+<div id="mypageLoadingScreen" class="main-container">
+<div class="mypage-loading-shell">
+<div class="spinner-border text-primary mb-3" role="status"></div>
+<div class="fw-bold mb-1">마이페이지를 준비하고 있습니다</div>
+<div class="small text-muted">권한과 개인 정보를 확인한 뒤 화면을 표시합니다.</div>
+</div>
+</div>
+<div id="mypagePageShell" class="main-container hidden">
 <div class="mypage-hero">
 <div>
 <div class="mypage-eyebrow">My Page</div>
@@ -229,6 +238,10 @@ let lastAlertFocusTarget=null;
 const MYPAGE_LEAVE_TYPE_CONFIG_KEY='approval_leave_type_catalog_json';
 const MYPAGE_LEAVE_SELECT_COLUMNS_WITH_SNAPSHOT='id,created_at,doc_type,title,content,amount,status,drafter_id,leave_snapshot';
 const MYPAGE_BUSINESS_TRIP_SELECT_COLUMNS_WITH_SNAPSHOT='id,created_at,doc_type,title,content,status,drafter_id,drafter_name,business_trip_snapshot';
+const MYPAGE_SCHEMA_FEATURE_CACHE_VERSION=1;
+const MYPAGE_SCHEMA_FEATURE_CACHE_TTL_MS=24*60*60*1000;
+const MYPAGE_COMPANY_INFO_CACHE_VERSION=1;
+const MYPAGE_COMPANY_INFO_CACHE_TTL_MS=10*60*1000;
 const MYPAGE_DEFAULT_LEAVE_TYPE_CATALOG=Object.freeze([
 {id:'annual',label:'연차',enabled:true,deductible:true,duration_mode:'date_range',aliases:['연차']},
 {id:'half_day',label:'반차',enabled:true,deductible:true,duration_mode:'half_day',aliases:['반차']},
@@ -526,24 +539,132 @@ if(safe) tokens.push(safe);
 window.LeaveLedger.setDeductibleSubTypes(Array.from(new Set(tokens)));
 }
 }
-async function detectMypageLeaveSnapshotSupport(){
+function getMypageSchemaFeatureCacheKey(){
+return `erp_mypage_schema_features:${SUPABASE_URL}`;
+}
+function readMypageSchemaFeatureCache(){
 try{
-const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`,{headers:{Accept:'application/openapi+json'}});
-if(!response.ok) return false;
-const openapi=await response.json();
-return !!openapi?.definitions?.ref_approval?.properties?.leave_snapshot;
+const raw=localStorage.getItem(getMypageSchemaFeatureCacheKey());
+if(!raw) return null;
+const parsed=JSON.parse(raw);
+if(!parsed||Number(parsed.version||0)!==MYPAGE_SCHEMA_FEATURE_CACHE_VERSION) return null;
+const savedAtMs=new Date(parsed.saved_at||'').getTime();
+if(!Number.isFinite(savedAtMs)) return null;
+if((Date.now()-savedAtMs)>MYPAGE_SCHEMA_FEATURE_CACHE_TTL_MS) return null;
+return{
+leave_snapshot:!!parsed.leave_snapshot,
+business_trip_snapshot:!!parsed.business_trip_snapshot
+};
 }catch(_){
-return false;
+return null;
 }
 }
-async function detectMypageBusinessTripSnapshotSupport(){
+function writeMypageSchemaFeatureCache(features={}){
 try{
-const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`,{headers:{Accept:'application/openapi+json'}});
-if(!response.ok) return false;
-const openapi=await response.json();
-return !!openapi?.definitions?.ref_approval?.properties?.business_trip_snapshot;
+localStorage.setItem(getMypageSchemaFeatureCacheKey(),JSON.stringify({
+version:MYPAGE_SCHEMA_FEATURE_CACHE_VERSION,
+saved_at:new Date().toISOString(),
+leave_snapshot:!!features.leave_snapshot,
+business_trip_snapshot:!!features.business_trip_snapshot
+}));
 }catch(_){
-return false;
+void 0;
+}
+}
+async function fetchMypageSchemaFeaturesFromOpenApi(){
+const response=await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`,{headers:{Accept:'application/openapi+json'}});
+if(!response.ok) throw new Error(`MYPAGE_OPENAPI_FETCH_${response.status}`);
+const openapi=await response.json();
+const properties=openapi?.definitions?.ref_approval?.properties||{};
+return{
+leave_snapshot:!!properties.leave_snapshot,
+business_trip_snapshot:!!properties.business_trip_snapshot
+};
+}
+async function loadMypageSchemaFeatures(){
+const cached=readMypageSchemaFeatureCache();
+if(cached) return cached;
+try{
+const fresh=await fetchMypageSchemaFeaturesFromOpenApi();
+writeMypageSchemaFeatureCache(fresh);
+return fresh;
+}catch(_){
+return{
+leave_snapshot:false,
+business_trip_snapshot:false
+};
+}
+}
+function applyMypageSchemaFeatureState(features={}){
+mypageLeaveSnapshotSupported=!!features.leave_snapshot;
+mypageBusinessTripSnapshotSupported=!!features.business_trip_snapshot;
+}
+function getMypageCompanyInfoCacheKey(coopId){
+const safeCoopId=String(coopId||'').trim();
+if(!safeCoopId) return '';
+return `erp_mypage_company_info:${safeCoopId}`;
+}
+function readMypageCompanyInfoCache(coopId,options={}){
+const allowStale=options?.allowStale===true;
+try{
+const cacheKey=getMypageCompanyInfoCacheKey(coopId);
+if(!cacheKey) return null;
+const raw=localStorage.getItem(cacheKey);
+if(!raw) return null;
+const parsed=JSON.parse(raw);
+if(!parsed||Number(parsed.version||0)!==MYPAGE_COMPANY_INFO_CACHE_VERSION||!parsed.data||typeof parsed.data!=='object') return null;
+const savedAtMs=new Date(parsed.saved_at||'').getTime();
+if(!allowStale){
+if(!Number.isFinite(savedAtMs)) return null;
+if((Date.now()-savedAtMs)>MYPAGE_COMPANY_INFO_CACHE_TTL_MS) return null;
+}
+return {...parsed.data};
+}catch(_){
+return null;
+}
+}
+function writeMypageCompanyInfoCache(coopId,infoMap={}){
+try{
+const cacheKey=getMypageCompanyInfoCacheKey(coopId);
+if(!cacheKey) return;
+localStorage.setItem(cacheKey,JSON.stringify({
+version:MYPAGE_COMPANY_INFO_CACHE_VERSION,
+saved_at:new Date().toISOString(),
+data:{...(infoMap||{})}
+}));
+}catch(_){
+void 0;
+}
+}
+function applyMypageCompanyInfoState(infoMap={}){
+companyInfo={...(infoMap||{})};
+syncMypageLeaveTypeRuntime();
+companyInfo.chairman=companyInfo.ceoName||"이사장";
+}
+async function refreshMypageCompanyInfo(coopId){
+try{
+const {data,error}=await _supabase.from('ref_company_info').select('key,value').eq('coop_id',coopId);
+if(error) throw error;
+const nextInfo={};
+(data||[]).forEach(row=>{nextInfo[row.key]=row.value;});
+if(nextInfo.logo_horizontal_url&&!String(nextInfo.logo_horizontal_url).startsWith('http')){
+const {data:d}=_supabase.storage.from('assets').getPublicUrl(nextInfo.logo_horizontal_url);
+if(d?.publicUrl) nextInfo.logo_horizontal_url=d.publicUrl;
+}
+if(nextInfo.seal_url){
+const rawSealPath=String(nextInfo.seal_url||'').trim();
+const sealPath=rawSealPath.startsWith('http')?rawSealPath.split('/').pop():rawSealPath;
+if(sealPath){
+const {data:d}=await _supabase.storage.from('attachments').createSignedUrl(sealPath,3600);
+if(d?.signedUrl) nextInfo.seal_url=d.signedUrl;
+}
+}
+applyMypageCompanyInfoState(nextInfo);
+writeMypageCompanyInfoCache(coopId,nextInfo);
+return nextInfo;
+}catch(error){
+console.warn('mypage company info refresh failed:',error?.message||error);
+return null;
 }
 }
 
@@ -891,6 +1012,12 @@ try{fallbackTarget.focus({preventScroll:true})}catch(_){try{fallbackTarget.focus
 }
 });
 }
+function setMypageBootStateReady(){
+const loadingEl=document.getElementById('mypageLoadingScreen');
+const shellEl=document.getElementById('mypagePageShell');
+if(loadingEl) loadingEl.classList.add('hidden');
+if(shellEl) shellEl.classList.remove('hidden');
+}
 window.onload=async function(){
 purposeModal=new bootstrap.Modal(document.getElementById('certPurposeModal'));
 leaveDetailModal=new bootstrap.Modal(document.getElementById('leaveDetailModal'));
@@ -933,6 +1060,7 @@ await loadCompanyInfo();
 await loadMypageCalendarIcsSettings();
 await Promise.all([loadProfile(),loadEmergencyList(),loadNotices(),calculateLeave(),loadMypageTelegramLinkStatus(),loadMypageOvertimeSummary()]);
 applyMypageRuntimeProfileUi();
+setMypageBootStateReady();
 };
 function showAlert(m){
 const alertModalEl=document.getElementById('alertModal');
@@ -972,7 +1100,24 @@ async function loadPermissions(user) {
     }
     return result;
 }
-async function loadCompanyInfo(){mypageLeaveSnapshotSupported=await detectMypageLeaveSnapshotSupport();mypageBusinessTripSnapshotSupported=await detectMypageBusinessTripSnapshotSupport();companyInfo={};const coopId=String(myInfo?.coop_id||'').trim();if(!coopId){syncMypageLeaveTypeRuntime();companyInfo.chairman="이사장";return}const{data}=await _supabase.from('ref_company_info').select('*').eq('coop_id',coopId);if(data)data.forEach(i=>companyInfo[i.key]=i.value);syncMypageLeaveTypeRuntime();companyInfo.chairman=companyInfo.ceoName||"이사장";if(companyInfo.logo_horizontal_url&&!companyInfo.logo_horizontal_url.startsWith('http')){const{data:d}=_supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);companyInfo.logo_horizontal_url=d.publicUrl}if(companyInfo.seal_url){let p=companyInfo.seal_url.startsWith('http')?companyInfo.seal_url.split('/').pop():companyInfo.seal_url;const{data:d}=await _supabase.storage.from('attachments').createSignedUrl(p,3600);if(d)companyInfo.seal_url=d.signedUrl}}
+async function loadCompanyInfo(){
+const schemaFeaturePromise=loadMypageSchemaFeatures();
+const coopId=String(myInfo?.coop_id||'').trim();
+const cachedCompanyInfo=readMypageCompanyInfoCache(coopId);
+if(!coopId){
+applyMypageCompanyInfoState({});
+applyMypageSchemaFeatureState(await schemaFeaturePromise);
+return;
+}
+if(cachedCompanyInfo) applyMypageCompanyInfoState(cachedCompanyInfo);
+else applyMypageCompanyInfoState({});
+applyMypageSchemaFeatureState(await schemaFeaturePromise);
+if(cachedCompanyInfo){
+void refreshMypageCompanyInfo(coopId);
+return;
+}
+await refreshMypageCompanyInfo(coopId);
+}
 async function loadProfile() {
     const { data } = await _supabase.from('ref_employees').select('*').eq('emp_id', myInfo.emp_id).single();
     if (data) {

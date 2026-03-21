@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.56 | Change: 2026-03-20 - 문서보관함 기본 조회를 최근 30일로 제한하고 검색만 전체 문서에서 수행하도록 보강. -->
+<!-- Version: v1.1.62 | Change: 2026-03-21 - 전자결재 탭을 bootstrap 완료 전 스켈레톤으로 가려 4개→3개 변화가 보이지 않게 정리. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.56 | approval.html');</script>
+  <script>console.log('[Version] v1.1.62 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -10,10 +10,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="erp_runtime_guard.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <script src="payroll_durunuri_module.js"></script>
   <script src="salary_ledger_module.js"></script>
   <script src="leave_ledger.js"></script>
@@ -35,6 +33,50 @@
     
     .file-item { font-size: 0.9rem; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; border: 1px solid #eee; }
     .file-size { font-size: 0.8rem; color: #888; float: right; }
+    .approval-draft-status {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+    .approval-draft-status .meta {
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .approval-draft-status .meta strong {
+      color: #0f172a;
+    }
+    .approval-draft-status .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .approval-draft-empty {
+      padding: 18px 12px;
+      text-align: center;
+      color: #64748b;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+    .approval-draft-item {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    .approval-draft-item.is-current {
+      border-color: #0d6efd;
+      box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.08);
+      background: #f8fbff;
+    }
     .attachment-dropzone {
       border: 1.5px dashed #cbd5e1;
       border-radius: 12px;
@@ -210,6 +252,33 @@
       padding: 10px 12px;
       margin-bottom: 12px;
     }
+    .approval-tab-shell {
+      min-height: 48px;
+      margin-bottom: 1.5rem;
+    }
+    .approval-tab-skeleton {
+      display: flex;
+      gap: 10px;
+    }
+    .approval-tab-skeleton.hidden {
+      display: none !important;
+    }
+    .approval-tab-skeleton-pill {
+      flex: 1 1 0;
+      height: 42px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+      background-size: 200% 100%;
+      animation: approvalTabSkeletonPulse 1.2s linear infinite;
+      border: 1px solid #e5e7eb;
+    }
+    .approval-tab-nav.hidden {
+      display: none !important;
+    }
+    @keyframes approvalTabSkeletonPulse {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
   </style>
   <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
@@ -224,17 +293,34 @@
     </div>
   </div>
 
-  <ul class="nav nav-pills nav-fill mb-4">
-    <li class="nav-item"><button class="nav-link active" id="tab1" onclick="switchTab('draft')">✍️ 기안 작성</button></li>
-    <li class="nav-item"><button class="nav-link" id="tab2" onclick="switchTab('todo')">📬 결재 대기함</button></li>
-    <li class="nav-item"><button class="nav-link" id="tab3" onclick="switchTab('pending')">⏳ 승인 대기중</button></li>
-    <li class="nav-item"><button class="nav-link" id="tab4" onclick="switchTab('history')">🗂️ 문서 보관함</button></li>
-  </ul>
+  <div class="approval-tab-shell">
+    <div id="approvalTabBootSkeleton" class="approval-tab-skeleton" aria-hidden="true">
+      <div class="approval-tab-skeleton-pill"></div>
+      <div class="approval-tab-skeleton-pill"></div>
+      <div class="approval-tab-skeleton-pill"></div>
+      <div class="approval-tab-skeleton-pill"></div>
+    </div>
+    <ul id="approvalTabNav" class="nav nav-pills nav-fill approval-tab-nav hidden">
+      <li class="nav-item"><button class="nav-link active" id="tab1" onclick="switchTab('draft')">✍️ 기안 작성</button></li>
+      <li class="nav-item"><button class="nav-link disabled" id="tab2" onclick="switchTab('todo')" disabled aria-disabled="true" title="결재 대기 문서를 확인하는 중입니다.">📬 결재 대기함</button></li>
+      <li class="nav-item"><button class="nav-link" id="tab3" onclick="switchTab('pending')">⏳ 승인 대기중</button></li>
+      <li class="nav-item"><button class="nav-link" id="tab4" onclick="switchTab('history')">🗂️ 문서 보관함</button></li>
+    </ul>
+  </div>
 
   <div id="delegateBanner" class="delegate-banner hidden"></div>
 
   <div id="view-draft">
     <form id="draftForm" onsubmit="handleDraftSubmit(event)">
+
+      <div class="approval-draft-status">
+        <div class="meta" id="approvalDraftStatusText">서버 임시저장을 사용하지 않는 새 문서입니다.</div>
+        <div class="actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetApprovalComposerWithConfirm()">📝 새 문서</button>
+          <button type="button" class="btn btn-outline-primary btn-sm" id="btnSaveApprovalDraft" onclick="saveApprovalDraft()">💾 임시저장</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" onclick="openApprovalDraftManager()">📂 임시저장함</button>
+        </div>
+      </div>
       
       <div class="d-flex justify-content-end mb-2">
         <div class="form-check form-switch">
@@ -673,6 +759,7 @@
 <div class="modal fade" id="evidenceUploadModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title fw-bold">📁 증빙제출</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="small text-muted fw-bold mb-2">증빙 파일</label><input type="file" id="evidenceDocInput" class="form-control" multiple accept=".pdf,.png,.jpg,.jpeg"><div class="small text-muted mt-2">업로드는 PDF 또는 이미지(PNG, JPG, JPEG) 파일만 가능합니다. 파일당 최대 10MB.</div></div><div><label class="small text-muted fw-bold mb-2">제출 메모</label><textarea id="evidenceNote" class="form-control" rows="3" placeholder="필요한 설명이 있으면 입력하세요."></textarea></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-primary btn-sm" id="btnEvidenceUploadSubmit" onclick="submitEvidenceUpload()">제출하기</button></div></div></div></div>
 <div class="modal fade" id="appDescPreviewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1" id="appDescPreviewTitle">본문 미리보기</h6><div class="small text-muted" id="appDescPreviewMeta">HTML 렌더링 결과</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="appDescPreviewBody" class="html-preview-box"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="approvalTemplateModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1">지난 양식 선택</h6><div class="small text-muted" id="approvalTemplateMeta">불러오는 중...</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="list-group" id="approvalTemplateList" style="max-height:420px; overflow-y:auto;"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button><button class="btn btn-primary btn-sm" id="btnApplyApprovalTemplate" onclick="applySelectedApprovalTemplate()">양식 적용</button></div></div></div></div>
+<div class="modal fade" id="approvalDraftModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1">서버 임시저장</h6><div class="small text-muted" id="approvalDraftMeta">최대 10개까지 저장할 수 있습니다.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="approvalDraftList"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="attachmentPreviewModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header bg-light"><div><h6 class="modal-title fw-bold mb-1" id="attachmentPreviewTitle">첨부파일 바로보기</h6><div class="small text-muted" id="attachmentPreviewMeta">PDF와 이미지를 웹에서 바로 볼 수 있습니다.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="attachmentPreviewBody" class="attachment-preview-box d-flex align-items-center justify-content-center text-muted">미리볼 파일을 불러오는 중입니다.</div></div><div class="modal-footer p-2 border-0"><a class="btn btn-outline-secondary btn-sm hidden" id="attachmentPreviewDownload" href="#" target="_blank" rel="noopener noreferrer">새 창 열기</a><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button></div></div></div></div>
 <div class="modal fade" id="delegationModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-light"><h6 class="modal-title fw-bold">🧭 결재 위임 설정</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="delegationEnabled" checked><label class="form-check-label fw-bold" for="delegationEnabled">위임 활성화</label></div><div class="mb-2"><label class="small text-muted fw-bold">위임 대상</label><select class="form-select" id="delegationTarget"><option value="">선택하세요</option></select></div><div class="row g-2"><div class="col-6"><label class="small text-muted fw-bold">시작</label><input type="datetime-local" class="form-control" id="delegationStart"></div><div class="col-6"><label class="small text-muted fw-bold">종료</label><input type="datetime-local" class="form-control" id="delegationEnd"></div></div><div class="mt-2"><label class="small text-muted fw-bold">사유</label><textarea class="form-control" id="delegationReason" rows="3" placeholder="예: 연차 휴가 기간 대결재"></textarea></div><div class="small text-muted mt-2" id="delegationInfoText"></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-outline-secondary btn-sm" onclick="disableDelegationSettings()">위임 해제</button><button class="btn btn-primary btn-sm" id="btnSaveDelegation" onclick="saveDelegationSettings()">저장</button></div></div></div></div>
 <input type="file" id="signedDocInput" class="hidden" accept=".pdf,.png,.jpg,.jpeg">
@@ -681,12 +768,26 @@
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const APPROVAL_QUILL_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js';
+const APPROVAL_HTML2PDF_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
 
 let myInfo = null;
 let allUsers = [];
 let modalInstance, alertModalInstance, confirmModalInstance;
 let modalType = ''; 
 let tempSelection = [], finalApprovers = [], finalRefs = [], historyCache = [], historySearchCache = [], pendingSubmissionCache = [], todoCache = [];
+let approvalDraftModalInstance = null;
+let approvalDraftCache = [];
+let currentApprovalDraftId = null;
+let currentApprovalDraftUpdatedAt = '';
+let approvalDraftAttachmentRefs = [];
+let myAuthUserId = '';
+let activeApprovalTab = 'draft';
+let approvalDataLoadedAt = { todo: 0, history: 0 };
+let approvalBootstrapSummary = null;
+let approvalBootstrapReady = false;
+let approvalQuillLoaderPromise = null;
+let approvalHtml2PdfLoaderPromise = null;
 let permissionSet = new Set();
 let pendingPhysicalDocId = null;
 let pendingPhysicalRejectDocId = null;
@@ -833,6 +934,768 @@ const formatYearMonthLabel = (ym) => {
     return `${y}년 ${Number(m)}월`;
 };
 const formatMoney = (value) => Number(value || 0).toLocaleString();
+const APPROVAL_DRAFT_LIMIT = 10;
+const APPROVAL_SUMMARY_CACHE_VERSION = 1;
+const APPROVAL_SUMMARY_CACHE_TTL_MS = 2 * 60 * 1000;
+const APPROVAL_DATA_CACHE_TTL_MS = 30 * 1000;
+const APPROVAL_SCHEMA_FEATURE_CACHE_VERSION = 1;
+const APPROVAL_SCHEMA_FEATURE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const APPROVAL_COMPANY_INFO_CACHE_VERSION = 1;
+const APPROVAL_COMPANY_INFO_CACHE_TTL_MS = 10 * 60 * 1000;
+const APPROVAL_EMPLOYEE_CACHE_VERSION = 1;
+const APPROVAL_EMPLOYEE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function formatApprovalDraftSavedAt(value) {
+    if (!value) return '-';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('ko-KR', {
+        timeZone: KST_TZ_APPROVAL,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+} // End of formatApprovalDraftSavedAt
+
+function sanitizeApprovalDraftFileName(fileName) {
+    const safeName = String(fileName || 'attachment').trim() || 'attachment';
+    return safeName.replace(/[^a-zA-Z0-9._-]/g, '_');
+} // End of sanitizeApprovalDraftFileName
+
+function buildApprovalDraftStoragePath(draftId, fileName) {
+    const safeDraftId = Number(draftId);
+    if (!Number.isInteger(safeDraftId) || safeDraftId <= 0) {
+        throw new Error('invalid_draft_id');
+    }
+    if (!String(myAuthUserId || '').trim()) {
+        throw new Error('approval_draft_auth_missing');
+    }
+    const safeFileName = sanitizeApprovalDraftFileName(fileName);
+    return `approval_drafts/${myAuthUserId}/${safeDraftId}/${crypto.randomUUID()}_${safeFileName}`;
+} // End of buildApprovalDraftStoragePath
+
+function normalizeApprovalDraftAttachmentItem(item) {
+    if (!item) return null;
+    if (typeof item === 'string') {
+        const rawRef = String(item || '').trim();
+        if (!rawRef) return null;
+        return {
+            rawRef,
+            displayName: extractDisplayFileName(rawRef, '첨부파일'),
+            size: 0,
+            mimeType: '',
+            uploadedAt: ''
+        };
+    }
+    const rawRef = String(item.rawRef || item.raw_ref || item.ref || '').trim();
+    if (!rawRef) return null;
+    return {
+        rawRef,
+        displayName: String(item.displayName || item.display_name || extractDisplayFileName(rawRef, '첨부파일')).trim() || '첨부파일',
+        size: Number(item.size || 0) || 0,
+        mimeType: String(item.mimeType || item.mime_type || '').trim(),
+        uploadedAt: String(item.uploadedAt || item.uploaded_at || '').trim()
+    };
+} // End of normalizeApprovalDraftAttachmentItem
+
+function getApprovalDraftAttachmentListForSave() {
+    return approvalDraftAttachmentRefs
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean)
+        .map((item) => ({
+            raw_ref: item.rawRef,
+            display_name: item.displayName,
+            size: Number(item.size || 0) || 0,
+            mime_type: item.mimeType || '',
+            uploaded_at: item.uploadedAt || ''
+        }));
+} // End of getApprovalDraftAttachmentListForSave
+
+function getApprovalDraftSummaryTitle(payload = null) {
+    const sourcePayload = payload && typeof payload === 'object' ? payload : null;
+    const category = sourcePayload
+        ? String(sourcePayload.category || '').trim()
+        : getCurrentDraftMainType();
+    if (sourcePayload) {
+        const fieldBag = sourcePayload.fields && typeof sourcePayload.fields === 'object' ? sourcePayload.fields : {};
+        const noticeTitle = String(fieldBag.notice_subject || '').trim();
+        const proposalTitle = String(fieldBag.proposal_subject || '').trim();
+        if (category === '공문' && noticeTitle) return noticeTitle;
+        if (proposalTitle) return proposalTitle;
+        if (category) return category;
+        return '새 문서';
+    }
+    const noticeTitle = String(document.getElementById('noticeSubject')?.value || '').trim();
+    const proposalTitle = String(document.getElementById('proposalSubject')?.value || '').trim();
+    if (category === '공문' && noticeTitle) return noticeTitle;
+    if (proposalTitle) return proposalTitle;
+    const generated = String(buildApprovalGeneratedTitle(category) || '').trim();
+    if (generated) return generated;
+    return category || '새 문서';
+} // End of getApprovalDraftSummaryTitle
+
+function normalizeApprovalDraftLineUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    const hydrated = hydrateApprovalDraftLineUser(user);
+    const safeEmpId = String(hydrated?.emp_id || '').trim();
+    if (!safeEmpId) return null;
+    return {
+        emp_id: safeEmpId,
+        emp_name: String(hydrated?.emp_name || hydrated?.name || '').trim(),
+        position: String(hydrated?.position || '').trim(),
+        auth_level: Number(hydrated?.auth_level || 0) || 0,
+        department: String(hydrated?.department || '').trim(),
+        role: String(hydrated?.role || '').trim()
+    };
+} // End of normalizeApprovalDraftLineUser
+
+function hydrateApprovalDraftLineUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    const safeEmpId = String(user.emp_id || '').trim();
+    if (!safeEmpId) return null;
+    const matched = getUserByEmpId(safeEmpId);
+    return {
+        ...(matched || {}),
+        ...user,
+        emp_id: safeEmpId,
+        emp_name: String(user.emp_name || user.name || matched?.emp_name || '').trim(),
+        position: String(user.position || matched?.position || '').trim(),
+        auth_level: Number(user.auth_level || matched?.auth_level || 0) || 0,
+        department: String(user.department || matched?.department || '').trim(),
+        role: String(user.role || matched?.role || '').trim()
+    };
+} // End of hydrateApprovalDraftLineUser
+
+function setApprovalRelatedDocLabel(docId, labelText) {
+    const relDocIdEl = document.getElementById('relDocId');
+    const relDocNameEl = document.getElementById('relDocName');
+    if (relDocIdEl) relDocIdEl.value = docId ? String(docId) : '';
+    if (relDocNameEl) {
+        const safeLabel = String(labelText || '').trim();
+        relDocNameEl.textContent = safeLabel || '선택된 관련 문서가 없습니다.';
+    }
+} // End of setApprovalRelatedDocLabel
+
+function clearApprovalDraftLocalFiles() {
+    const input = document.getElementById('attachFile');
+    if (input) input.value = '';
+} // End of clearApprovalDraftLocalFiles
+
+function collectApprovalDraftFormPayload() {
+    const proposalSubjectEl = document.getElementById('proposalSubject');
+    const noticeSubjectEl = document.getElementById('noticeSubject');
+    const selectedHalf = document.querySelector('input[name="ampm"]:checked');
+    return {
+        version: 1,
+        category: getCurrentDraftMainType(),
+        proxy: {
+            enabled: !!document.getElementById('chkProxy')?.checked,
+            target_emp_id: String(document.getElementById('proxyTargetSelect')?.value || '').trim()
+        },
+        jeongyeol: {
+            selected: !!manualJeongyeolSelected,
+            touched: !!manualJeongyeolToggleTouched
+        },
+        approval_line: finalApprovers.map((user) => normalizeApprovalDraftLineUser(user)).filter(Boolean),
+        ref_line: finalRefs.map((user) => normalizeApprovalDraftLineUser(user)).filter(Boolean),
+        body: getApprovalEditorContent(),
+        fields: {
+            leave_type: String(document.getElementById('leaveTypeSelect')?.value || '').trim(),
+            proposal_subject: String(proposalSubjectEl?.value || '').trim(),
+            proposal_subject_auto: proposalSubjectEl?.dataset?.autoGenerated === '1',
+            notice_subject: String(noticeSubjectEl?.value || '').trim(),
+            notice_subject_auto: noticeSubjectEl?.dataset?.autoGenerated === '1',
+            notice_receiver: String(document.getElementById('noticeReceiver')?.value || '').trim(),
+            notice_via: String(document.getElementById('noticeVia')?.value || '').trim(),
+            notice_approval_memo: String(document.getElementById('noticeApprovalMemo')?.value || '').trim(),
+            amount: String(document.getElementById('appAmount')?.value || '').trim(),
+            related_doc_id: String(document.getElementById('relDocId')?.value || '').trim(),
+            related_doc_label: String(document.getElementById('relDocName')?.textContent || '').trim(),
+            expense_sub_type: String(document.getElementById('expenseSubType')?.value || '').trim(),
+            payroll_month: String(document.getElementById('payrollMonth')?.value || '').trim(),
+            leave_start: String(document.getElementById('leaveStart')?.value || '').trim(),
+            leave_end: String(document.getElementById('leaveEnd')?.value || '').trim(),
+            single_leave_date: String(document.getElementById('singleLeaveDate')?.value || '').trim(),
+            half_date: String(document.getElementById('halfDate')?.value || '').trim(),
+            half_slot: String(selectedHalf?.value || '').trim(),
+            overtime_work_date: String(document.getElementById('overtimeWorkDate')?.value || '').trim(),
+            overtime_day_type: String(document.getElementById('overtimeDayType')?.value || '').trim(),
+            overtime_comp_mode: String(document.getElementById('overtimeCompMode')?.value || '').trim(),
+            overtime_start_time: String(document.getElementById('overtimeStartTime')?.value || '').trim(),
+            overtime_end_time: String(document.getElementById('overtimeEndTime')?.value || '').trim(),
+            business_trip_start_date: String(document.getElementById('businessTripStartDate')?.value || '').trim(),
+            business_trip_end_date: String(document.getElementById('businessTripEndDate')?.value || '').trim(),
+            business_trip_slot_am: !!document.getElementById('businessTripSlotAm')?.checked,
+            business_trip_slot_pm: !!document.getElementById('businessTripSlotPm')?.checked,
+            business_trip_location: String(document.getElementById('businessTripLocation')?.value || '').trim()
+        }
+    };
+} // End of collectApprovalDraftFormPayload
+
+function isApprovalComposerDirty() {
+    if (currentApprovalDraftId) return true;
+    if (approvalDraftAttachmentRefs.length > 0) return true;
+    if (Array.from(document.getElementById('attachFile')?.files || []).length > 0) return true;
+    if (finalApprovers.length > 0 || finalRefs.length > 0) return true;
+    const payload = collectApprovalDraftFormPayload();
+    if (String(payload.body || '').trim()) return true;
+    if (payload.proxy?.enabled) return true;
+    const fields = payload.fields || {};
+    return Object.values(fields).some((value) => {
+        if (typeof value === 'boolean') return value === true;
+        return String(value || '').trim() !== '';
+    });
+} // End of isApprovalComposerDirty
+
+function syncApprovalDraftStatusText() {
+    const statusEl = document.getElementById('approvalDraftStatusText');
+    if (!statusEl) return;
+    if (currentApprovalDraftId) {
+        const title = getApprovalDraftSummaryTitle();
+        const attachmentCount = approvalDraftAttachmentRefs.length;
+        const attachmentText = attachmentCount > 0 ? ` / 저장 첨부 ${attachmentCount}건` : '';
+        statusEl.innerHTML = `<strong>${escapeHtml(title || '임시문서')}</strong> 임시저장 불러옴 · 마지막 저장 ${escapeHtml(formatApprovalDraftSavedAt(currentApprovalDraftUpdatedAt))}${attachmentText ? escapeHtml(attachmentText) : ''}`;
+        return;
+    }
+    statusEl.textContent = '서버 임시저장을 사용하지 않는 새 문서입니다.';
+} // End of syncApprovalDraftStatusText
+
+function getApprovalDraftErrorMessage(error, fallback = '임시저장 처리 중 오류가 발생했습니다.') {
+    const rawMessage = String(error?.message || error || '').trim();
+    if (rawMessage.includes('APPROVAL_DRAFT_LIMIT_REACHED')) {
+        return `임시저장은 최대 ${APPROVAL_DRAFT_LIMIT}개까지 저장할 수 있습니다. 기존 초안 1개를 삭제한 뒤 다시 저장하세요.`;
+    }
+    if (rawMessage.includes('APPROVAL_DRAFT_NOT_FOUND')) {
+        return '선택한 임시저장을 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도하세요.';
+    }
+    if (rawMessage.includes('APPROVAL_DRAFT_AUTH_REQUIRED')) {
+        return '로그인 세션을 확인할 수 없습니다. 새로고침 후 다시 로그인해 주세요.';
+    }
+    if (rawMessage.includes('APPROVAL_DRAFT_ATTACHMENTS_INVALID') || rawMessage.includes('APPROVAL_DRAFT_PAYLOAD_INVALID')) {
+        return '임시저장 데이터 형식이 올바르지 않습니다.';
+    }
+    return rawMessage || fallback;
+} // End of getApprovalDraftErrorMessage
+
+async function fetchApprovalDraftList() {
+    const { data, error } = await _supabase
+        .from('erp_approval_drafts')
+        .select('id, doc_type, draft_title, form_payload, attachment_links, created_at, updated_at')
+        .order('updated_at', { ascending: false });
+    if (error) throw error;
+    approvalDraftCache = Array.isArray(data) ? data : [];
+    return approvalDraftCache;
+} // End of fetchApprovalDraftList
+
+function renderApprovalDraftList() {
+    const listEl = document.getElementById('approvalDraftList');
+    const metaEl = document.getElementById('approvalDraftMeta');
+    if (!listEl || !metaEl) return;
+    const count = approvalDraftCache.length;
+    metaEl.textContent = `최대 ${APPROVAL_DRAFT_LIMIT}개까지 저장할 수 있습니다. 현재 ${count}개 저장됨.`;
+    if (count === 0) {
+        listEl.innerHTML = '<div class="approval-draft-empty">저장된 임시문서가 없습니다.</div>';
+        return;
+    }
+    listEl.innerHTML = approvalDraftCache.map((draft) => {
+        const title = String(draft?.draft_title || getApprovalDraftSummaryTitle(draft?.form_payload || {})).trim() || '제목 없음';
+        const docType = String(draft?.doc_type || draft?.form_payload?.category || '-').trim() || '-';
+        const updatedAt = formatApprovalDraftSavedAt(draft?.updated_at || draft?.created_at);
+        const attachmentCount = Array.isArray(draft?.attachment_links) ? draft.attachment_links.length : 0;
+        const isCurrent = Number(draft?.id || 0) === Number(currentApprovalDraftId || 0);
+        return `
+            <div class="approval-draft-item${isCurrent ? ' is-current' : ''}">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="flex-grow-1">
+                  <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+                    <span class="badge bg-primary">${escapeHtml(docType)}</span>
+                    ${isCurrent ? '<span class="badge bg-info text-dark">현재 불러온 초안</span>' : ''}
+                  </div>
+                  <div class="fw-bold">${escapeHtml(title)}</div>
+                  <div class="small text-muted mt-1">마지막 저장 ${escapeHtml(updatedAt)} / 첨부 ${attachmentCount}건</div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 justify-content-end">
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadApprovalDraftFromServer(${Number(draft.id)})">불러오기</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteApprovalDraft(${Number(draft.id)})">삭제</button>
+                </div>
+              </div>
+            </div>
+        `;
+    }).join('');
+} // End of renderApprovalDraftList
+
+async function openApprovalDraftManager() {
+    if (!approvalDraftModalInstance) return;
+    const listEl = document.getElementById('approvalDraftList');
+    if (listEl) listEl.innerHTML = '<div class="approval-draft-empty">불러오는 중...</div>';
+    approvalDraftModalInstance.show();
+    try {
+        await fetchApprovalDraftList();
+        renderApprovalDraftList();
+    } catch (error) {
+        if (listEl) listEl.innerHTML = `<div class="approval-draft-empty text-danger">${escapeHtml(getApprovalDraftErrorMessage(error, '임시저장 목록을 불러오지 못했습니다.'))}</div>`;
+    }
+} // End of openApprovalDraftManager
+
+async function persistApprovalDraftRecord(draftId, payload, attachmentItems) {
+    const normalizedAttachments = (Array.isArray(attachmentItems) ? attachmentItems : approvalDraftAttachmentRefs)
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean);
+    const { data, error } = await _supabase.rpc('erp_save_my_approval_draft', {
+        p_id: draftId || null,
+        p_doc_type: String(payload?.category || '').trim() || null,
+        p_draft_title: getApprovalDraftSummaryTitle(payload),
+        p_form_payload: payload || {},
+        p_attachment_links: normalizedAttachments.map((item) => ({
+            raw_ref: item.rawRef,
+            display_name: item.displayName,
+            size: Number(item.size || 0) || 0,
+            mime_type: item.mimeType || '',
+            uploaded_at: item.uploadedAt || ''
+        }))
+    });
+    if (error) throw error;
+    const savedDraft = data?.draft || null;
+    if (!savedDraft?.id) {
+        throw new Error('APPROVAL_DRAFT_SAVE_FAILED');
+    }
+    currentApprovalDraftId = Number(savedDraft.id);
+    currentApprovalDraftUpdatedAt = savedDraft.updated_at || savedDraft.created_at || '';
+    approvalDraftAttachmentRefs = (Array.isArray(savedDraft.attachment_links) ? savedDraft.attachment_links : normalizedAttachments)
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean);
+    syncApprovalDraftStatusText();
+    return savedDraft;
+} // End of persistApprovalDraftRecord
+
+async function deleteDraftAttachmentObjects(items) {
+    const grouped = new Map();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+        const normalized = normalizeApprovalDraftAttachmentItem(item);
+        const ref = parseStorageObjectRef(normalized?.rawRef || '');
+        if (!ref?.bucket || !ref?.path) return;
+        if (!grouped.has(ref.bucket)) grouped.set(ref.bucket, []);
+        grouped.get(ref.bucket).push(ref.path);
+    });
+    for (const [bucket, paths] of grouped.entries()) {
+        if (!paths.length) continue;
+        const { error } = await _supabase.storage.from(bucket).remove(paths);
+        if (error) throw error;
+    }
+} // End of deleteDraftAttachmentObjects
+
+async function uploadApprovalDraftAttachments(draftId, fileList) {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return [];
+    const validation = validateAttachments(files);
+    if (!validation.ok) throw new Error(validation.message);
+    const uploaded = [];
+    try {
+        for (const file of files) {
+            const storagePath = buildApprovalDraftStoragePath(draftId, file.name || 'attachment');
+            const { error } = await _supabase.storage.from('attachments').upload(storagePath, file);
+            if (error) throw error;
+            uploaded.push({
+                rawRef: `attachments/${storagePath}?display_name=${encodeURIComponent(file.name || 'attachment')}`,
+                displayName: file.name || 'attachment',
+                size: Number(file.size || 0) || 0,
+                mimeType: String(file.type || '').trim(),
+                uploadedAt: new Date().toISOString()
+            });
+        }
+        return uploaded;
+    } catch (error) {
+        try {
+            await deleteDraftAttachmentObjects(uploaded);
+        } catch (_) { /* noop */ }
+        throw error;
+    }
+} // End of uploadApprovalDraftAttachments
+
+async function copyApprovalDraftAttachmentsForSubmit(items) {
+    const copiedRefs = [];
+    const copiedDraftObjects = [];
+    try {
+        for (const item of Array.isArray(items) ? items : []) {
+            const normalized = normalizeApprovalDraftAttachmentItem(item);
+            const ref = parseStorageObjectRef(normalized?.rawRef || '');
+            if (!ref?.bucket || !ref?.path || ref.bucket !== 'attachments' || !ref.path.startsWith('approval_drafts/')) {
+                if (normalized?.rawRef) copiedRefs.push(normalized.rawRef);
+                continue;
+            }
+            const displayName = normalized.displayName || extractDisplayFileName(normalized.rawRef, '첨부파일');
+            const finalPath = `${crypto.randomUUID()}_${sanitizeApprovalDraftFileName(displayName)}`;
+            const { error } = await _supabase.storage.from(ref.bucket).copy(ref.path, finalPath);
+            if (error) throw error;
+            copiedDraftObjects.push({ rawRef: `attachments/${finalPath}?display_name=${encodeURIComponent(displayName)}` });
+            copiedRefs.push(`attachments/${finalPath}?display_name=${encodeURIComponent(displayName)}`);
+        }
+        return { fileRefs: copiedRefs, copiedObjects: copiedDraftObjects };
+    } catch (error) {
+        try {
+            await deleteDraftAttachmentObjects(copiedDraftObjects);
+        } catch (_) { /* noop */ }
+        throw error;
+    }
+} // End of copyApprovalDraftAttachmentsForSubmit
+
+function resetApprovalComposerForm(options = {}) {
+    const keepDraftIdentity = options.keepDraftIdentity === true;
+    const form = document.getElementById('draftForm');
+    if (form) form.reset();
+
+    clearApprovalDraftLocalFiles();
+    approvalDraftAttachmentRefs = [];
+    if (!keepDraftIdentity) {
+        currentApprovalDraftId = null;
+        currentApprovalDraftUpdatedAt = '';
+    }
+
+    salaryExpenseState = null;
+    finalApprovers = [];
+    finalRefs = [];
+    tempSelection = [];
+    savedApproversBeforeJeongyeol = [];
+    jeongyeolLineLocked = false;
+    jeongyeolLockReasonLabel = '';
+    manualJeongyeolSelected = false;
+    manualJeongyeolToggleTouched = false;
+    approvalLineTemplateAutoApplied = false;
+    approvalLastCategory = '';
+
+    setApprovalRelatedDocLabel('', '');
+    setApprovalEditorContent('');
+    renderLinePreview();
+    renderRefPreview();
+
+    const proposalSubjectEl = document.getElementById('proposalSubject');
+    const noticeSubjectEl = document.getElementById('noticeSubject');
+    const payrollMonthInput = document.getElementById('payrollMonth');
+    const jeongyeolToggleEl = document.getElementById('chkSecretaryJeongyeol');
+    if (proposalSubjectEl) proposalSubjectEl.dataset.autoGenerated = '0';
+    if (noticeSubjectEl) noticeSubjectEl.dataset.autoGenerated = '0';
+    if (payrollMonthInput) payrollMonthInput.value = formatApprovalKstMonth();
+    if (jeongyeolToggleEl) jeongyeolToggleEl.checked = false;
+
+    const proxyCheckEl = document.getElementById('chkProxy');
+    if (proxyCheckEl) proxyCheckEl.checked = false;
+    toggleProxyMode();
+    handleCategoryChange();
+    calculateLeave();
+    updateFileList();
+    syncApprovalDraftStatusText();
+} // End of resetApprovalComposerForm
+
+async function resetApprovalComposerWithConfirm() {
+    if (!isApprovalComposerDirty()) {
+        resetApprovalComposerForm();
+        return;
+    }
+    const ok = await showConfirm('현재 작성 중인 내용이 있습니다.\n새 문서로 초기화하시겠습니까?', {
+        title: '새 문서 시작',
+        okText: '초기화',
+        okClass: 'btn-danger'
+    });
+    if (!ok) return;
+    resetApprovalComposerForm();
+} // End of resetApprovalComposerWithConfirm
+
+async function loadApprovalDraftFromServer(draftId) {
+    const safeDraftId = Number(draftId);
+    if (!Number.isInteger(safeDraftId) || safeDraftId <= 0) return;
+
+    const targetDraft = approvalDraftCache.find((item) => Number(item?.id || 0) === safeDraftId);
+    let draftRow = targetDraft || null;
+    if (!draftRow) {
+        const { data, error } = await _supabase
+            .from('erp_approval_drafts')
+            .select('id, doc_type, draft_title, form_payload, attachment_links, created_at, updated_at')
+            .eq('id', safeDraftId)
+            .single();
+        if (error || !data) return showAlert(getApprovalDraftErrorMessage(error, '임시저장 문서를 불러오지 못했습니다.'));
+        draftRow = data;
+    }
+
+    if (Number(currentApprovalDraftId || 0) !== safeDraftId && isApprovalComposerDirty()) {
+        const replaceOk = await showConfirm('현재 작성 중인 내용이 있습니다.\n선택한 임시문서를 불러오면 현재 내용은 화면에서 사라집니다.', {
+            title: '임시문서 불러오기',
+            okText: '불러오기',
+            okClass: 'btn-primary'
+        });
+        if (!replaceOk) return;
+    }
+
+    resetApprovalComposerForm({ keepDraftIdentity: true });
+
+    const payload = draftRow?.form_payload && typeof draftRow.form_payload === 'object' ? draftRow.form_payload : {};
+    const fields = payload?.fields && typeof payload.fields === 'object' ? payload.fields : {};
+    const category = String(payload?.category || draftRow?.doc_type || document.getElementById('appCategory')?.value || '일반품의').trim() || '일반품의';
+
+    const proxyCheckEl = document.getElementById('chkProxy');
+    if (proxyCheckEl) proxyCheckEl.checked = !!payload?.proxy?.enabled;
+    toggleProxyMode();
+    const proxyTargetEl = document.getElementById('proxyTargetSelect');
+    if (proxyTargetEl && payload?.proxy?.target_emp_id) proxyTargetEl.value = String(payload.proxy.target_emp_id || '').trim();
+
+    const categoryEl = document.getElementById('appCategory');
+    const leaveTypeEl = document.getElementById('leaveTypeSelect');
+    if (categoryEl) categoryEl.value = category;
+    if (leaveTypeEl && String(fields.leave_type || '').trim()) leaveTypeEl.value = String(fields.leave_type || '').trim();
+    handleCategoryChange();
+
+    const proposalSubjectEl = document.getElementById('proposalSubject');
+    const noticeSubjectEl = document.getElementById('noticeSubject');
+    if (proposalSubjectEl) {
+        proposalSubjectEl.value = String(fields.proposal_subject || '').trim();
+        proposalSubjectEl.dataset.autoGenerated = fields.proposal_subject_auto ? '1' : '0';
+    }
+    if (noticeSubjectEl) {
+        noticeSubjectEl.value = String(fields.notice_subject || '').trim();
+        noticeSubjectEl.dataset.autoGenerated = fields.notice_subject_auto ? '1' : '0';
+    }
+    const amountEl = document.getElementById('appAmount');
+    if (amountEl) amountEl.value = String(fields.amount || '').trim();
+    const expenseSubTypeEl = document.getElementById('expenseSubType');
+    if (expenseSubTypeEl && String(fields.expense_sub_type || '').trim()) {
+        expenseSubTypeEl.value = String(fields.expense_sub_type || '').trim();
+        handleExpenseSubTypeChange();
+    }
+    const payrollMonthEl = document.getElementById('payrollMonth');
+    if (payrollMonthEl && String(fields.payroll_month || '').trim()) {
+        payrollMonthEl.value = String(fields.payroll_month || '').trim();
+    }
+    const noticeReceiverEl = document.getElementById('noticeReceiver');
+    if (noticeReceiverEl) noticeReceiverEl.value = String(fields.notice_receiver || '').trim();
+    const noticeViaEl = document.getElementById('noticeVia');
+    if (noticeViaEl) noticeViaEl.value = String(fields.notice_via || '').trim();
+    const noticeMemoEl = document.getElementById('noticeApprovalMemo');
+    if (noticeMemoEl) noticeMemoEl.value = String(fields.notice_approval_memo || '').trim();
+    setApprovalEditorContent(String(payload?.body || '').trim());
+
+    setApprovalRelatedDocLabel(String(fields.related_doc_id || '').trim(), String(fields.related_doc_label || '').trim());
+
+    const leaveStartEl = document.getElementById('leaveStart');
+    const leaveEndEl = document.getElementById('leaveEnd');
+    const singleLeaveDateEl = document.getElementById('singleLeaveDate');
+    const halfDateEl = document.getElementById('halfDate');
+    if (leaveStartEl) leaveStartEl.value = String(fields.leave_start || '').trim();
+    if (leaveEndEl) leaveEndEl.value = String(fields.leave_end || '').trim();
+    if (singleLeaveDateEl) singleLeaveDateEl.value = String(fields.single_leave_date || '').trim();
+    if (halfDateEl) halfDateEl.value = String(fields.half_date || '').trim();
+    const halfSlot = String(fields.half_slot || '').trim();
+    if (halfSlot === '오후' && document.getElementById('pm')) document.getElementById('pm').checked = true;
+    else if (document.getElementById('am')) document.getElementById('am').checked = true;
+
+    const overtimeWorkDateEl = document.getElementById('overtimeWorkDate');
+    const overtimeDayTypeEl = document.getElementById('overtimeDayType');
+    const overtimeCompModeEl = document.getElementById('overtimeCompMode');
+    const overtimeStartEl = document.getElementById('overtimeStartTime');
+    const overtimeEndEl = document.getElementById('overtimeEndTime');
+    if (overtimeWorkDateEl) overtimeWorkDateEl.value = String(fields.overtime_work_date || '').trim();
+    if (overtimeDayTypeEl) overtimeDayTypeEl.value = String(fields.overtime_day_type || '').trim() || 'workday';
+    if (overtimeCompModeEl) overtimeCompModeEl.value = String(fields.overtime_comp_mode || '').trim() || 'allowance';
+    if (overtimeStartEl) overtimeStartEl.value = String(fields.overtime_start_time || '').trim();
+    if (overtimeEndEl) overtimeEndEl.value = String(fields.overtime_end_time || '').trim();
+
+    const btStartEl = document.getElementById('businessTripStartDate');
+    const btEndEl = document.getElementById('businessTripEndDate');
+    const btAmEl = document.getElementById('businessTripSlotAm');
+    const btPmEl = document.getElementById('businessTripSlotPm');
+    const btLocationEl = document.getElementById('businessTripLocation');
+    if (btStartEl) btStartEl.value = String(fields.business_trip_start_date || '').trim();
+    if (btEndEl) btEndEl.value = String(fields.business_trip_end_date || '').trim();
+    if (btAmEl) btAmEl.checked = !!fields.business_trip_slot_am;
+    if (btPmEl) btPmEl.checked = !!fields.business_trip_slot_pm;
+    if (btLocationEl) btLocationEl.value = String(fields.business_trip_location || '').trim();
+
+    finalApprovers = (Array.isArray(payload?.approval_line) ? payload.approval_line : [])
+        .map((item) => hydrateApprovalDraftLineUser(item))
+        .filter(Boolean);
+    finalRefs = (Array.isArray(payload?.ref_line) ? payload.ref_line : [])
+        .map((item) => hydrateApprovalDraftLineUser(item))
+        .filter(Boolean);
+    renderRefPreview();
+
+    manualJeongyeolSelected = !!payload?.jeongyeol?.selected;
+    manualJeongyeolToggleTouched = !!payload?.jeongyeol?.touched;
+    currentApprovalDraftId = safeDraftId;
+    currentApprovalDraftUpdatedAt = draftRow?.updated_at || draftRow?.created_at || '';
+    approvalDraftAttachmentRefs = (Array.isArray(draftRow?.attachment_links) ? draftRow.attachment_links : [])
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean);
+
+    calculateLeave();
+    recalcApprovalOvertimeSummary();
+    syncApprovalBusinessTripSummary();
+    updateJeongyeolUi();
+    renderLinePreview();
+    updateFileList();
+    syncApprovalDraftStatusText();
+    if (approvalDraftModalInstance) approvalDraftModalInstance.hide();
+    switchTab('draft');
+} // End of loadApprovalDraftFromServer
+
+async function saveApprovalDraft() {
+    if (!canPerform('approval.submit')) return showAlert('임시저장 권한이 없습니다.');
+    const saveBtn = document.getElementById('btnSaveApprovalDraft');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = '저장 중...';
+    }
+
+    const fileInput = document.getElementById('attachFile');
+    const pendingFiles = Array.from(fileInput?.files || []);
+    let newlyUploadedAttachments = [];
+    const validation = validateAttachments(pendingFiles);
+    if (!validation.ok) {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 임시저장';
+        }
+        return showAlert(validation.message);
+    }
+
+    try {
+        const latestDrafts = await fetchApprovalDraftList();
+        if (!currentApprovalDraftId && latestDrafts.length >= APPROVAL_DRAFT_LIMIT) {
+            const openManager = await showConfirm(`임시저장은 최대 ${APPROVAL_DRAFT_LIMIT}개까지 저장할 수 있습니다.\n기존 초안 1개를 삭제한 뒤 다시 저장하세요.`, {
+                title: '임시저장 한도',
+                okText: '저장함 열기',
+                okClass: 'btn-primary'
+            });
+            if (openManager) await openApprovalDraftManager();
+            return;
+        }
+
+        let draftId = Number(currentApprovalDraftId || 0) || null;
+        let mergedAttachments = approvalDraftAttachmentRefs
+            .map((item) => normalizeApprovalDraftAttachmentItem(item))
+            .filter(Boolean);
+        let payload = collectApprovalDraftFormPayload();
+
+        if (!draftId) {
+            await persistApprovalDraftRecord(null, payload, mergedAttachments);
+            draftId = Number(currentApprovalDraftId || 0) || null;
+        }
+
+        if (!draftId) {
+            throw new Error('APPROVAL_DRAFT_SAVE_FAILED');
+        }
+
+        if (pendingFiles.length > 0) {
+            newlyUploadedAttachments = await uploadApprovalDraftAttachments(draftId, pendingFiles);
+            mergedAttachments = mergedAttachments.concat(newlyUploadedAttachments);
+        }
+
+        payload = collectApprovalDraftFormPayload();
+        await persistApprovalDraftRecord(draftId, payload, mergedAttachments);
+        clearApprovalDraftLocalFiles();
+        updateFileList();
+        await fetchApprovalDraftList();
+        renderApprovalDraftList();
+        showAlert(`임시저장되었습니다.\n제목: ${getApprovalDraftSummaryTitle(payload)}`);
+    } catch (error) {
+        try {
+            if (newlyUploadedAttachments.length > 0) {
+                await deleteDraftAttachmentObjects(newlyUploadedAttachments);
+            }
+        } catch (cleanupError) {
+            console.warn('approval draft orphan cleanup failed', cleanupError);
+        }
+        showAlert(getApprovalDraftErrorMessage(error, '임시저장에 실패했습니다.'));
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 임시저장';
+        }
+        syncApprovalDraftStatusText();
+    }
+} // End of saveApprovalDraft
+
+async function deleteApprovalDraft(draftId, options = {}) {
+    const safeDraftId = Number(draftId);
+    if (!Number.isInteger(safeDraftId) || safeDraftId <= 0) return;
+
+    const draftRow = approvalDraftCache.find((item) => Number(item?.id || 0) === safeDraftId);
+    const title = String(draftRow?.draft_title || getApprovalDraftSummaryTitle(draftRow?.form_payload || {})).trim() || '제목 없음';
+    const skipConfirm = options.skipConfirm === true;
+    if (!skipConfirm) {
+        const ok = await showConfirm(`임시저장 문서를 삭제하시겠습니까?\n제목: ${title}`, {
+            title: '임시저장 삭제',
+            okText: '삭제',
+            okClass: 'btn-danger'
+        });
+        if (!ok) return;
+    }
+
+    const attachmentItems = (Array.isArray(draftRow?.attachment_links) ? draftRow.attachment_links : approvalDraftAttachmentRefs)
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean);
+
+    const { error } = await _supabase
+        .from('erp_approval_drafts')
+        .delete()
+        .eq('id', safeDraftId);
+    if (error) return showAlert(getApprovalDraftErrorMessage(error, '임시저장 삭제에 실패했습니다.'));
+
+    let cleanupWarning = '';
+    try {
+        await deleteDraftAttachmentObjects(attachmentItems);
+    } catch (cleanupError) {
+        cleanupWarning = `\n첨부 임시파일 정리는 일부 실패했습니다: ${getApprovalDraftErrorMessage(cleanupError, 'unknown error')}`;
+    }
+
+    if (Number(currentApprovalDraftId || 0) === safeDraftId) {
+        resetApprovalComposerForm();
+    }
+    await fetchApprovalDraftList();
+    renderApprovalDraftList();
+    if (options.silent !== true) {
+        showAlert(`임시저장을 삭제했습니다.${cleanupWarning}`);
+    }
+} // End of deleteApprovalDraft
+
+async function removeSavedApprovalDraftAttachment(index) {
+    const target = normalizeApprovalDraftAttachmentItem(approvalDraftAttachmentRefs[index]);
+    if (!target) return;
+    const ok = await showConfirm(`저장된 첨부를 삭제하시겠습니까?\n파일: ${target.displayName || '첨부파일'}`, {
+        title: '첨부 삭제',
+        okText: '삭제',
+        okClass: 'btn-danger'
+    });
+    if (!ok) return;
+
+    try {
+        await deleteDraftAttachmentObjects([target]);
+        approvalDraftAttachmentRefs.splice(index, 1);
+        updateFileList();
+        if (currentApprovalDraftId) {
+            await persistApprovalDraftRecord(currentApprovalDraftId, collectApprovalDraftFormPayload(), approvalDraftAttachmentRefs);
+            await fetchApprovalDraftList();
+            renderApprovalDraftList();
+        }
+        showAlert('저장된 첨부를 삭제했습니다.');
+    } catch (error) {
+        showAlert(getApprovalDraftErrorMessage(error, '첨부 삭제에 실패했습니다.'));
+    }
+} // End of removeSavedApprovalDraftAttachment
+
+function removeLocalAttachment(index) {
+    const input = document.getElementById('attachFile');
+    if (!input) return;
+    const remainFiles = Array.from(input.files || []).filter((_, fileIndex) => fileIndex !== index);
+    input.files = buildAttachmentFileTransfer(remainFiles).files;
+    updateFileList();
+} // End of removeLocalAttachment
+
+function openSavedApprovalDraftAttachmentPreview(index) {
+    const item = normalizeApprovalDraftAttachmentItem(approvalDraftAttachmentRefs[index]);
+    if (!item?.rawRef) return;
+    openAttachmentPreview(encodeURIComponent(item.rawRef));
+} // End of openSavedApprovalDraftAttachmentPreview
+
 
 function isApprovalWorkforceLiteProfile() {
     return approvalRuntimeProfile === 'workforce_lite';
@@ -1385,86 +2248,246 @@ function applyApprovalRuntimeProfileUi() {
 }
 
 async function loadApprovalCompanyInfo() {
-    try {
-        approvalLeaveSnapshotSupported = await detectApprovalLeaveSnapshotSupport();
-    } catch (_) {
-        approvalLeaveSnapshotSupported = false;
-    }
-    try {
-        approvalAttendanceSnapshotSupported = await detectApprovalAttendanceSnapshotSupport();
-    } catch (_) {
-        approvalAttendanceSnapshotSupported = false;
-    }
-    try {
-        approvalBusinessTripSnapshotSupported = await detectApprovalBusinessTripSnapshotSupport();
-    } catch (_) {
-        approvalBusinessTripSnapshotSupported = false;
-    }
+    const schemaFeaturePromise = loadApprovalSchemaFeatures();
     const coopId = String(myInfo?.coop_id || '').trim();
+    const cachedCompanyInfo = readApprovalCompanyInfoCache(coopId);
     if (!coopId) {
-        approvalCompanyInfo = {};
-        approvalOvertimePolicy = { ...APPROVAL_DEFAULT_OVERTIME_POLICY };
-        syncApprovalLeaveTypeRuntime();
-        syncApprovalOvertimePolicyUi();
+        applyApprovalCompanyInfoState({});
+        applyApprovalSchemaFeatureState(await schemaFeaturePromise);
         return;
     }
-    const { data, error } = await _supabase.from('ref_company_info').select('key,value').eq('coop_id', coopId);
-    if (error) throw error;
-    approvalCompanyInfo = {};
-    (data || []).forEach((row) => {
-        approvalCompanyInfo[row.key] = row.value;
+    if (cachedCompanyInfo) {
+        applyApprovalCompanyInfoState(cachedCompanyInfo);
+    } else {
+        applyApprovalCompanyInfoState({});
+    }
+    applyApprovalSchemaFeatureState(await schemaFeaturePromise);
+    if (cachedCompanyInfo) {
+        void refreshApprovalCompanyInfo(coopId);
+        return;
+    }
+    await refreshApprovalCompanyInfo(coopId);
+}
+
+function getApprovalSchemaFeatureCacheKey() {
+    return `erp_approval_schema_features:${SUPABASE_URL}`;
+} // End of getApprovalSchemaFeatureCacheKey
+
+function readApprovalSchemaFeatureCache() {
+    try {
+        const cacheKey = getApprovalSchemaFeatureCacheKey();
+        const raw = localStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || Number(parsed.version || 0) !== APPROVAL_SCHEMA_FEATURE_CACHE_VERSION) return null;
+        const savedAtMs = new Date(parsed.saved_at || '').getTime();
+        if (!Number.isFinite(savedAtMs)) return null;
+        if ((Date.now() - savedAtMs) > APPROVAL_SCHEMA_FEATURE_CACHE_TTL_MS) return null;
+        return {
+            leave_snapshot: !!parsed.leave_snapshot,
+            attendance_snapshot: !!parsed.attendance_snapshot,
+            business_trip_snapshot: !!parsed.business_trip_snapshot
+        };
+    } catch (_) {
+        return null;
+    }
+} // End of readApprovalSchemaFeatureCache
+
+function writeApprovalSchemaFeatureCache(features = {}) {
+    try {
+        localStorage.setItem(getApprovalSchemaFeatureCacheKey(), JSON.stringify({
+            version: APPROVAL_SCHEMA_FEATURE_CACHE_VERSION,
+            saved_at: new Date().toISOString(),
+            leave_snapshot: !!features.leave_snapshot,
+            attendance_snapshot: !!features.attendance_snapshot,
+            business_trip_snapshot: !!features.business_trip_snapshot
+        }));
+    } catch (_) {
+        void 0;
+    }
+} // End of writeApprovalSchemaFeatureCache
+
+async function fetchApprovalSchemaFeaturesFromOpenApi() {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
+        headers: { Accept: 'application/openapi+json' }
     });
+    if (!response.ok) throw new Error(`APPROVAL_OPENAPI_FETCH_${response.status}`);
+    const openapi = await response.json();
+    const properties = openapi?.definitions?.ref_approval?.properties || {};
+    return {
+        leave_snapshot: !!properties.leave_snapshot,
+        attendance_snapshot: !!properties.attendance_snapshot,
+        business_trip_snapshot: !!properties.business_trip_snapshot
+    };
+} // End of fetchApprovalSchemaFeaturesFromOpenApi
+
+async function loadApprovalSchemaFeatures() {
+    const cached = readApprovalSchemaFeatureCache();
+    if (cached) return cached;
+    try {
+        const fresh = await fetchApprovalSchemaFeaturesFromOpenApi();
+        writeApprovalSchemaFeatureCache(fresh);
+        return fresh;
+    } catch (_) {
+        return {
+            leave_snapshot: false,
+            attendance_snapshot: false,
+            business_trip_snapshot: false
+        };
+    }
+} // End of loadApprovalSchemaFeatures
+
+function applyApprovalSchemaFeatureState(features = {}) {
+    approvalLeaveSnapshotSupported = !!features.leave_snapshot;
+    approvalAttendanceSnapshotSupported = !!features.attendance_snapshot;
+    approvalBusinessTripSnapshotSupported = !!features.business_trip_snapshot;
+} // End of applyApprovalSchemaFeatureState
+
+function getApprovalCompanyInfoCacheKey(coopId) {
+    const safeCoopId = String(coopId || '').trim();
+    if (!safeCoopId) return '';
+    return `erp_company_info:${safeCoopId}`;
+} // End of getApprovalCompanyInfoCacheKey
+
+function readApprovalCompanyInfoCache(coopId, options = {}) {
+    const allowStale = options?.allowStale === true;
+    try {
+        const cacheKey = getApprovalCompanyInfoCacheKey(coopId);
+        if (!cacheKey) return null;
+        const raw = localStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.version === APPROVAL_COMPANY_INFO_CACHE_VERSION && parsed.data && typeof parsed.data === 'object') {
+            const savedAtMs = new Date(parsed.saved_at || '').getTime();
+            if (!allowStale) {
+                if (!Number.isFinite(savedAtMs)) return null;
+                if ((Date.now() - savedAtMs) > APPROVAL_COMPANY_INFO_CACHE_TTL_MS) return null;
+            }
+            return { ...parsed.data };
+        }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return { ...parsed };
+        }
+        return null;
+    } catch (_) {
+        return null;
+    }
+} // End of readApprovalCompanyInfoCache
+
+function writeApprovalCompanyInfoCache(coopId, infoMap = {}) {
+    try {
+        const cacheKey = getApprovalCompanyInfoCacheKey(coopId);
+        if (!cacheKey) return;
+        localStorage.setItem(cacheKey, JSON.stringify({
+            version: APPROVAL_COMPANY_INFO_CACHE_VERSION,
+            saved_at: new Date().toISOString(),
+            data: { ...(infoMap || {}) }
+        }));
+    } catch (_) {
+        void 0;
+    }
+} // End of writeApprovalCompanyInfoCache
+
+function applyApprovalCompanyInfoState(infoMap = {}) {
+    approvalCompanyInfo = { ...(infoMap || {}) };
     approvalSecretaryJeongyeolEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_jeongyeol_enabled'], true);
     approvalSecretaryAttendanceEnabled = parseApprovalBoolean(approvalCompanyInfo['approval_secretary_attendance_enabled'], true);
     approvalDocRuleCatalog = parseApprovalDocRuleCatalog(approvalCompanyInfo[APPROVAL_DOC_RULE_CONFIG_KEY]);
     approvalOvertimePolicy = parseApprovalOvertimePolicy(approvalCompanyInfo[APPROVAL_OVERTIME_POLICY_KEY]);
     syncApprovalLeaveTypeRuntime();
     syncApprovalOvertimePolicyUi();
+} // End of applyApprovalCompanyInfoState
+
+async function refreshApprovalCompanyInfo(coopId) {
     try {
-        localStorage.setItem(`erp_company_info:${coopId}`, JSON.stringify(approvalCompanyInfo));
+        const { data, error } = await _supabase.from('ref_company_info').select('key,value').eq('coop_id', coopId);
+        if (error) throw error;
+        const nextInfo = {};
+        (data || []).forEach((row) => {
+            nextInfo[row.key] = row.value;
+        });
+        applyApprovalCompanyInfoState(nextInfo);
+        writeApprovalCompanyInfoCache(coopId, nextInfo);
+        applyApprovalRuntimeProfileUi();
+        return nextInfo;
+    } catch (error) {
+        console.warn('approval company info refresh failed', error);
+        return null;
+    }
+} // End of refreshApprovalCompanyInfo
+
+function getApprovalEmployeeCacheKey() {
+    const coopId = String(myInfo?.coop_id || '').trim();
+    if (!coopId) return '';
+    return `erp_approval_employees:${coopId}`;
+} // End of getApprovalEmployeeCacheKey
+
+function readApprovalEmployeeCache() {
+    try {
+        const cacheKey = getApprovalEmployeeCacheKey();
+        if (!cacheKey || typeof sessionStorage === 'undefined') return null;
+        const raw = sessionStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || Number(parsed.version || 0) !== APPROVAL_EMPLOYEE_CACHE_VERSION) return null;
+        const savedAtMs = new Date(parsed.saved_at || '').getTime();
+        if (!Number.isFinite(savedAtMs)) return null;
+        if ((Date.now() - savedAtMs) > APPROVAL_EMPLOYEE_CACHE_TTL_MS) return null;
+        return Array.isArray(parsed.data) ? parsed.data : null;
+    } catch (_) {
+        return null;
+    }
+} // End of readApprovalEmployeeCache
+
+function writeApprovalEmployeeCache(employees = []) {
+    try {
+        const cacheKey = getApprovalEmployeeCacheKey();
+        if (!cacheKey || typeof sessionStorage === 'undefined') return;
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+            version: APPROVAL_EMPLOYEE_CACHE_VERSION,
+            saved_at: new Date().toISOString(),
+            data: Array.isArray(employees) ? employees : []
+        }));
     } catch (_) {
         void 0;
     }
-}
+} // End of writeApprovalEmployeeCache
 
-async function detectApprovalLeaveSnapshotSupport() {
-    try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
-            headers: { Accept: 'application/openapi+json' }
-        });
-        if (!response.ok) return false;
-        const openapi = await response.json();
-        return !!openapi?.definitions?.ref_approval?.properties?.leave_snapshot;
-    } catch (_) {
-        return false;
-    }
-}
+function applyApprovalEmployeeData(employees = []) {
+    if (!Array.isArray(employees) || employees.length === 0) return;
+    allUsers = employees;
+    populateDelegationTargets();
+    setDelegationDefaultPeriod();
+} // End of applyApprovalEmployeeData
 
-async function detectApprovalAttendanceSnapshotSupport() {
-    try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
-            headers: { Accept: 'application/openapi+json' }
-        });
-        if (!response.ok) return false;
-        const openapi = await response.json();
-        return !!openapi?.definitions?.ref_approval?.properties?.attendance_snapshot;
-    } catch (_) {
-        return false;
-    }
-}
+async function fetchApprovalEmployeesFromServer() {
+    const { data, error } = await _supabase.from('ref_employees').select('*').order('auth_level', { ascending: true });
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
+} // End of fetchApprovalEmployeesFromServer
 
-async function detectApprovalBusinessTripSnapshotSupport() {
+async function refreshApprovalEmployees(options = {}) {
+    const applyToUi = options?.applyToUi !== false;
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${encodeURIComponent(SUPABASE_KEY)}`, {
-            headers: { Accept: 'application/openapi+json' }
-        });
-        if (!response.ok) return false;
-        const openapi = await response.json();
-        return !!openapi?.definitions?.ref_approval?.properties?.business_trip_snapshot;
-    } catch (_) {
-        return false;
+        const employees = await fetchApprovalEmployeesFromServer();
+        writeApprovalEmployeeCache(employees);
+        if (applyToUi) applyApprovalEmployeeData(employees);
+        return employees;
+    } catch (error) {
+        console.warn('approval employee refresh failed', error);
+        return [];
     }
-}
+} // End of refreshApprovalEmployees
+
+async function loadApprovalEmployees() {
+    const cached = readApprovalEmployeeCache();
+    if (Array.isArray(cached) && cached.length > 0) {
+        applyApprovalEmployeeData(cached);
+        void refreshApprovalEmployees({ applyToUi: true });
+        return cached;
+    }
+    return await refreshApprovalEmployees({ applyToUi: false });
+} // End of loadApprovalEmployees
 
 function parseApprovalOvertimePolicy(rawValue) {
     const base = { ...APPROVAL_DEFAULT_OVERTIME_POLICY };
@@ -2660,6 +3683,83 @@ function getCurrentApprovalCategory() {
     return String(document.getElementById("appCategory")?.value || '').trim();
 }
 
+function scheduleApprovalIdleTask(task) {
+    if (typeof task !== 'function') return;
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(() => task(), { timeout: 1200 });
+        return;
+    }
+    window.setTimeout(task, 300);
+}
+
+function loadApprovalExternalScript(src, marker) {
+    return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[data-approval-loader="${marker}"]`);
+        if (existing) {
+            if (existing.dataset.loaded === 'true') {
+                resolve(true);
+                return;
+            }
+            existing.addEventListener('load', () => resolve(true), { once: true });
+            existing.addEventListener('error', () => reject(new Error(`APPROVAL_SCRIPT_LOAD_FAILED:${marker}`)), { once: true });
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.dataset.approvalLoader = marker;
+        script.addEventListener('load', () => {
+            script.dataset.loaded = 'true';
+            resolve(true);
+        }, { once: true });
+        script.addEventListener('error', () => reject(new Error(`APPROVAL_SCRIPT_LOAD_FAILED:${marker}`)), { once: true });
+        document.head.appendChild(script);
+    });
+}
+
+function warmApprovalQuillAssets() {
+    if (typeof window.Quill === 'function') {
+        if (String(getCurrentApprovalCategory() || '').trim() === '일반품의') {
+            ensureGeneralProposalQuill();
+            syncApprovalVisualSurface('일반품의');
+        }
+        return Promise.resolve(true);
+    }
+    if (approvalQuillLoaderPromise) return approvalQuillLoaderPromise;
+    approvalQuillLoaderPromise = loadApprovalExternalScript(APPROVAL_QUILL_SCRIPT_URL, 'quill')
+        .then(() => {
+            if (typeof window.Quill !== 'function') throw new Error('APPROVAL_QUILL_UNAVAILABLE');
+            if (String(getCurrentApprovalCategory() || '').trim() === '일반품의') {
+                ensureGeneralProposalQuill();
+                syncApprovalVisualSurface('일반품의');
+                if (approvalEditorMode === 'visual') window.switchApprovalEditorTab('visual');
+            }
+            return true;
+        })
+        .catch((error) => {
+            approvalQuillLoaderPromise = null;
+            console.warn('approval quill load failed', error);
+            return false;
+        });
+    return approvalQuillLoaderPromise;
+}
+
+async function ensureApprovalHtml2PdfReady() {
+    if (typeof window.html2pdf === 'function') return true;
+    if (!approvalHtml2PdfLoaderPromise) {
+        approvalHtml2PdfLoaderPromise = loadApprovalExternalScript(APPROVAL_HTML2PDF_SCRIPT_URL, 'html2pdf')
+            .then(() => {
+                if (typeof window.html2pdf !== 'function') throw new Error('APPROVAL_HTML2PDF_UNAVAILABLE');
+                return true;
+            })
+            .catch((error) => {
+                approvalHtml2PdfLoaderPromise = null;
+                throw error;
+            });
+    }
+    return await approvalHtml2PdfLoaderPromise;
+}
+
 function hasGeneralProposalEnhancedEditor(docType) {
     return String(docType || '').trim() === '일반품의' && typeof window.Quill === 'function';
 }
@@ -3133,7 +4233,9 @@ function initializeApprovalEditor() {
     });
 
     syncApprovalVisualFromSource();
-    ensureGeneralProposalQuill();
+    scheduleApprovalIdleTask(() => {
+        void warmApprovalQuillAssets();
+    });
 }
 
 function mapApprovalDocTypeToMainCategory(docType) {
@@ -3779,9 +4881,14 @@ function updateAttachmentDropZoneUi() {
     const textEl = document.getElementById('attachmentDropZoneText');
     const input = document.getElementById('attachFile');
     if (!dropZone || !textEl || !input) return;
-    const count = Array.from(input.files || []).length;
-    if (count > 0) {
-        textEl.textContent = `${count}개 파일이 첨부되었습니다. 파일을 더 끌어놓으면 기존 첨부에 추가됩니다.`;
+    const localCount = Array.from(input.files || []).length;
+    const savedCount = approvalDraftAttachmentRefs.length;
+    const totalCount = localCount + savedCount;
+    if (totalCount > 0) {
+        const parts = [];
+        if (savedCount > 0) parts.push(`저장된 첨부 ${savedCount}건`);
+        if (localCount > 0) parts.push(`이번 기기에서 선택한 첨부 ${localCount}건`);
+        textEl.textContent = `${parts.join(' / ')}. 파일을 더 끌어놓으면 기존 첨부에 추가됩니다.`;
     } else {
         textEl.textContent = ATTACHMENT_DROP_ZONE_DEFAULT_TEXT;
     }
@@ -3847,6 +4954,7 @@ window.onload = async function() {
     evidenceUploadModalInstance = new bootstrap.Modal(document.getElementById('evidenceUploadModal'));
     appDescPreviewModalInstance = new bootstrap.Modal(document.getElementById('appDescPreviewModal'));
     approvalTemplateModalInstance = new bootstrap.Modal(document.getElementById('approvalTemplateModal'));
+    approvalDraftModalInstance = new bootstrap.Modal(document.getElementById('approvalDraftModal'));
     attachmentPreviewModalInstance = new bootstrap.Modal(attachmentPreviewModalEl);
     delegationModalInstance = new bootstrap.Modal(document.getElementById('delegationModal'));
     bindModalStackingBehavior();
@@ -3883,7 +4991,30 @@ window.onload = async function() {
         });
         return;
     }
-    permissionSet = await loadPermissions(myInfo);
+    myAuthUserId = String(authData.user.id || '').trim();
+    applyChairmanApprovalTabLayout();
+    const cachedApprovalSummary = readApprovalSummaryCache();
+    applyApprovalSummaryCacheToUi(cachedApprovalSummary);
+    const cachedInitialTab = getCachedApprovalInitialTab(cachedApprovalSummary);
+    const optimisticInitialTab = cachedInitialTab === 'todo' ? 'draft' : cachedInitialTab;
+    switchTab(optimisticInitialTab, { skipLoad: true, skipCacheWrite: true });
+    approvalBootstrapReady = false;
+
+    const permissionsPromise = loadPermissions(myInfo);
+    const runtimeGatePromise = window.ErpRuntimeGuard.enforce(_supabase, {
+        moduleKey: 'approval',
+        moduleLabel: '전자결재',
+        alertFn: function(msg) { showAlert(msg); },
+        redirectUrl: 'index.html'
+    });
+    const bootstrapSummaryPromise = fetchApprovalBootstrapSummary(cachedApprovalSummary);
+
+    const [loadedPermissionSet, approvalRuntimeGate, bootstrapSummary] = await Promise.all([
+        permissionsPromise,
+        runtimeGatePromise,
+        bootstrapSummaryPromise
+    ]);
+    permissionSet = loadedPermissionSet;
     localStorage.setItem('erp_permissions', JSON.stringify(Array.from(permissionSet)));
     const hasApprovalView = permissionSet.size > 0
         ? permissionSet.has('approval.view')
@@ -3893,29 +5024,29 @@ window.onload = async function() {
         setTimeout(() => location.href = 'index.html', 1200);
         return;
     }
-    const approvalRuntimeGate = await window.ErpRuntimeGuard.enforce(_supabase, {
-        moduleKey: 'approval',
-        moduleLabel: '전자결재',
-        alertFn: function(msg) { showAlert(msg); },
-        redirectUrl: 'index.html'
-    });
     if (!approvalRuntimeGate.ok) return;
     approvalRuntimeProfile = String(approvalRuntimeGate.runtime?.runtime_profile || 'legacy_full');
-    await loadApprovalCompanyInfo();
+    approvalBootstrapReady = true;
+    applyApprovalBootstrapSummary(bootstrapSummary);
     applyApprovalRuntimeProfileUi();
 
-    // [로직] 직원 목록 로드 (1급 이사장 -> 9급 사원)
-    const { data } = await _supabase.from('ref_employees').select('*').order('auth_level', {ascending: true});
-    if(data) allUsers = data;
-    populateDelegationTargets();
-    setDelegationDefaultPeriod();
-    if (isApprovalWorkforceLiteProfile()) {
-        await loadDelegationContext({ refreshTodo: false });
-    }
-    applyChairmanApprovalTabLayout();
-    await loadHistoryList({ render: false });
-    await loadTodoList({ render: false });
-    switchTab(getApprovalInitialTab());
+    const companyInfoPromise = loadApprovalCompanyInfo();
+    const employeePromise = loadApprovalEmployees();
+
+    const resolvedInitialTab = getCachedApprovalInitialTab({
+        ...normalizeApprovalBootstrapSummary(cachedApprovalSummary),
+        ...normalizeApprovalBootstrapSummary(bootstrapSummary)
+    });
+    const initialTab = getApprovalInitialTab(resolvedInitialTab);
+    switchTab(initialTab, { skipLoad: true });
+    await loadApprovalTabData(initialTab, { render: true });
+
+    await companyInfoPromise;
+    applyApprovalRuntimeProfileUi();
+
+    const employeeData = await employeePromise;
+    applyApprovalEmployeeData(employeeData);
+    scheduleApprovalBackgroundRefresh(initialTab);
 
     const payrollMonthInput = document.getElementById("payrollMonth");
     if (payrollMonthInput) payrollMonthInput.value = formatApprovalKstMonth();
@@ -3964,6 +5095,13 @@ window.onload = async function() {
             if (metaEl) metaEl.textContent = '';
         });
     }
+    const approvalDraftEl = document.getElementById('approvalDraftModal');
+    if (approvalDraftEl) {
+        approvalDraftEl.addEventListener('hidden.bs.modal', () => {
+            const listEl = document.getElementById('approvalDraftList');
+            if (listEl) listEl.innerHTML = '';
+        });
+    }
 
     initializeApprovalEditor();
     calculateLeave(); // 연차 계산 (대리상신 고려하여 함수 분리됨)
@@ -3987,6 +5125,8 @@ window.onload = async function() {
     }
     applyApprovalRuntimeProfileUi();
     handleCategoryChange(); // UI 초기화
+    syncApprovalDraftStatusText();
+    updateFileList();
     await openApprovalDocFromLocationIfNeeded();
 };
 
@@ -4053,13 +5193,171 @@ function isSubmittedApprovalPending(doc) {
         && mapHistoryStatusGroup(safeDoc.status) === 'PENDING';
 } // End of isSubmittedApprovalPending
 
+function getApprovalSummaryCacheKey() {
+    const coopId = String(myInfo?.coop_id || '').trim();
+    const empId = String(myInfo?.emp_id || '').trim();
+    if (!coopId || !empId) return '';
+    return `erp_approval_summary:${coopId}:${empId}`;
+} // End of getApprovalSummaryCacheKey
+
+function readApprovalSummaryCache() {
+    try {
+        const cacheKey = getApprovalSummaryCacheKey();
+        if (!cacheKey || typeof sessionStorage === 'undefined') return null;
+        const raw = sessionStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || Number(parsed.version || 0) !== APPROVAL_SUMMARY_CACHE_VERSION) return null;
+        const savedAtMs = new Date(parsed.saved_at || '').getTime();
+        if (!Number.isFinite(savedAtMs)) return null;
+        if ((Date.now() - savedAtMs) > APPROVAL_SUMMARY_CACHE_TTL_MS) return null;
+        return {
+            version: APPROVAL_SUMMARY_CACHE_VERSION,
+            saved_at: parsed.saved_at,
+            active_tab: String(parsed.active_tab || '').trim(),
+            todo_count: Math.max(0, Number(parsed.todo_count || 0) || 0),
+            pending_count: Math.max(0, Number(parsed.pending_count || 0) || 0),
+            history_count: Math.max(0, Number(parsed.history_count || 0) || 0)
+        };
+    } catch (_) {
+        return null;
+    }
+} // End of readApprovalSummaryCache
+
+function writeApprovalSummaryCache(overrides = {}) {
+    try {
+        const cacheKey = getApprovalSummaryCacheKey();
+        if (!cacheKey || typeof sessionStorage === 'undefined') return;
+        const nextValue = {
+            version: APPROVAL_SUMMARY_CACHE_VERSION,
+            saved_at: new Date().toISOString(),
+            active_tab: String(overrides.active_tab || activeApprovalTab || 'draft').trim() || 'draft',
+            todo_count: Math.max(0, Number(overrides.todo_count ?? (Array.isArray(todoCache) ? todoCache.length : 0)) || 0),
+            pending_count: Math.max(0, Number(overrides.pending_count ?? (Array.isArray(pendingSubmissionCache) ? pendingSubmissionCache.length : 0)) || 0),
+            history_count: Math.max(0, Number(overrides.history_count ?? (Array.isArray(historyCache) ? historyCache.length : 0)) || 0)
+        };
+        sessionStorage.setItem(cacheKey, JSON.stringify(nextValue));
+    } catch (_) {
+        // noop
+    }
+} // End of writeApprovalSummaryCache
+
+function normalizeApprovalBootstrapSummary(summary = null, fallback = null) {
+    const source = summary && typeof summary === 'object' ? summary : {};
+    const fallbackSource = fallback && typeof fallback === 'object' ? fallback : {};
+    const delegatedIds = Array.isArray(source.delegated_approver_emp_ids)
+        ? source.delegated_approver_emp_ids
+        : (Array.isArray(fallbackSource.delegated_approver_emp_ids) ? fallbackSource.delegated_approver_emp_ids : []);
+    return {
+        todo_count: Math.max(0, Number(source.todo_count ?? fallbackSource.todo_count ?? 0) || 0),
+        pending_count: Math.max(0, Number(source.pending_count ?? fallbackSource.pending_count ?? 0) || 0),
+        history_count: Math.max(0, Number(source.history_count ?? fallbackSource.history_count ?? 0) || 0),
+        active_tab: String(source.active_tab || fallbackSource.active_tab || '').trim(),
+        delegated_approver_emp_ids: delegatedIds
+            .map((item) => String(item || '').trim())
+            .filter(Boolean),
+        generated_at: String(source.generated_at || fallbackSource.generated_at || '').trim()
+    };
+} // End of normalizeApprovalBootstrapSummary
+
+function setApprovalTodoTabVisible(isVisible) {
+    const tabBtn = document.getElementById('tab2');
+    const navItem = tabBtn?.closest('.nav-item');
+    if (!tabBtn || !navItem) return;
+    navItem.classList.toggle('hidden', !isVisible);
+} // End of setApprovalTodoTabVisible
+
+function setApprovalTodoTabInteractive(isInteractive, tooltipText = '') {
+    const tabBtn = document.getElementById('tab2');
+    if (!tabBtn) return;
+    const disabled = !isInteractive;
+    tabBtn.disabled = disabled;
+    tabBtn.classList.toggle('disabled', disabled);
+    tabBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    if (tooltipText) tabBtn.title = tooltipText;
+    else tabBtn.removeAttribute('title');
+} // End of setApprovalTodoTabInteractive
+
+function setApprovalTabBootMaskVisible(isVisible) {
+    const skeleton = document.getElementById('approvalTabBootSkeleton');
+    const nav = document.getElementById('approvalTabNav');
+    if (skeleton) skeleton.classList.toggle('hidden', !isVisible);
+    if (nav) nav.classList.toggle('hidden', isVisible);
+} // End of setApprovalTabBootMaskVisible
+
+function setApprovalTodoTabBootState(summary = null, options = {}) {
+    const safeSummary = normalizeApprovalBootstrapSummary(summary);
+    const isPending = options.pending === true;
+    const preserveVisibleWhilePending = options.preserveVisibleWhilePending === true;
+    const hasTodo = safeSummary.todo_count > 0;
+    const shouldShow = preserveVisibleWhilePending ? (hasTodo || activeApprovalTab === 'todo') : hasTodo;
+    setApprovalTodoTabVisible(shouldShow);
+    setApprovalTodoTabInteractive(!isPending && shouldShow, isPending ? '결재 대기 문서를 확인하는 중입니다.' : '');
+} // End of setApprovalTodoTabBootState
+
+function applyApprovalSummaryCacheToUi(summary = null) {
+    setApprovalTodoTabBootState(summary, { pending: true, preserveVisibleWhilePending: true });
+    setApprovalTabBootMaskVisible(true);
+} // End of applyApprovalSummaryCacheToUi
+
+function getCachedApprovalInitialTab(summary = null) {
+    const safeSummary = normalizeApprovalBootstrapSummary(summary);
+    const preferredTab = String(safeSummary?.active_tab || '').trim();
+    const hasTodo = Number(safeSummary?.todo_count || 0) > 0;
+    const hasPending = Number(safeSummary?.pending_count || 0) > 0;
+    const hasHistory = Number(safeSummary?.history_count || 0) > 0;
+
+    if (preferredTab === 'todo' && hasTodo) return 'todo';
+    if (preferredTab === 'pending' && hasPending) return 'pending';
+    if (preferredTab === 'history' && (hasHistory || hasPending)) return 'history';
+    if (hasTodo) return 'todo';
+    if (hasPending) return 'pending';
+    if (preferredTab === 'history' && hasHistory) return 'history';
+    return 'draft';
+} // End of getCachedApprovalInitialTab
+
+function hasFreshApprovalData(kind) {
+    const loadedAt = Number(approvalDataLoadedAt?.[kind] || 0);
+    if (!Number.isFinite(loadedAt) || loadedAt <= 0) return false;
+    return (Date.now() - loadedAt) <= APPROVAL_DATA_CACHE_TTL_MS;
+} // End of hasFreshApprovalData
+
+function markApprovalDataLoaded(kind) {
+    approvalDataLoadedAt[kind] = Date.now();
+} // End of markApprovalDataLoaded
+
+async function fetchApprovalBootstrapSummary(fallbackSummary = null) {
+    const fallback = normalizeApprovalBootstrapSummary(fallbackSummary);
+    try {
+        const { data, error } = await _supabase.rpc('erp_get_approval_bootstrap_summary');
+        if (error) throw error;
+        return normalizeApprovalBootstrapSummary(data, fallback);
+    } catch (error) {
+        console.warn('approval bootstrap summary fallback', error);
+        return fallback;
+    }
+} // End of fetchApprovalBootstrapSummary
+
+function applyApprovalBootstrapSummary(summary = null) {
+    approvalBootstrapSummary = normalizeApprovalBootstrapSummary(summary);
+    delegatedApproverEmpIds = approvalBootstrapSummary.delegated_approver_emp_ids.slice();
+    setApprovalTodoTabBootState(approvalBootstrapSummary, { pending: !approvalBootstrapReady, preserveVisibleWhilePending: true });
+    setApprovalTabBootMaskVisible(!approvalBootstrapReady);
+    writeApprovalSummaryCache({
+        todo_count: approvalBootstrapSummary.todo_count,
+        pending_count: approvalBootstrapSummary.pending_count,
+        history_count: approvalBootstrapSummary.history_count
+    });
+} // End of applyApprovalBootstrapSummary
+
 function syncTodoTabVisibility() {
     const tabBtn = document.getElementById('tab2');
     const navItem = tabBtn?.closest('.nav-item');
     if (!tabBtn || !navItem) return;
 
-    const canSeeTodo = canPerform('approval.process') && Array.isArray(todoCache) && todoCache.length > 0;
-    navItem.classList.toggle('hidden', !canSeeTodo);
+    const canSeeTodo = Array.isArray(todoCache) && todoCache.length > 0;
+    setApprovalTodoTabVisible(canSeeTodo);
+    setApprovalTodoTabInteractive(approvalBootstrapReady && canProcessApprovals() && canSeeTodo);
 
     if (!canSeeTodo && tabBtn.classList.contains('active')) {
         if (pendingSubmissionCache.length > 0) {
@@ -4070,8 +5368,21 @@ function syncTodoTabVisibility() {
     }
 } // End of syncTodoTabVisibility
 
-function getApprovalInitialTab() {
-    if (canPerform('approval.process') && Array.isArray(todoCache) && todoCache.length > 0) {
+function getApprovalInitialTab(preferredTab = '') {
+    const safePreferredTab = String(preferredTab || '').trim();
+    if (safePreferredTab === 'todo' && canProcessApprovals()) {
+        return 'todo';
+    }
+    if (safePreferredTab === 'pending') {
+        return 'pending';
+    }
+    if (safePreferredTab === 'history') {
+        return 'history';
+    }
+    if (safePreferredTab === 'draft') {
+        return 'draft';
+    }
+    if (Array.isArray(todoCache) && todoCache.length > 0) {
         return 'todo';
     }
     if (Array.isArray(pendingSubmissionCache) && pendingSubmissionCache.length > 0) {
@@ -4079,6 +5390,75 @@ function getApprovalInitialTab() {
     }
     return 'draft';
 } // End of getApprovalInitialTab
+
+async function ensureTodoListLoaded(options = {}) {
+    const shouldRender = options?.render !== false;
+    const force = options?.force === true;
+    if (!force && hasFreshApprovalData('todo')) {
+        syncTodoTabVisibility();
+        if (shouldRender) {
+            const el = document.getElementById('todoList');
+            if (el) renderDocs(el, todoCache, true);
+        }
+        return todoCache;
+    }
+    const list = await loadTodoList({ render: shouldRender });
+    markApprovalDataLoaded('todo');
+    writeApprovalSummaryCache({ todo_count: Array.isArray(list) ? list.length : 0 });
+    return list;
+} // End of ensureTodoListLoaded
+
+async function ensureHistoryListLoaded(options = {}) {
+    const shouldRender = options?.render !== false;
+    const force = options?.force === true;
+    if (!force && hasFreshApprovalData('history')) {
+        if (shouldRender) {
+            renderPendingList();
+            renderFilteredHistoryList();
+        }
+        return {
+            pendingSubmissionCache,
+            historyCache
+        };
+    }
+    const result = await loadHistoryList({ render: shouldRender });
+    markApprovalDataLoaded('history');
+    writeApprovalSummaryCache({
+        pending_count: Array.isArray(pendingSubmissionCache) ? pendingSubmissionCache.length : 0,
+        history_count: Array.isArray(historyCache) ? historyCache.length : 0
+    });
+    return result;
+} // End of ensureHistoryListLoaded
+
+async function loadApprovalTabData(tab, options = {}) {
+    if (tab === 'todo') {
+        return ensureTodoListLoaded(options);
+    }
+    if (tab === 'pending' || tab === 'history') {
+        return ensureHistoryListLoaded(options);
+    }
+    return null;
+} // End of loadApprovalTabData
+
+function scheduleApprovalBackgroundRefresh(initialTab) {
+    window.requestAnimationFrame(() => {
+        window.setTimeout(async () => {
+            try {
+                if (isApprovalWorkforceLiteProfile() && (delegationIncoming.length === 0 || delegationOutgoing === null) && !delegationRpcUnavailable) {
+                    await loadDelegationContext({ refreshTodo: false });
+                }
+                if (initialTab !== 'pending' && initialTab !== 'history') {
+                    await ensureHistoryListLoaded({ render: false, force: true });
+                }
+                if (initialTab !== 'todo') {
+                    await ensureTodoListLoaded({ render: false, force: true });
+                }
+            } catch (error) {
+                console.warn('approval background refresh failed', error);
+            }
+        }, 0);
+    });
+} // End of scheduleApprovalBackgroundRefresh
 
 function canUseSalaryExpense() {
     const role = String(myInfo?.role || '').toLowerCase();
@@ -4564,25 +5944,31 @@ function decorateTodoDelegation(doc) {
     return doc;
 } // End of decorateTodoDelegation
 
-function switchTab(tab) {
+function switchTab(tab, options = {}) {
+    activeApprovalTab = String(tab || 'draft').trim() || 'draft';
     document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    const shouldLoad = options?.skipLoad !== true;
+    const shouldWriteCache = options?.skipCacheWrite !== true;
     if(tab==='draft') { document.getElementById('view-draft').classList.remove('hidden'); document.getElementById('tab1').classList.add('active'); }
     else if(tab==='todo') { 
         if (!canProcessApprovals()) { showAlert("접근 권한이 없습니다."); switchTab('draft'); return; }
         document.getElementById('view-todo').classList.remove('hidden'); 
         document.getElementById('tab2').classList.add('active'); 
-        loadTodoList(); 
+        if (shouldLoad) void ensureTodoListLoaded(); 
     }
     else if (tab === 'pending') {
         document.getElementById('view-pending').classList.remove('hidden');
         document.getElementById('tab3').classList.add('active');
-        loadHistoryList();
+        if (shouldLoad) void ensureHistoryListLoaded();
     }
     else {
         document.getElementById('view-history').classList.remove('hidden');
         document.getElementById('tab4').classList.add('active');
-        loadHistoryList();
+        if (shouldLoad) void ensureHistoryListLoaded();
+    }
+    if (shouldWriteCache) {
+        writeApprovalSummaryCache({ active_tab: activeApprovalTab });
     }
 }
 
@@ -4863,6 +6249,7 @@ function handleCategoryChange() {
         }
     }
     else if (type === '일반품의') {
+        void warmApprovalQuillAssets();
         divProposalSubject.classList.remove("hidden");
         btnAppDescPreview.classList.remove("hidden");
         appDescHtmlHelp.classList.remove("hidden");
@@ -5794,13 +7181,14 @@ async function handleDraftSubmit(e) {
     if (!isApprovalWorkforceLiteProfile() && mainType === '휴가') {
         const lType = document.getElementById("leaveTypeSelect").value;
         if ((lType==='경조사' || lType==='병가') && !isProxy) {
-            if(document.getElementById("attachFile").files.length === 0) return showAlert("증빙서류 필수입니다.");
+            const totalAttachmentCount = Array.from(document.getElementById("attachFile").files || []).length + approvalDraftAttachmentRefs.length;
+            if (totalAttachmentCount === 0) return showAlert("증빙서류 필수입니다.");
         }
     }
 
     // 첨부파일 형식/용량 검증
     const fileInput = document.getElementById("attachFile");
-    if (isApprovalDocRuleEnabled(mainType, 'require_attachment') && fileInput.files.length === 0) {
+    if (isApprovalDocRuleEnabled(mainType, 'require_attachment') && (fileInput.files.length + approvalDraftAttachmentRefs.length) === 0) {
         return showAlert('첨부파일이 필수입니다.');
     }
     const validation = validateAttachments(fileInput.files);
@@ -5815,79 +7203,85 @@ async function handleDraftSubmit(e) {
 
     // 3. 파일 업로드
     const uploadedUrls = [];
+    const uploadRollbackItems = [];
     const isSalaryExpenseDoc = mainType === '지출결의' && expenseSubType === '급여';
-	    for (let i = 0; i < fileInput.files.length; i++) {
-	        const file = fileInput.files[i];
-	        const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-	        const { data, error } = await _supabase.storage.from('attachments').upload(safeName, file);
-        if (error) {
-            showAlert("파일 오류: " + error.message);
-            btn.disabled = false;
-            btn.innerText = "상신하기";
-	            return;
-	        }
-	        // Store a storage reference (not a public URL). Download uses signed URLs at view time.
-	        uploadedUrls.push(`attachments/${safeName}?display_name=${encodeURIComponent(file.name || safeName)}`);
-	    }
-    if (isSalaryExpenseDoc && salaryExpenseState?.loaded) {
-        if (!window.SalaryLedgerModule) {
-            showAlert("급여대장 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
-            btn.disabled = false;
-            btn.innerText = "상신하기";
-            return;
-        }
-        const salaryLedgerFileName = window.SalaryLedgerModule.makeFileName(payrollMonth);
-        let ledgerPdfBlob = null;
-        try {
-            const ledgerState = window.SalaryLedgerModule.createStateFromRows(
-                salaryExpenseState.rows || [],
-                payrollMonth || salaryExpenseState.yearMonth || ''
-            );
-            let companyInfo = {};
-            try {
-                const coopId = String(myInfo?.coop_id || '').trim();
-                const companyInfoKey = coopId ? `erp_company_info:${coopId}` : 'erp_company_info';
-                companyInfo = JSON.parse(localStorage.getItem(companyInfoKey) || '{}') || {};
-            } catch (_) {
-                companyInfo = {};
-            }
-            const ymLabel = window.SalaryLedgerModule.formatYearMonthLabel(payrollMonth);
-            ledgerPdfBlob = await window.SalaryLedgerModule.generatePdfBlob(ledgerState, {
-                fileName: salaryLedgerFileName,
-                title: `${ymLabel} 급여대장`,
-                logoUrl: companyInfo.logo_horizontal_url || "",
-                chairmanName: companyInfo.chairman_name || companyInfo.ceoName || "이사장",
-                showApprovalBox: true,
-                showPrintDate: true,
-                footerText: 'ERP 급여관리 출력본',
-                marginMm: 6
-            });
-        } catch (pdfErr) {
-            showAlert("급여대장 PDF 생성 실패: " + (pdfErr?.message || pdfErr));
-            btn.disabled = false;
-            btn.innerText = "상신하기";
-            return;
-        }
-        if (!(ledgerPdfBlob instanceof Blob) || ledgerPdfBlob.size === 0) {
-            showAlert("급여대장 PDF 생성 결과가 비어 있습니다.");
-            btn.disabled = false;
-            btn.innerText = "상신하기";
-            return;
+    try {
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const file = fileInput.files[i];
+            const safeName = `${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+            const { error } = await _supabase.storage.from('attachments').upload(safeName, file);
+            if (error) throw error;
+            const rawRef = `attachments/${safeName}?display_name=${encodeURIComponent(file.name || safeName)}`;
+            uploadedUrls.push(rawRef);
+            uploadRollbackItems.push({ rawRef });
         }
 
-        const ymTag = String(payrollMonth || '').replace(/[^0-9]/g, '') || String(formatApprovalKstMonth() || '').replace(/[^0-9]/g, '');
-        const salaryStoragePath = `${crypto.randomUUID()}/salary_ledger_${ymTag || Date.now()}.pdf`;
-        const { error: salaryAttachErr } = await _supabase.storage
-            .from('attachments')
-            .upload(salaryStoragePath, ledgerPdfBlob, { contentType: 'application/pdf' });
-	        if (salaryAttachErr) {
-	            showAlert("급여대장 첨부 업로드 실패: " + salaryAttachErr.message);
-	            btn.disabled = false;
-	            btn.innerText = "상신하기";
-	            return;
-	        }
-	        uploadedUrls.push(`attachments/${salaryStoragePath}?display_name=${encodeURIComponent(salaryLedgerFileName)}`);
-	    }
+        if (approvalDraftAttachmentRefs.length > 0) {
+            const copiedAttachments = await copyApprovalDraftAttachmentsForSubmit(approvalDraftAttachmentRefs);
+            copiedAttachments.fileRefs.forEach((rawRef) => {
+                uploadedUrls.push(rawRef);
+                uploadRollbackItems.push({ rawRef });
+            });
+        }
+
+        if (isSalaryExpenseDoc && salaryExpenseState?.loaded) {
+            if (!window.SalaryLedgerModule) {
+                throw new Error("급여대장 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+            }
+            await ensureApprovalHtml2PdfReady();
+            const salaryLedgerFileName = window.SalaryLedgerModule.makeFileName(payrollMonth);
+            let ledgerPdfBlob = null;
+            try {
+                const ledgerState = window.SalaryLedgerModule.createStateFromRows(
+                    salaryExpenseState.rows || [],
+                    payrollMonth || salaryExpenseState.yearMonth || ''
+                );
+                let companyInfo = {};
+                try {
+                    const coopId = String(myInfo?.coop_id || '').trim();
+                    companyInfo = readApprovalCompanyInfoCache(coopId, { allowStale: true }) || {};
+                } catch (_) {
+                    companyInfo = {};
+                }
+                const ymLabel = window.SalaryLedgerModule.formatYearMonthLabel(payrollMonth);
+                ledgerPdfBlob = await window.SalaryLedgerModule.generatePdfBlob(ledgerState, {
+                    fileName: salaryLedgerFileName,
+                    title: `${ymLabel} 급여대장`,
+                    logoUrl: companyInfo.logo_horizontal_url || "",
+                    chairmanName: companyInfo.chairman_name || companyInfo.ceoName || "이사장",
+                    showApprovalBox: true,
+                    showPrintDate: true,
+                    footerText: 'ERP 급여관리 출력본',
+                    marginMm: 6
+                });
+            } catch (pdfErr) {
+                throw new Error("급여대장 PDF 생성 실패: " + (pdfErr?.message || pdfErr));
+            }
+            if (!(ledgerPdfBlob instanceof Blob) || ledgerPdfBlob.size === 0) {
+                throw new Error("급여대장 PDF 생성 결과가 비어 있습니다.");
+            }
+
+            const ymTag = String(payrollMonth || '').replace(/[^0-9]/g, '') || String(formatApprovalKstMonth() || '').replace(/[^0-9]/g, '');
+            const salaryStoragePath = `${crypto.randomUUID()}/salary_ledger_${ymTag || Date.now()}.pdf`;
+            const { error: salaryAttachErr } = await _supabase.storage
+                .from('attachments')
+                .upload(salaryStoragePath, ledgerPdfBlob, { contentType: 'application/pdf' });
+            if (salaryAttachErr) {
+                throw new Error("급여대장 첨부 업로드 실패: " + salaryAttachErr.message);
+            }
+            const rawRef = `attachments/${salaryStoragePath}?display_name=${encodeURIComponent(salaryLedgerFileName)}`;
+            uploadedUrls.push(rawRef);
+            uploadRollbackItems.push({ rawRef });
+        }
+    } catch (error) {
+        try {
+            await deleteDraftAttachmentObjects(uploadRollbackItems);
+        } catch (_) { /* noop */ }
+        showAlert("파일 오류: " + (error?.message || error));
+        btn.disabled = false;
+        btn.innerText = "상신하기";
+        return;
+    }
 
     const relatedDocId = document.getElementById("relDocId").value || null;
     const allowHtmlContent = isApprovalHtmlEditorType(mainType);
@@ -5947,6 +7341,9 @@ async function handleDraftSubmit(e) {
         const insertResult = await insertApprovalWithDocNoRetry(approvalInsertPayload);
         insertedDoc = insertResult.insertedDoc;
     } catch (error) {
+        try {
+            await deleteDraftAttachmentObjects(uploadRollbackItems);
+        } catch (_) { /* noop */ }
         showAlert("상신 실패: " + error.message);
         btn.disabled = false;
         btn.innerText = "상신하기";
@@ -5962,6 +7359,13 @@ async function handleDraftSubmit(e) {
         });
         const notificationResult = await createNotification(finalApprovers[0]?.emp_id, '결재 요청', `${title} 문서가 상신되었습니다.`, `approval.html?doc=${docId}`, { doc_id: docId });
         insertedDoc._notificationResult = notificationResult;
+        if (currentApprovalDraftId) {
+            try {
+                await deleteApprovalDraft(currentApprovalDraftId, { skipConfirm: true, silent: true });
+            } catch (cleanupError) {
+                console.warn('approval draft cleanup failed after submit', cleanupError);
+            }
+        }
     }
     const firstApprover = finalApprovers[0];
     const firstApproverName = firstApprover ? `${firstApprover.emp_name} ${firstApprover.position || ''}`.trim() : '-';
@@ -6461,7 +7865,7 @@ async function loadTodoList(options = {}) {
     const el = document.getElementById("todoList");
     const shouldRender = options?.render !== false;
     if (el && shouldRender) el.innerHTML = 'loading...';
-    if (!canPerform('approval.process')) {
+    if (!canPerform('approval.process') && delegatedApproverEmpIds.length === 0) {
         await loadDelegationContext({ refreshTodo: false });
     }
     const approverIds = Array.from(new Set(
@@ -6471,7 +7875,9 @@ async function loadTodoList(options = {}) {
     ));
     if (approverIds.length === 0) {
         todoCache = [];
+        markApprovalDataLoaded('todo');
         syncTodoTabVisibility();
+        writeApprovalSummaryCache({ todo_count: 0 });
         if (el && shouldRender) renderDocs(el, [], true);
         return todoCache;
     }
@@ -6504,7 +7910,9 @@ async function loadTodoList(options = {}) {
         });
     const list = Array.from(todoMap.values()).sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0));
     todoCache = list;
+    markApprovalDataLoaded('todo');
     syncTodoTabVisibility();
+    writeApprovalSummaryCache({ todo_count: list.length });
     if (el && shouldRender) renderDocs(el, list, true);
     return todoCache;
 }
@@ -6730,6 +8138,11 @@ async function loadHistoryList(options = {}) {
         ]);
         pendingSubmissionCache = pendingDocs;
         historyCache = recentHistoryDocs;
+        markApprovalDataLoaded('history');
+        writeApprovalSummaryCache({
+            pending_count: pendingDocs.length,
+            history_count: recentHistoryDocs.length
+        });
     } catch (error) {
         if (shouldRender) setHistoryListLoading('불러오기 실패');
         showAlert("문서 보관함 조회 실패: " + (error?.message || error));
@@ -7087,14 +8500,44 @@ function updateFileList() {
     area.innerHTML = "";
     const input = document.getElementById("attachFile");
     const files = Array.from(input?.files || []);
+    const savedAttachments = approvalDraftAttachmentRefs
+        .map((item) => normalizeApprovalDraftAttachmentItem(item))
+        .filter(Boolean);
+
+    if (savedAttachments.length === 0 && files.length === 0) {
+        area.innerHTML = '<div class="small text-muted">선택된 첨부가 없습니다.</div>';
+        updateAttachmentDropZoneUi();
+        return;
+    }
+
+    savedAttachments.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "file-item";
+        const canPreview = canPreviewAttachment(item.displayName || item.rawRef || '');
+        const sizeLabel = item.size > 0 ? ` · ${formatAttachmentSize(item.size)}` : '';
+        row.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center gap-2">
+                <span>☁️ ${escapeHtml(item.displayName || '저장된 첨부')} <span class="text-muted small">(서버 임시저장${escapeHtml(sizeLabel)})</span></span>
+                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                    ${canPreview ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openSavedApprovalDraftAttachmentPreview(${idx})">바로보기</button>` : ''}
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSavedApprovalDraftAttachment(${idx})">삭제</button>
+                </div>
+            </div>
+        `;
+        area.appendChild(row);
+    });
+
     files.forEach((f, idx) => {
         const item = document.createElement("div");
         item.className = "file-item";
         const canPreview = canPreviewAttachment(f.name);
         item.innerHTML = `
             <div class="d-flex justify-content-between align-items-center gap-2">
-                <span>📎 ${escapeHtml(f.name)}</span>
-                ${canPreview ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openLocalAttachmentPreview(${idx})">바로보기</button>` : ''}
+                <span>📎 ${escapeHtml(f.name)} <span class="text-muted small">(이 기기에서만 선택됨${escapeHtml(f.size ? ` · ${formatAttachmentSize(f.size)}` : '')})</span></span>
+                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                    ${canPreview ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openLocalAttachmentPreview(${idx})">바로보기</button>` : ''}
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeLocalAttachment(${idx})">제외</button>
+                </div>
             </div>
         `;
         area.appendChild(item);
