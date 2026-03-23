@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.11 -->
+<!-- Version: v1.0.14 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.11 | index.html');</script>
+  <script>console.log('[Version] v1.0.14 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -29,7 +29,6 @@
     .profile-box { background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: left; }
     .btn-kakao { background: #FEE500; border: none; border-radius: 10px; font-weight: bold; color: #3a1d1d; }
     .btn-kakao:hover { background: #f4dc00; color: #3a1d1d; }
-    .notif-badge { display: inline-block; min-width: 20px; text-align: center; }
     .guard-hint { display: none; white-space: pre-wrap; }
     .menu-order-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e9ecef; border-radius: 10px; background: #fff; }
     .menu-order-item strong { font-size: 0.95rem; }
@@ -88,12 +87,8 @@
         <span class="text-muted small ms-1" id="userRank">과장</span>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-outline-secondary btn-sm" onclick="openNotificationModal()">🔔 알림</button>
-          <button class="btn btn-outline-primary btn-sm hidden" id="btnMenuOrder" onclick="openMenuOrderModal()">↕️ 메뉴 순서</button>
-        </div>
-        <span class="badge bg-danger notif-badge hidden" id="notifBadge">0</span>
+      <div class="d-flex justify-content-end align-items-center mb-3">
+        <button class="btn btn-outline-primary btn-sm hidden" id="btnMenuOrder" onclick="openMenuOrderModal()">↕️ 메뉴 순서</button>
       </div>
       
       <div class="d-grid gap-2" id="menuButtons">
@@ -134,7 +129,7 @@
 
         <button class="btn btn-white btn-menu hidden" id="btnGovernanceHub" onclick="location.href='governance.html'">
           🗂️ <strong>문서관리</strong>
-          <span class="d-block small text-muted">의사록, 공문, 총회 자료, 문서함, 전자서명</span>
+          <span class="d-block small text-muted">의사록, 공문, 총회 자료, 문서함, 전자서명, 서명 준비</span>
         </button>
 
         <button class="btn btn-white btn-menu hidden" id="btnMinutesAdmin" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_admin'">
@@ -233,24 +228,6 @@
     </div>
   </div>
 
-  <div class="modal fade" id="notifModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header bg-light">
-          <h6 class="modal-title fw-bold mb-0">🔔 알림 센터</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body p-0">
-          <div id="notifList" class="list-group list-group-flush"></div>
-        </div>
-        <div class="modal-footer border-0">
-          <button class="btn btn-outline-secondary btn-sm" onclick="markAllNotificationsRead()">모두 읽음</button>
-          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
 <script>
 const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
@@ -268,8 +245,6 @@ let myInfo = null;
 let permissionSet = new Set();
 let platformContext = null;
 let coopRuntime = null;
-let notifModalInstance = null;
-let lastNotifList = [];
 let suppressSessionExpiredHandling = false;
 let loginFormOpenedAt = Date.now();
 let magicLinkCooldownTimer = null;
@@ -519,7 +494,6 @@ async function loadUserInfo(user) {
     applyMenuPermissions(data, platformContext, coopRuntime);
 
     document.getElementById('patchNoteArea')?.classList.remove('hidden');
-    await loadNotifications(false);
     showScreen('menuArea');
 }
 
@@ -900,8 +874,6 @@ function initCommonModals() {
     if (menuOrderEl) menuOrderModalInstance = new bootstrap.Modal(menuOrderEl);
     if (alertEl) alertModalInstance = new bootstrap.Modal(alertEl);
     if (confirmEl) confirmModalInstance = new bootstrap.Modal(confirmEl);
-    const notifEl = document.getElementById('notifModal');
-    if (notifEl) notifModalInstance = new bootstrap.Modal(notifEl);
 }
 
 function showAlert(message) {
@@ -1069,79 +1041,6 @@ async function logout() {
         localStorage.removeItem('erp_permissions');
         location.reload();
     });
-}
-
-async function loadNotifications(openModal) {
-    if (!myInfo) return;
-    const { data } = await _supabase
-        .from('erp_notifications')
-        .select('*')
-        .eq('user_emp_id', myInfo.emp_id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-    lastNotifList = Array.isArray(data) ? data : [];
-    renderNotificationList(lastNotifList);
-    updateNotifBadge(lastNotifList);
-    if (openModal && notifModalInstance) notifModalInstance.show();
-}
-
-function updateNotifBadge(list) {
-    const badge = document.getElementById('notifBadge');
-    if (!badge) return;
-    const unread = list.filter(n => !n.is_read).length;
-    if (unread > 0) {
-        badge.textContent = String(unread);
-        badge.classList.remove('hidden');
-    } else {
-        badge.classList.add('hidden');
-    }
-}
-
-function renderNotificationList(list) {
-    const container = document.getElementById('notifList');
-    if (!container) return;
-    container.innerHTML = '';
-    if (!list || list.length === 0) {
-        container.innerHTML = '<div class="p-4 text-center text-muted">알림이 없습니다.</div>';
-        return;
-    }
-    list.forEach(item => {
-        const el = document.createElement('button');
-        el.type = 'button';
-        el.className = `list-group-item list-group-item-action ${item.is_read ? '' : 'fw-bold'}`;
-        const title = item.title || '알림';
-        const msg = item.message || '';
-        const time = item.created_at ? item.created_at.slice(0, 16).replace('T', ' ') : '';
-        el.textContent = `${title} - ${msg} (${time})`;
-        el.onclick = async () => {
-            await markNotificationRead(item.id);
-            if (item.link_url) location.href = item.link_url;
-        };
-        container.appendChild(el);
-    });
-}
-
-async function openNotificationModal() {
-    await loadNotifications(true);
-}
-
-async function markNotificationRead(id) {
-    if (!id) return;
-    await _supabase.from('erp_notifications').update({ is_read: true, read_at: new Date() }).eq('id', id);
-    const updated = lastNotifList.map(n => (n.id === id ? { ...n, is_read: true } : n));
-    lastNotifList = updated;
-    renderNotificationList(lastNotifList);
-    updateNotifBadge(lastNotifList);
-}
-
-async function markAllNotificationsRead() {
-    if (!myInfo) return;
-    await _supabase.from('erp_notifications')
-        .update({ is_read: true, read_at: new Date() })
-        .eq('user_emp_id', myInfo.emp_id)
-        .eq('is_read', false);
-    await loadNotifications(false);
 }
 
 document.addEventListener('DOMContentLoaded', initCommonModals);

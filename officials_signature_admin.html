@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.4 -->
+<!-- Version: v1.0.10 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.4 | officials_signature_admin.html');</script>
+  <script>console.log('[Version] v1.0.10 | officials_signature_admin.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -54,6 +54,32 @@
       border-radius: 10px;
       box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
     }
+    .summary-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .summary-card .label {
+      color: #6b7280;
+      font-size: .82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .summary-card .value {
+      color: #111827;
+      font-size: 1.55rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-top: 4px;
+    }
+    .summary-card .desc {
+      color: #6b7280;
+      font-size: .82rem;
+      margin-top: 4px;
+    }
   </style>
   <link rel="stylesheet" href="./erp_theme.css?v=1.0.0">
 </head>
@@ -77,6 +103,39 @@
         <i class="bi bi-info-circle-fill"></i> 업로드한 서명 이미지는 <code>coop_officials.seal_url</code>에 저장되며, 의사록·총회자료 전자서명 화면에서 재사용됩니다. 큰 이미지는 업로드 전에 자동 축소하고, 너무 작은 이미지는 경고만 표시한 뒤 그대로 등록합니다.
       </div>
 
+      <div class="row g-3 mb-3" id="signatureSummaryRow">
+        <div class="col-sm-6 col-lg-3">
+          <div class="summary-card">
+            <div class="label">대상 인원</div>
+            <div class="value" id="signatureSummaryTotal">-</div>
+            <div class="desc">활성 임원·대의원·선관위원</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="summary-card">
+            <div class="label">서명 등록</div>
+            <div class="value" id="signatureSummaryRegistered">-</div>
+            <div class="desc">서명 이미지가 등록된 인원</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="summary-card">
+            <div class="label">미등록</div>
+            <div class="value" id="signatureSummaryMissing">-</div>
+            <div class="desc">업로드가 필요한 인원</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="summary-card">
+            <div class="label">Telegram 연결</div>
+            <div class="value" id="signatureSummaryTelegram">-</div>
+            <div class="desc">서명 리마인드 수신 가능 인원</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="signatureOpsBanner" class="alert alert-secondary d-none" role="status"></div>
+
       <div class="card border-0 shadow-sm">
         <div class="card-body">
           <div class="toolbar mb-3">
@@ -84,7 +143,16 @@
               <h2 class="h6 mb-1">현재 서명 등록 현황</h2>
               <div class="helper">활성 임원·대의원·선관위원을 기준으로 1명당 1개의 서명 이미지를 관리합니다.</div>
             </div>
-            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="loadOfficialSignatures()">새로고침</button>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <select id="signatureFilter" class="form-select form-select-sm" style="width:180px;">
+                <option value="all">전체 보기</option>
+                <option value="missing">미등록만 보기</option>
+                <option value="registered">등록 완료만 보기</option>
+                <option value="telegram_missing">Telegram 미연결만 보기</option>
+              </select>
+              <button class="btn btn-outline-primary btn-sm" type="button" onclick="copySignatureLoginLink()">서명자 로그인 링크 복사</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" onclick="loadOfficialSignatures()">새로고침</button>
+            </div>
           </div>
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -141,6 +209,7 @@
     let officialSignGroups = {};
     let signatureTelegramStatusMap = {};
     let sealPreviewModal = null;
+    let currentSignatureFilter = 'all';
     const MAX_SEAL_LONG_EDGE = 1600;
     const MIN_SEAL_LONG_EDGE_WARNING = 600;
 
@@ -311,6 +380,87 @@
       `;
     }
 
+    function updateSignatureSummary(groups) {
+      const entries = Object.values(groups || {});
+      const total = entries.length;
+      const registered = entries.filter((group) => !!group?.seal_url).length;
+      const missing = Math.max(0, total - registered);
+      const telegramLinked = entries.filter((group) => {
+        const memberId = String(group?.member_id || '').trim();
+        return !!(memberId && signatureTelegramStatusMap[memberId]?.linked);
+      }).length;
+
+      const totalEl = document.getElementById('signatureSummaryTotal');
+      const registeredEl = document.getElementById('signatureSummaryRegistered');
+      const missingEl = document.getElementById('signatureSummaryMissing');
+      const telegramEl = document.getElementById('signatureSummaryTelegram');
+      const bannerEl = document.getElementById('signatureOpsBanner');
+      if (totalEl) totalEl.textContent = String(total);
+      if (registeredEl) registeredEl.textContent = String(registered);
+      if (missingEl) missingEl.textContent = String(missing);
+      if (telegramEl) telegramEl.textContent = String(telegramLinked);
+
+      if (bannerEl) {
+        const telegramMissing = Math.max(0, total - telegramLinked);
+        const actionButtons = [];
+        if (missing > 0) {
+          actionButtons.push('<button type="button" class="btn btn-sm btn-outline-primary" onclick="setSignatureFilter(\'missing\')">미등록자 보기</button>');
+        }
+        if (telegramMissing > 0) {
+          actionButtons.push('<button type="button" class="btn btn-sm btn-outline-primary" onclick="setSignatureFilter(\'telegram_missing\')">Telegram 미연결 보기</button>');
+        }
+        if (missing === 0 && telegramMissing === 0) {
+          bannerEl.className = 'alert alert-success';
+          bannerEl.innerHTML = '서명 운영 준비가 완료되었습니다. 현재 활성 임원·대의원·선관위원 모두 서명 이미지와 Telegram 수신 연결이 준비된 상태입니다.';
+        } else {
+          bannerEl.className = 'alert alert-warning';
+          bannerEl.innerHTML = `
+            <div class="fw-bold mb-1">서명 운영 전 확인이 필요한 항목이 있습니다.</div>
+            <div class="small mb-2">서명 이미지 미등록 ${missing}명 / Telegram 미연결 ${telegramMissing}명</div>
+            <div class="d-flex gap-2 flex-wrap">${actionButtons.join('')}</div>
+          `;
+        }
+        bannerEl.classList.remove('d-none');
+      }
+    }
+
+    window.setSignatureFilter = function setSignatureFilter(nextFilter) {
+      currentSignatureFilter = ['all', 'missing', 'registered', 'telegram_missing'].includes(String(nextFilter || '').trim())
+        ? String(nextFilter || '').trim()
+        : 'all';
+      const filterEl = document.getElementById('signatureFilter');
+      if (filterEl) filterEl.value = currentSignatureFilter;
+      loadOfficialSignatures();
+    };
+
+    window.copySignatureLoginLink = async function copySignatureLoginLink() {
+      try {
+        const loginUrl = new URL('../minutes/sign_login.html', window.location.href).href;
+        await navigator.clipboard.writeText(loginUrl);
+        showAlert('서명자 로그인 링크를 복사했습니다.', 'success');
+      } catch (error) {
+        showAlert('서명자 로그인 링크 복사 실패: ' + (error?.message || 'Unknown error'), 'danger');
+      }
+    };
+
+    function getFilteredSignatureGroupEntries(groups) {
+      const filter = String(currentSignatureFilter || 'all').trim();
+      const entries = Object.values(groups || {});
+      if (filter === 'missing') {
+        return entries.filter((group) => !group?.seal_url);
+      }
+      if (filter === 'registered') {
+        return entries.filter((group) => !!group?.seal_url);
+      }
+      if (filter === 'telegram_missing') {
+        return entries.filter((group) => {
+          const memberId = String(group?.member_id || '').trim();
+          return !memberId || !signatureTelegramStatusMap[memberId]?.linked;
+        });
+      }
+      return entries;
+    }
+
     async function loadImageElementFromFile(file) {
       const objectUrl = URL.createObjectURL(file);
       try {
@@ -395,6 +545,8 @@
       if (filtered.length === 0) {
         body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">등록된 활성 임원 정보가 없습니다.</td></tr>';
         officialSignGroups = {};
+        signatureTelegramStatusMap = {};
+        updateSignatureSummary({});
         return;
       }
 
@@ -439,9 +591,22 @@
         }
       });
       officialSignGroups = groups;
+      updateSignatureSummary(groups);
 
-      body.innerHTML = groupKeys.map((key) => {
-        const group = groups[key];
+      const filteredEntries = getFilteredSignatureGroupEntries(groups);
+      if (filteredEntries.length === 0) {
+        const emptyMessage = currentSignatureFilter === 'missing'
+          ? '서명 이미지가 아직 등록되지 않은 인원이 없습니다.'
+          : currentSignatureFilter === 'registered'
+            ? '서명 이미지가 등록된 인원이 없습니다.'
+            : currentSignatureFilter === 'telegram_missing'
+              ? 'Telegram 미연결 인원이 없습니다.'
+              : '표시할 인원이 없습니다.';
+        body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">${emptyMessage}</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = filteredEntries.map((group) => {
         const name = escapeHtml(group.display_name || group.member_id || '-');
         const categories = Array.from(group.categories);
         const hasDelegate = categories.includes('delegate');
@@ -616,6 +781,13 @@
     async function init() {
       try {
         sealPreviewModal = new bootstrap.Modal(document.getElementById('sealPreviewModal'));
+        const filterEl = document.getElementById('signatureFilter');
+        if (filterEl) {
+          filterEl.addEventListener('change', () => {
+            currentSignatureFilter = String(filterEl.value || 'all').trim();
+            loadOfficialSignatures();
+          });
+        }
         const ok = await ensureAccess();
         if (!ok) return;
         await loadOfficialSignatures();

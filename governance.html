@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.1 -->
+<!-- Version: v1.0.5 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.1 | governance.html');</script>
+  <script>console.log('[Version] v1.0.5 | governance.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -25,10 +25,7 @@
   <div class="wrap">
     <div class="panel">
       <div class="d-flex justify-content-between align-items-center gap-3">
-        <div>
-          <h1 class="h4 mb-1">문서관리</h1>
-          <div class="helper">사용 가능한 문서 관련 기능만 표시합니다.</div>
-        </div>
+        <div><h1 class="h4 mb-1">문서관리</h1></div>
         <button class="btn btn-outline-secondary btn-sm" onclick="location.href='index.html'">ERP 메인</button>
       </div>
 
@@ -45,6 +42,11 @@
       <button type="button" class="menu-card d-none" id="cardSignature" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_sign'">
         <strong>전자서명</strong>
         <span>임원·대의원 서명 요청 확인</span>
+      </button>
+
+      <button type="button" class="menu-card d-none" id="cardSignatureAdmin" onclick="location.href='officials_signature_admin.html'">
+        <strong>서명자 준비</strong>
+        <span>서명 이미지 등록과 Telegram 연결 상태 확인</span>
       </button>
 
       <div id="emptyState" class="alert alert-light border mt-3 d-none mb-0">
@@ -110,11 +112,13 @@
       const siteOnly = hasPermission(permissionSet, 'site.admin');
       const canSiteAdmin = siteOnly === null ? null : (siteOnly || hasPermission(permissionSet, 'member.admin') === true);
       const canMinutesAdmin = isModuleEnabled(runtime, 'minutes') && (hasAdminRoleFallback || canMemberAdmin === true || canSiteAdmin === true);
+      const canSignatureAdmin = isModuleEnabled(runtime, 'signature') && (hasAdminRoleFallback || canMemberAdmin === true || canSiteAdmin === true);
 
       const visibleCards = [];
       if (canMinutesAdmin) visibleCards.push('cardMinutesAdmin');
       if (isModuleEnabled(runtime, 'documents')) visibleCards.push('cardDocuments');
       if (isModuleEnabled(runtime, 'signature')) visibleCards.push('cardSignature');
+      if (canSignatureAdmin) visibleCards.push('cardSignatureAdmin');
 
       visibleCards.forEach(id => document.getElementById(id)?.classList.remove('d-none'));
       if (visibleCards.length === 0) {

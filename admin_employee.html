@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.17
-Change: 2026-03-21 - 직원관리 초기 화면을 부트 완료 뒤 한 번에 노출하도록 로딩 셸을 추가.
+Version: v1.0.20
+Change: 2026-03-22 - Remove first-use guidance banner from employee admin.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.17 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.20 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -1882,6 +1882,7 @@ function setHrBootStateReady() {
 }
 
 window.onload = async function() {
+    try {
     alertModal = new bootstrap.Modal(document.getElementById('alertModal'));
     confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
     settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
@@ -1945,7 +1946,12 @@ window.onload = async function() {
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
     syncHrStructureSettingsUi();
-    setHrBootStateReady();
+    } catch (error) {
+        console.error('[admin_employee] boot failed:', error);
+        showAlert('직원관리 초기화 중 오류가 발생했습니다.\n' + (error?.message || '잠시 후 다시 시도해 주세요.'));
+    } finally {
+        setHrBootStateReady();
+    }
 };
 
 function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModal.show(); }

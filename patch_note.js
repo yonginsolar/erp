@@ -1,5 +1,5 @@
-/* Version: v1.0.3
-Change: 2026-02-05 - Use KST date defaults for patch notes.
+/* Version: v1.0.4
+Change: 2026-03-23 - Blur patch note dismiss buttons before Bootstrap hides the modal.
 */
 /**
  * [File: patch_note.js]
@@ -104,9 +104,21 @@ let patchNoteFocusBound = false;
 function ensurePatchNoteFocusGuard(modalEl) {
     if (patchNoteFocusBound || !modalEl) return;
     patchNoteFocusBound = true;
+    const blurDismissTarget = (event) => {
+        const target = event.currentTarget;
+        if (target && typeof target.blur === 'function') target.blur();
+    };
+    modalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach((btn) => {
+        btn.addEventListener('click', blurDismissTarget, true);
+        btn.addEventListener('pointerdown', blurDismissTarget, true);
+    });
+    modalEl.addEventListener('show.bs.modal', () => {
+        modalEl.removeAttribute('inert');
+    });
     modalEl.addEventListener('hide.bs.modal', () => {
         const active = document.activeElement;
         if (active && modalEl.contains(active)) active.blur();
+        modalEl.setAttribute('inert', '');
     });
     modalEl.addEventListener('hidden.bs.modal', () => {
         if (patchNoteLastFocus && typeof patchNoteLastFocus.focus === 'function') {
