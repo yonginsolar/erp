@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.15 -->
+<!-- Version: v1.0.17 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.15 | index.html');</script>
+  <script>console.log('[Version] v1.0.17 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -240,11 +240,13 @@ const MAGICLINK_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const MAGICLINK_MAX_PER_WINDOW = 5;
 const MAGICLINK_COOLDOWN_MS = 60 * 1000;
 const MAGICLINK_MIN_PAGE_AGE_MS = 1200;
+const ERP_RETIRED_ACCESS_YEARS = 3;
 
 let myInfo = null;
 let permissionSet = new Set();
 let platformContext = null;
 let coopRuntime = null;
+let retiredGraceAccess = false;
 let suppressSessionExpiredHandling = false;
 let loginFormOpenedAt = Date.now();
 let magicLinkCooldownTimer = null;
@@ -306,6 +308,21 @@ function updateLoginGuardHint(text) {
     }
     hintEl.textContent = text;
     hintEl.style.display = 'block';
+}
+
+function isWithinRetiredAccessWindow(resignDate) {
+    const raw = String(resignDate || '').trim();
+    if (!raw) return false;
+    const resign = new Date(raw);
+    if (Number.isNaN(resign.getTime())) return false;
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - ERP_RETIRED_ACCESS_YEARS);
+    cutoff.setHours(0, 0, 0, 0);
+    return resign >= cutoff;
+}
+
+function isRetiredGraceUser(user) {
+    return !!String(user?.resign_date || '').trim() && isWithinRetiredAccessWindow(user?.resign_date);
 }
 
 function applyMagicLinkCooldown() {
@@ -488,6 +505,25 @@ async function loadUserInfo(user) {
         await signOutSilently(_supabase); 
         showScreen('loginForm'); 
         return;
+    }
+
+    retiredGraceAccess = false;
+    if (data && data.is_active === false) {
+        console.error("접근 권한 없음: 비활성 처리된 직원 계정입니다.");
+        showAlert("접근 권한 없음\n현재 ERP 사용이 가능한 직원 계정이 아닙니다.\n관리자에게 직원 상태를 확인해 주세요.");
+        await signOutSilently(_supabase);
+        showScreen('loginForm');
+        return;
+    }
+    if (data && String(data.resign_date || '').trim()) {
+        if (!isWithinRetiredAccessWindow(data.resign_date)) {
+            console.error("접근 권한 없음: 퇴사 후 보관 기간이 지난 계정입니다.");
+            showAlert("접근 권한 없음\n퇴사 후 증명서 열람 가능 기간이 지났습니다.\n관리자에게 확인해 주세요.");
+            await signOutSilently(_supabase);
+            showScreen('loginForm');
+            return;
+        }
+        retiredGraceAccess = true;
     }
 
     myInfo = data;
@@ -750,6 +786,16 @@ function applyMenuPermissions(user, platformCtx, runtime) {
     const canAudit = hasPermission('audit.view');
     const canPerm = hasPermission('permission.manage');
 
+    if (retiredGraceAccess) {
+        ERP_MENU_BUTTON_ORDER_IDS.forEach(id => document.getElementById(id)?.classList.add('hidden'));
+        if (mypageEnabled && (canMypage === null || canMypage === true)) {
+            document.getElementById('btnMypage')?.classList.remove('hidden');
+        }
+        applyMenuOrder();
+        updateMenuOrderButtonVisibility(false);
+        return;
+    }
+
     applyHrMenuLabel(runtime);
 
     if (!approvalEnabled || (canApproval !== null && !canApproval)) document.getElementById('btnApproval')?.classList.add('hidden');
@@ -953,12 +999,12 @@ async function sendMagicLink() {
         if (employeeError) throw employeeError;
         if (rows.length === 0) {
             recordMagicLinkAttempt(email, false);
-            showAlert("직원으로 등록된 이메일만 로그인 메일을 받을 수 있습니다.");
+            showAlert("입력한 이메일로 로그인 가능한 계정이 확인되면 인증 메일을 발송합니다.\n메일이 오지 않으면 관리자에게 등록 상태를 확인해 주세요.");
             return;
         }
         if (rows.length > 1) {
             recordMagicLinkAttempt(email, false);
-            showAlert("같은 이메일이 여러 직원에 연결되어 있습니다. 관리자에게 이메일 정리를 요청해 주세요.");
+            showAlert("입력한 이메일의 로그인 상태를 확인할 수 없습니다.\n관리자에게 직원 이메일 정리를 요청해 주세요.");
             return;
         }
 

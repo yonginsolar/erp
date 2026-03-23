@@ -121,7 +121,7 @@ const PrintService = {
         <div class="print-cert" style="padding: 20px; height: 100%; box-sizing: border-box; position: relative;">
             ${data.logo ? `<img src="${data.logo}" style="position:absolute; left:20px; top:20px; height:45px;">` : ''}
             <div style="text-align:right; font-size:12px; margin-top:20px; margin-bottom:5px;">www.yonginsolar.kr</div>
-            <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">재 직 증 명 서</h2>
+            <h2 style="text-align:center; font-size: 32px; text-decoration: underline; margin: 50px 0 40px 0; font-weight: bold;">${String(data.certTitle || '재직증명서').replace(/\s+/g, '').split('').join(' ')}</h2>
             <div style="text-align:right; font-size: 13px; margin-bottom: 20px;">문서번호: ${data.docNum}</div>
             
             <div style="text-align:left; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 5px;">1. 인적사항</div>
@@ -137,7 +137,7 @@ const PrintService = {
                 <tr><th style="background:#f9f9f9; padding:6px 10px;">용 도</th><td colspan="3" style="padding:6px 10px;">${data.purpose}</td></tr>
             </table>
 
-            <div style="text-align:center; margin-top: 60px; font-size: 18px;">위와 같이 재직하고 있음을 증명합니다.</div>
+            <div style="text-align:center; margin-top: 60px; font-size: 18px;">${data.employmentStatement || '위와 같이 재직하고 있음을 증명합니다.'}</div>
             <div style="text-align:center; margin-top: 30px; font-size: 18px;">${data.today}</div>
             
             <div style="text-align:center; margin-top: 60px; position:relative;">

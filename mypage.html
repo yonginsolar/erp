@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.33 | Change: 2026-03-23 - Prevent duplicate Durunuri adjustment in payslip print. -->
+<!-- Version: v1.0.34 | Change: 2026-03-23 - Support 경력증명서 for retired employees within retention window. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.33 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.34 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -168,7 +168,7 @@ body{padding:18px 14px 28px}
 </div>
 </div>
 <div class="tab-pane fade" id="tabCert">
-<div class="card p-3 border mb-3"><div class="d-flex justify-content-between align-items-center"><div><h6 class="fw-bold mb-1">📄 재직증명서</h6><small class="text-muted">은행/관공서 제출용</small></div><button class="btn btn-outline-primary" id="btnCert" onclick="openCertModal()">발급 신청</button></div></div>
+<div class="card p-3 border mb-3"><div class="d-flex justify-content-between align-items-center"><div><h6 class="fw-bold mb-1" id="certCardTitle">📄 재직증명서</h6><small class="text-muted" id="certCardSubtitle">은행/관공서 제출용</small></div><button class="btn btn-outline-primary" id="btnCert" onclick="openCertModal()">발급 신청</button></div></div>
 <div class="card p-3 border"><div class="d-flex justify-content-between align-items-center"><div><h6 class="fw-bold mb-1">🤝 근로계약서</h6><small class="text-muted">서명 완료된 계약서</small></div><button class="btn btn-secondary" id="btnContract" onclick="viewContract()" disabled>등록된 계약서 없음</button></div></div>
 </div>
 <div class="tab-pane fade" id="tabNotice"><div class="list-group" id="noticeList"><div class="text-center p-3 text-muted">로딩 중...</div></div></div>
@@ -218,6 +218,20 @@ const KST_TZ_MYPAGE='Asia/Seoul';
 const formatMypageKstDate=(value,fallback='')=>{if(!value) return fallback; const d=new Date(value); if(Number.isNaN(d.getTime())) return fallback; return new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d)};
 const formatMypageKstMonth=(value=new Date())=>{const d=value instanceof Date?value:new Date(value); if(Number.isNaN(d.getTime())) return ''; return new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit'}).format(d)};
 const toUtcIsoFromKstInput=(value)=>{if(!value) return null; return new Date(`${value}:00+09:00`).toISOString()};
+function isMypageRetiredEmployee(){return !!String(myInfo?.resign_date||'').trim()}
+function getMypageCertificateMeta(){
+const retired=isMypageRetiredEmployee();
+return retired
+?{type:'경력증명서',title:'📄 경력증명서',subtitle:'퇴사 후 3년 이내 발급 가능',statement:'위와 같이 근무하였음을 증명합니다.'}
+:{type:'재직증명서',title:'📄 재직증명서',subtitle:'은행/관공서 제출용',statement:'위와 같이 재직하고 있음을 증명합니다.'};
+}
+function applyMypageCertificateUi(){
+const meta=getMypageCertificateMeta();
+const titleEl=document.getElementById('certCardTitle');
+const subEl=document.getElementById('certCardSubtitle');
+if(titleEl) titleEl.textContent=meta.title;
+if(subEl) subEl.textContent=meta.subtitle;
+}
 const getMypageKstDateParts=(value)=>{if(!value) return {date:'',time:'',hasTime:false}; if(typeof value==='string' && !value.includes('T')) return {date:value,time:'',hasTime:false}; const d=new Date(value); if(Number.isNaN(d.getTime())) return {date:'',time:'',hasTime:false}; const date=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,year:'numeric',month:'2-digit',day:'2-digit'}).format(d); const time=new Intl.DateTimeFormat('sv-SE',{timeZone:KST_TZ_MYPAGE,hour:'2-digit',minute:'2-digit',hour12:false}).format(d); return {date,time,hasTime:true}};
 function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
 async function getAdjustedSalaryRowForMypage(row, ym){if(!row) return row; if(!window.PayrollDurunuriModule) return row; try{const supportMap=await window.PayrollDurunuriModule.getSupportMap(_supabase,ym); return window.PayrollDurunuriModule.adjustSalaryRow(row,supportMap);}catch(e){console.warn('Durunuri support load failed:',e?.message||e); return row;}}
@@ -1142,6 +1156,7 @@ async function loadProfile() {
         myInfo = data;
         localStorage.setItem('erp_user', JSON.stringify(data));
     }
+    applyMypageCertificateUi();
     
     // 표시 전용 텍스트
     document.getElementById("dspName").innerText = myInfo.emp_name;
@@ -1801,15 +1816,18 @@ async function runCertIssue() {
     const birthStr = birthDate || "미등록";
 
     // 3. 재직 기간 텍스트 생성
+    const certMeta = getMypageCertificateMeta();
     const today = new Date();
     const dateStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
     let tenureStr = "-";
     if (myInfo.hire_date) {
         const join = new Date(myInfo.hire_date);
-        const diff = today - join;
+        const endBase = myInfo.resign_date ? new Date(myInfo.resign_date) : today;
+        const diff = endBase - join;
         const y = Math.floor(diff / (1000 * 60 * 60 * 24 * 365));
         const m = Math.floor((diff % (1000 * 60 * 60 * 24 * 365)) / (1000 * 60 * 60 * 24 * 30));
-        tenureStr = `${myInfo.hire_date} ~ 현재 (${y}년 ${m}개월)`;
+        const endLabel = myInfo.resign_date || '현재';
+        tenureStr = `${myInfo.hire_date} ~ ${endLabel} (${y}년 ${m}개월)`;
     }
 
     // [핵심 변경] 클라이언트 계산 로직 삭제 -> DB RPC 함수 호출
@@ -1818,7 +1836,7 @@ async function runCertIssue() {
         p_emp_id: myInfo.emp_id,
         p_emp_name: myInfo.emp_name,
         p_purpose: purpose,
-        p_type: '재직증명서'
+        p_type: certMeta.type
     });
 
     if (error) {
@@ -1838,6 +1856,8 @@ async function runCertIssue() {
         tenure: tenureStr,
         purpose: purpose,
         today: dateStr,
+        certTitle: certMeta.type,
+        employmentStatement: certMeta.statement,
         chairman: companyInfo.chairman || "이사장",
         compName: companyInfo.company_name || "용인모두의햇빛협동조합",
         compAddr: (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim(),

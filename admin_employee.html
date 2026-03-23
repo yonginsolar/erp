@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.22
-Change: 2026-03-23 - Prevent duplicate Durunuri adjustment and clarify ledger label.
+Version: v1.0.23
+Change: 2026-03-23 - Print 경력증명서 for resigned employees and preserve retired access policy.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.22 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.23 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -3152,6 +3152,8 @@ async function reqIssueCert() {
     // 2. 생년월일 조회 (기존 로직 유지)
     const { data: birthDate } = await _supabase.rpc('get_emp_birthdate', { p_emp_id: currentEmpId });
     const birthStr = birthDate || "미등록";
+    const certType = currentEmpResignDate ? '경력증명서' : '재직증명서';
+    const certStatement = currentEmpResignDate ? '위와 같이 근무하였음을 증명합니다.' : '위와 같이 재직하고 있음을 증명합니다.';
 
     // [핵심 변경] 클라이언트 카운팅 삭제 -> DB RPC 함수 호출로 대체
     // 관리자가 발급하더라도 DB가 순번을 매겨야 안전합니다.
@@ -3159,7 +3161,7 @@ async function reqIssueCert() {
         p_emp_id: currentEmpId,
         p_emp_name: currentEmpName,
         p_purpose: purpose,
-        p_type: '재직증명서'
+        p_type: certType
     });
 
     if (error) {
@@ -3172,11 +3174,11 @@ async function reqIssueCert() {
     let tenureStr = "-";
     if(hireDate && hireDate !== '-') {
         const join = new Date(hireDate); 
-        const now = new Date(); 
-        const diff = now - join; 
+        const endBase = currentEmpResignDate ? new Date(currentEmpResignDate) : new Date();
+        const diff = endBase - join; 
         const y = Math.floor(diff / (1000*60*60*24*365)); 
         const m = Math.floor((diff % (1000*60*60*24*365)) / (1000*60*60*24*30)); 
-        tenureStr = `${hireDate}~현재 (${y}년 ${m}개월)`;
+        tenureStr = `${hireDate}~${currentEmpResignDate || '현재'} (${y}년 ${m}개월)`;
     }
     
     // 4. 회사 정보 준비
@@ -3201,6 +3203,8 @@ async function reqIssueCert() {
         tenure: tenureStr, 
         purpose: purpose, 
         today: new Date().toLocaleDateString('ko-KR', { timeZone: KST_TZ_ADMIN_EMP, year: 'numeric', month: 'long', day: 'numeric' }), 
+        certTitle: certType,
+        employmentStatement: certStatement,
         chairman: ceoName, 
         compName: compName, 
         compAddr: cleanAddr, 
