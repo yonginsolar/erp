@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.20
-Change: 2026-03-22 - Remove first-use guidance banner from employee admin.
+Version: v1.0.22
+Change: 2026-03-23 - Prevent duplicate Durunuri adjustment and clarify ledger label.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.20 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.22 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -17,9 +17,9 @@ Change: 2026-03-22 - Remove first-use guidance banner from employee admin.
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="print_service.js"></script>
+  <script src="print_service.js?v=20260323-3"></script>
   <script src="payroll_durunuri_module.js"></script>
-  <script src="salary_ledger_module.js"></script>
+  <script src="salary_ledger_module.js?v=20260323-1"></script>
   <script src="leave_ledger.js"></script>
   
   <style>
@@ -3061,9 +3061,9 @@ async function saveSalary() {
 
     // 3. 4대보험 계산 (DB 요율 적용)
     // rule['key'] || 0.045 -> DB에 값이 있으면 쓰고, 없으면 기본값 사용
-    const pen = Math.floor(tax_base * (rule['pension_rate_emp'] || 0.045)); 
-    const hlt = Math.floor((tax_base * (rule['health_rate_emp'] || 0.03545))/10)*10; 
-    const care = Math.floor((hlt * (rule['care_rate_ratio'] || 0.1295))/10)*10; 
+    const pen = Math.floor(tax_base * (rule['pension_rate_emp'] || 0.0475)); 
+    const hlt = Math.floor((tax_base * (rule['health_rate_emp'] || 0.03595))/10)*10; 
+    const care = Math.floor((hlt * (rule['care_rate_ratio'] || 0.1314))/10)*10; 
     const emp = Math.floor(tax_base * (rule['employ_rate_emp'] || 0.009));
 
     // 4. 소득세 계산 (별도 함수 사용)
@@ -3214,7 +3214,8 @@ async function reqIssueCert() {
 
 async function printSalaryAdmin() {
     if(!currentSalaryDataForPrint) return showAlert("저장된 급여 내역이 없습니다.");
-    const d = await getAdjustedSalaryRowWithDurunuri(currentSalaryDataForPrint, currentSalaryDataForPrint.year_month);
+    const d = currentSalaryDataForPrint;
+    const dedAdvanceLabel = getSalaryDedAdvanceLabelForAdmin(d);
     const [y, m] = d.year_month.split('-');
     
     // 스마트 기간 산정
@@ -3253,7 +3254,7 @@ async function printSalaryAdmin() {
         p_child: fmt(d.pay_child), p_bonus: fmt(d.pay_bonus), p_total: fmt(d.pay_total), 
         d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care), 
         d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), 
-        d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total), 
+        d_adv: fmt(d.ded_advance), d_adv_label: dedAdvanceLabel, d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total), 
         net: fmt(d.net_pay), 
         logo: companyInfo.logo_horizontal_url || "", 
         seal: companyInfo.seal_url, 
@@ -3268,6 +3269,14 @@ async function printSalaryAdmin() {
         PrintService.printSalary(salaryData);
     });
 }
+
+function getSalaryDedAdvanceLabelForAdmin(row) {
+    const supportEmp = Number(row?.durunuri_emp_support || 0);
+    const rawAdvance = Number(row?.ded_advance_raw ?? row?.ded_advance ?? 0);
+    if (supportEmp > 0 && rawAdvance === 0) return '두루누리 지원금';
+    if (supportEmp > 0) return '기타조정(두루누리 포함)';
+    return '기타조정';
+} // End of getSalaryDedAdvanceLabelForAdmin
 
 function openLedgerModal() { ledgerModal.show(); }
 async function printLedger() {

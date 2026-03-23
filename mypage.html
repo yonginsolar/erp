@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.31 | Change: 2026-03-22 - Move calendar subscription settings into modal. -->
+<!-- Version: v1.0.33 | Change: 2026-03-23 - Prevent duplicate Durunuri adjustment in payslip print. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.31 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.33 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -13,7 +13,7 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="erp_runtime_guard.js"></script>
-<script src="print_service.js"></script>
+<script src="print_service.js?v=20260323-3"></script>
 <script src="payroll_durunuri_module.js"></script>
 <script src="leave_ledger.js"></script>
   
@@ -1688,8 +1688,9 @@ document.getElementById("btnPrintSalary").classList.remove("hidden");
 const[y,m]=ym.split('-');
 document.getElementById("sl_ym_display").innerText=`${y}년 ${Number(m)}월`;
 const f=n=>Number(n).toLocaleString();
+const dedAdvanceLabel=getSalaryDedAdvanceLabel(adjusted);
 const p=[['pay_basic','기본급'],['pay_meal','식대'],['pay_car','차량유지비'],['pay_position','직책수당'],['pay_service','근속수당'],['pay_overtime','연장수당'],['pay_child','육아수당'],['pay_bonus','상여금']];
-const d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance','기타조정'],['ded_capital','출자금']];
+const d=[['ded_pension','국민연금'],['ded_health','건강보험'],['ded_care','장기요양'],['ded_employ','고용보험'],['ded_income','소득세'],['ded_local','지방소득세'],['ded_advance',dedAdvanceLabel],['ded_capital','출자금']];
 let ph="";
 p.forEach(i=>ph+=`<tr><td>${i[1]}</td><td class="amount-text"><span class="salary-blur">${f(adjusted[i[0]]||0)}</span></td></tr>`);
 ph+=`<tr><td class="bg-light fw-bold">지급계</td><td class="amount-text text-primary fw-bold"><span class="salary-blur">${f(adjusted.pay_total)}</span></td></tr>`;
@@ -1706,7 +1707,8 @@ async function printSalaryPopup() {
 
     // 숫자 쉼표 포맷팅 헬퍼
     const fmt = (n) => Number(n || 0).toLocaleString();
-    const d = await getAdjustedSalaryRowForMypage(currentSalaryData, currentSalaryData.year_month);
+    const d = currentSalaryData;
+    const dedAdvanceLabel = getSalaryDedAdvanceLabel(d);
     const [y, m] = d.year_month.split('-'); // 2025-05
 
     // 날짜 포맷팅
@@ -1730,7 +1732,7 @@ async function printSalaryPopup() {
         // 공제 내역
         d_pen: fmt(d.ded_pension), d_hlt: fmt(d.ded_health), d_care: fmt(d.ded_care),
         d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local),
-        d_adv: fmt(d.ded_advance), d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total),
+        d_adv: fmt(d.ded_advance), d_adv_label: dedAdvanceLabel, d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total),
         
         // 실지급액
         net: fmt(d.net_pay),
@@ -1745,6 +1747,14 @@ async function printSalaryPopup() {
     // 모듈 호출
     PrintService.printSalary(salaryData);
 }
+
+function getSalaryDedAdvanceLabel(row){
+const supportEmp=Number(row?.durunuri_emp_support||0);
+const rawAdvance=Number(row?.ded_advance_raw ?? row?.ded_advance ?? 0);
+if(supportEmp>0&&rawAdvance===0) return '두루누리 지원금';
+if(supportEmp>0) return '기타조정(두루누리 포함)';
+return '기타조정';
+} // End of getSalaryDedAdvanceLabel
 
   function toggleEtcInput(){const v=document.getElementById("certPurposeSelect").value,e=document.getElementById("certPurposeEtc");if(v==='기타'){e.classList.remove('hidden');e.focus()}else{e.classList.add('hidden')}}
 function openCertModal(){purposeModal.show()}

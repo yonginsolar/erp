@@ -3,7 +3,8 @@
 
   const NUMERIC_FIELDS = [
     'pay_basic', 'pay_meal', 'pay_car', 'pay_child', 'pay_position', 'pay_service', 'pay_overtime', 'pay_bonus', 'pay_total',
-    'ded_pension', 'ded_health', 'ded_care', 'ded_employ', 'ded_income', 'ded_local', 'ded_advance', 'ded_capital', 'ded_total', 'net_pay'
+    'ded_pension', 'ded_health', 'ded_care', 'ded_employ', 'ded_income', 'ded_local', 'ded_advance', 'ded_advance_raw', 'ded_capital', 'ded_total', 'net_pay',
+    'durunuri_emp_support'
   ];
 
   function toInt(value) {
@@ -58,6 +59,19 @@
     return normalized;
   }
 
+  function resolveEtcDeductionLabel(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const hasOnlyDurunuri = list.length > 0 && list.every(function eachRow(row) {
+      const supportEmp = toInt(row.durunuri_emp_support);
+      const rawAdvance = toInt(row.ded_advance_raw);
+      const capital = toInt(row.ded_capital);
+      const hasEtcValue = toInt(row.ded_advance) !== 0 || capital !== 0 || supportEmp !== 0 || rawAdvance !== 0;
+      if (!hasEtcValue) return true;
+      return supportEmp !== 0 && rawAdvance === 0 && capital === 0;
+    });
+    return hasOnlyDurunuri ? '두루누리 지원금' : '기타공제';
+  }
+
   function createStateFromRows(rows, yearMonth) {
     const list = Array.isArray(rows) ? rows : [];
     const normalizedRows = list.map(function mapRow(row) {
@@ -93,6 +107,7 @@
       payTotal: totals.pay_total,
       dedTotal: totals.ded_total,
       netTotal: totals.net_pay,
+      dedEtcLabel: resolveEtcDeductionLabel(normalizedRows),
       totals: totals
     };
   }
@@ -189,7 +204,7 @@
       '</tr>' +
       '<tr>' +
       '<th>기본급</th><th>식대</th><th>차량</th><th>기타수당</th><th>상여</th><th class="fw-bold">지급계</th>' +
-      '<th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>소득세</th><th>지방세</th><th>기타공제</th>' +
+      '<th>국민연금</th><th>건강보험</th><th>장기요양</th><th>고용보험</th><th>소득세</th><th>지방세</th><th>' + escapeHtml(state.dedEtcLabel || '기타공제') + '</th>' +
       '</tr>' +
       '</thead>' +
       '<tbody>' + buildRowsHtml(rows) + '</tbody>' +

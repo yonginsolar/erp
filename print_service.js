@@ -1,4 +1,4 @@
-/* Version: v1.0.1
+/* Version: v1.0.2
 /**
  * 🖨️ Print Service Module v1.0
  * 급여명세서, 재직증명서, 급여대장 인쇄 로직 전담
@@ -93,7 +93,7 @@ const PrintService = {
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">고용보험</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_emp}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_inc}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">지방소득세</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_loc}</td></tr>
-                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">기타조정</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
+                        <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv_label || '기타조정'}</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_adv}</td></tr>
                         <tr><td style="padding:5px; border:none; border-bottom:1px solid #eee;">출자금</td><td class="text-end" style="padding:5px; border:none; border-bottom:1px solid #eee;">${data.d_cap}</td></tr>
                     </table>
                 </div>
