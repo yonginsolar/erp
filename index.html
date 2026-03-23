@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.14 -->
+<!-- Version: v1.0.15 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.14 | index.html');</script>
+  <script>console.log('[Version] v1.0.15 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -444,11 +444,34 @@ async function loadUserInfo(user) {
         showScreen('loginForm'); 
         return;
     }
-    const { data, error } = await _supabase
+    let { data, error } = await _supabase
         .from('ref_employees')
         .select('*')
         .eq('auth_user_id', authUserId)
         .single();
+
+    if (error || !data) {
+        try {
+            const { data: recoveryData, error: recoveryError } = await _supabase.rpc('erp_resolve_login_employee');
+            if (!recoveryError && recoveryData?.ok === true) {
+                const retry = await _supabase
+                    .from('ref_employees')
+                    .select('*')
+                    .eq('auth_user_id', authUserId)
+                    .single();
+                data = retry.data || null;
+                error = retry.error || null;
+            } else if (recoveryData?.code === 'MULTIPLE_EMPLOYEE_MATCH') {
+                console.error("접근 권한 없음: 같은 이메일이 여러 직원 row와 연결되어 있습니다.");
+                showAlert("접근 권한 없음\n같은 이메일이 여러 직원 정보에 연결되어 있습니다.\n관리자에게 직원 이메일 정리를 요청해 주세요.");
+                await signOutSilently(_supabase);
+                showScreen('loginForm');
+                return;
+            }
+        } catch (recoveryException) {
+            console.error('erp_resolve_login_employee exception:', recoveryException);
+        }
+    }
 
     // [복구 완료] 국장님이 요청하신 모달/로그 처리 로직 그대로 복구
     if (error || !data) {
@@ -898,12 +921,14 @@ function handleConfirm() {
 async function findRegisteredEmployeeByEmail(email) {
     const safeEmail = String(email || '').trim().toLowerCase();
     if (!safeEmail) return { rows: [], error: null };
-    const { data, error } = await _supabase
-        .from('ref_employees')
-        .select('emp_id, emp_name, email')
-        .eq('email', safeEmail)
-        .limit(2);
-    return { rows: Array.isArray(data) ? data : [], error };
+    const { data, error } = await _supabase.rpc('erp_check_login_email', {
+        p_email: safeEmail
+    });
+    if (error) return { rows: [], error };
+    const count = Number(data?.count || 0);
+    if (count <= 0) return { rows: [], error: null };
+    if (count === 1) return { rows: [{}], error: null };
+    return { rows: [{}, {}], error: null };
 } // End of findRegisteredEmployeeByEmail
 
 async function sendMagicLink() {

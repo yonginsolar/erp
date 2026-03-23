@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.38
-Change: 2026-03-20 - 조합원 엑셀 다운로드를 가입일 기준일 이하 조합원만 포함하도록 보정.
+Version: v1.0.39
+Change: 2026-03-23 - 자금 및 이용고배당관리의 자산수증이익 탭에 수동 입력/엑셀 업로드/양식 다운로드를 추가.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.38';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.39';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -464,6 +464,12 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
                 </div>
             </div>
 
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="openDonationModal()">
+                    + 자산수증이익 입력/업로드
+                </button>
+            </div>
+
             <div class="table-responsive bg-white border rounded" style="max-height: 550px; overflow-y: auto;">
                 <table class="table table-hover align-middle mb-0 text-center small">
                     <thead class="table-light sticky-top">
@@ -584,6 +590,94 @@ body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; overflo
 
                             <button class="btn btn-success w-100 btn-sm fw-bold" onclick="submitDividendBatch()">
                                 <i class="bi bi-check-lg"></i> 일괄 적용하기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="donationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h6 class="modal-title fw-bold">🎁 자산수증이익 등록</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <ul class="nav nav-tabs nav-justified" id="donationTab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active rounded-0" data-bs-toggle="tab" data-bs-target="#tab-don-single" type="button">👤 개별 등록</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link rounded-0" data-bs-toggle="tab" data-bs-target="#tab-don-batch" type="button">📊 엑셀 일괄 등록</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3">
+                    <div class="tab-pane fade show active" id="tab-don-single">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">대상 조합원</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="dn-member-id" class="form-control" placeholder="ID 입력 또는 검색" readonly>
+                                <input type="text" id="dn-member-name" class="form-control bg-white" placeholder="이름" readonly>
+                                <button class="btn btn-secondary" type="button" onclick="openMemberSearch('donation')">🔍 찾기</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">기부일</label>
+                            <input type="date" id="dn-date" class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">금액</label>
+                            <input type="number" id="dn-amount" class="form-control form-control-sm" placeholder="숫자만 입력">
+                            <div class="form-text x-small text-end">단위: 원</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">입금 방식</label>
+                            <select id="dn-method" class="form-select form-select-sm">
+                                <option value="transfer">계좌이체</option>
+                                <option value="cash">현금</option>
+                                <option value="card">카드</option>
+                                <option value="etc">기타</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">비고</label>
+                            <input type="text" id="dn-note" class="form-control form-control-sm" placeholder="예: 운영기금 후원">
+                        </div>
+                        <button class="btn btn-primary w-100 btn-sm" onclick="submitDonationGrant()">등록하기</button>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-don-batch">
+                        <div class="alert alert-light border small mb-3">
+                            <i class="bi bi-info-circle-fill"></i> 여러 조합원의 자산수증이익을 한 번에 등록합니다.
+                            <div class="small text-muted mt-1">필수 칼럼: 조합원ID, 금액, 날짜 / 선택 칼럼: 수단, 비고</div>
+                            <div class="mt-2 text-end">
+                                <button class="btn btn-xs btn-outline-success border" onclick="downloadDonationTemplate()">
+                                    <i class="bi bi-file-earmark-excel"></i> 양식 다운로드
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">엑셀 파일 선택</label>
+                            <input type="file" id="don-excel-file" class="form-control form-control-sm" accept=".xlsx, .xls" onchange="readDonationExcel(this)">
+                        </div>
+
+                        <div id="don-excel-preview" style="display:none;">
+                            <h6 class="small fw-bold text-primary">미리보기 (상위 5건)</h6>
+                            <table class="table table-bordered table-sm x-small text-center">
+                                <thead class="table-light"><tr><th>ID</th><th>날짜</th><th>금액</th><th>수단</th><th>비고</th></tr></thead>
+                                <tbody id="don-excel-tbody"></tbody>
+                            </table>
+                            <div class="text-end small text-muted mb-2" id="don-excel-count"></div>
+
+                            <button class="btn btn-success w-100 btn-sm fw-bold" onclick="submitDonationBatch()">
+                                <i class="bi bi-check-lg"></i> 일괄 등록하기
                             </button>
                         </div>
                     </div>
@@ -7689,6 +7783,211 @@ async function fetchGlobalDividends() {
     });
 }
 
+let g_donation_excel_data = [];
+
+function getDonationMethodLabel(method) {
+    if (method === 'transfer') return '계좌이체';
+    if (method === 'cash') return '현금';
+    if (method === 'card') return '카드';
+    if (method === 'etc') return '기타';
+    return '계좌이체';
+}
+
+function normalizeDonationMethod(value) {
+    const raw = String(value ?? '').trim().toLowerCase();
+    if (!raw) return 'transfer';
+    if (['transfer', '계좌이체', '계좌', '이체', 'bank'].includes(raw)) return 'transfer';
+    if (['cash', '현금'].includes(raw)) return 'cash';
+    if (['card', '카드'].includes(raw)) return 'card';
+    if (['etc', '기타'].includes(raw)) return 'etc';
+    return 'transfer';
+}
+
+function normalizeDonationBatchRow(row) {
+    const pick = (...keys) => {
+        for (const key of keys) {
+            if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+            const value = row[key];
+            if (value === null || value === undefined) continue;
+            if (typeof value === 'string' && value.trim() === '') continue;
+            return value;
+        }
+        return '';
+    };
+
+    const memberId = String(pick('조합원ID', 'ID', '아이디', 'member_id', 'memberId') || '').trim();
+    const amountRaw = pick('금액', 'amount', 'Amount');
+    const amount = Number(String(amountRaw ?? '').replace(/,/g, '').trim());
+    const donationDate = normalizeMemberImportDate(pick('날짜', '기부일', '입금일', 'donation_date', 'date')) || '';
+    const method = normalizeDonationMethod(pick('수단', '입금방식', '방식', 'method', 'type'));
+    const note = String(pick('비고', '메모', '사유', 'note', 'remark') || '').trim();
+
+    return { memberId, amount, donationDate, method, note };
+}
+
+function openDonationModal() {
+    document.getElementById('dn-member-id').value = '';
+    document.getElementById('dn-member-name').value = '';
+    document.getElementById('dn-date').value = getAdminMemberKstDateString();
+    document.getElementById('dn-amount').value = '';
+    document.getElementById('dn-method').value = 'transfer';
+    document.getElementById('dn-note').value = '';
+
+    g_donation_excel_data = [];
+    document.getElementById('don-excel-file').value = '';
+    document.getElementById('don-excel-preview').style.display = 'none';
+    document.getElementById('don-excel-tbody').innerHTML = '';
+    document.getElementById('don-excel-count').innerText = '';
+
+    const firstTab = new bootstrap.Tab(document.querySelector('#donationTab button[data-bs-target="#tab-don-single"]'));
+    firstTab.show();
+
+    new bootstrap.Modal(document.getElementById('donationModal')).show();
+}
+
+async function submitDonationGrant() {
+    const memberId = document.getElementById('dn-member-id').value.trim();
+    const amount = Number(document.getElementById('dn-amount').value);
+    const donationDate = document.getElementById('dn-date').value;
+    const method = normalizeDonationMethod(document.getElementById('dn-method').value);
+    const note = document.getElementById('dn-note').value.trim();
+
+    if (!memberId) return myAlert('대상 조합원을 선택해주세요.', 'warning');
+    if (!Number.isFinite(amount) || amount <= 0) return myAlert('정확한 금액을 입력해주세요.', 'warning');
+    if (!donationDate) return myAlert('기부일을 선택해주세요.', 'warning');
+
+    myConfirm(`[${memberId}] 조합원에게\n자산수증이익 ${amount.toLocaleString()}원을 등록하시겠습니까?`, async () => {
+        showLoading(true);
+
+        const { error } = await _supabase.rpc('manage_donation_secure', {
+            p_id: null,
+            p_member_uid: null,
+            p_member_text_id: memberId,
+            p_amount: Math.trunc(amount),
+            p_date: donationDate,
+            p_method: method,
+            p_note: note
+        });
+
+        showLoading(false);
+
+        if (error) {
+            myAlert('등록 실패: ' + error.message, 'error');
+            return;
+        }
+
+        myAlert('자산수증이익이 등록되었습니다.');
+        bootstrap.Modal.getInstance(document.getElementById('donationModal')).hide();
+        fetchGlobalDonations();
+    });
+}
+
+function downloadDonationTemplate() {
+    const wsData = [
+        ['조합원ID', '금액', '날짜', '수단', '비고'],
+        ['2024-001', '100000', '2026-03-23', '계좌이체', '운영기금 후원'],
+        ['2024-002', '50000', '2026-03-23', '현금', '행사 모금']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '자산수증이익일괄등록');
+    XLSX.writeFile(wb, '자산수증이익_일괄등록_양식.xlsx');
+}
+
+function readDonationExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        if (json.length === 0) {
+            myAlert('데이터가 없는 엑셀입니다.', 'warning');
+            return;
+        }
+
+        g_donation_excel_data = json;
+
+        const tbody = document.getElementById('don-excel-tbody');
+        tbody.innerHTML = '';
+
+        json.slice(0, 5).forEach((row) => {
+            const parsed = normalizeDonationBatchRow(row);
+            const tr = document.createElement('tr');
+
+            const tdId = document.createElement('td');
+            const tdDate = document.createElement('td');
+            const tdAmt = document.createElement('td');
+            const tdMethod = document.createElement('td');
+            const tdNote = document.createElement('td');
+
+            tdId.textContent = parsed.memberId || '-';
+            tdDate.textContent = parsed.donationDate || '-';
+            tdAmt.textContent = Number.isFinite(parsed.amount) ? parsed.amount.toLocaleString() : '-';
+            tdMethod.textContent = getDonationMethodLabel(parsed.method);
+            tdNote.textContent = parsed.note || '-';
+
+            tr.appendChild(tdId);
+            tr.appendChild(tdDate);
+            tr.appendChild(tdAmt);
+            tr.appendChild(tdMethod);
+            tr.appendChild(tdNote);
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('don-excel-count').innerText = `총 ${json.length}건 대기 중`;
+        document.getElementById('don-excel-preview').style.display = 'block';
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+async function submitDonationBatch() {
+    if (g_donation_excel_data.length === 0) return myAlert('데이터가 없습니다.', 'warning');
+
+    myConfirm(`총 ${g_donation_excel_data.length}건의 자산수증이익을 등록하시겠습니까?\n시간이 조금 걸릴 수 있습니다.`, async () => {
+        showLoading(true);
+
+        let successCnt = 0;
+        let failCnt = 0;
+
+        for (const row of g_donation_excel_data) {
+            const parsed = normalizeDonationBatchRow(row);
+            if (!parsed.memberId || !parsed.donationDate || !Number.isFinite(parsed.amount) || parsed.amount <= 0) {
+                failCnt++;
+                continue;
+            }
+
+            const { error } = await _supabase.rpc('manage_donation_secure', {
+                p_id: null,
+                p_member_uid: null,
+                p_member_text_id: parsed.memberId,
+                p_amount: Math.trunc(parsed.amount),
+                p_date: parsed.donationDate,
+                p_method: parsed.method,
+                p_note: parsed.note
+            });
+
+            if (error) {
+                console.error(`자산수증이익 등록 실패 (${parsed.memberId}):`, error);
+                failCnt++;
+            } else {
+                successCnt++;
+            }
+        }
+
+        showLoading(false);
+        myAlert(`완료되었습니다.<br>성공: ${successCnt}건, 실패: ${failCnt}건`);
+
+        bootstrap.Modal.getInstance(document.getElementById('donationModal')).hide();
+        fetchGlobalDonations();
+    });
+}
+
 // 기존 openDividendModal 함수 교체
 function openDividendModal() {
     // 필드 초기화
@@ -7909,6 +8208,9 @@ function selectMemberForModal(id, name) {
     if(g_search_target === 'dividend') {
         document.getElementById('dv-member-id').value = id;
         document.getElementById('dv-member-name').value = name;
+    } else if (g_search_target === 'donation') {
+        document.getElementById('dn-member-id').value = id;
+        document.getElementById('dn-member-name').value = name;
     }
     // 다른 곳에서 쓸 경우 else if 추가
 
