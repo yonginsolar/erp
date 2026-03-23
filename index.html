@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.17 -->
+<!-- Version: v1.0.18 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.17 | index.html');</script>
+  <script>console.log('[Version] v1.0.18 | index.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -236,8 +236,6 @@ const ERP_BASE_URL = new URL('./', window.location.href);
 const SUPABASE_PROJECT_REF = 'ifdqlwxgqgsvnawmhlfc';
 const ERP_SESSION_EXPIRED_NOTICE_KEY = 'erp_session_expired_notice_v1';
 const MAGICLINK_RATE_KEY = 'erp_magiclink_rate_v1';
-const MAGICLINK_REQUEST_WINDOW_MS = 60 * 60 * 1000;
-const MAGICLINK_MAX_PER_WINDOW = 5;
 const MAGICLINK_COOLDOWN_MS = 60 * 1000;
 const MAGICLINK_MIN_PAGE_AGE_MS = 1200;
 const ERP_RETIRED_ACCESS_YEARS = 3;
@@ -276,26 +274,19 @@ function clearSupabaseAuthCache() {
 function readMagicLinkState() {
     try {
         const raw = localStorage.getItem(MAGICLINK_RATE_KEY);
-        if (!raw) return { attempts: [], cooldown_until: 0 };
+        if (!raw) return { cooldown_until: 0 };
         const parsed = JSON.parse(raw);
-        const attempts = Array.isArray(parsed?.attempts) ? parsed.attempts : [];
         const cooldownUntil = Number(parsed?.cooldown_until || 0);
-        return { attempts, cooldown_until: Number.isFinite(cooldownUntil) ? cooldownUntil : 0 };
+        return { cooldown_until: Number.isFinite(cooldownUntil) ? cooldownUntil : 0 };
     } catch (_) {
-        return { attempts: [], cooldown_until: 0 };
+        return { cooldown_until: 0 };
     }
 }
 
 function writeMagicLinkState(state) {
-    localStorage.setItem(MAGICLINK_RATE_KEY, JSON.stringify(state || { attempts: [], cooldown_until: 0 }));
-}
-
-function trimMagicLinkAttempts(attempts) {
-    const now = Date.now();
-    return (Array.isArray(attempts) ? attempts : []).filter((at) => {
-        const ts = Number(at?.ts || 0);
-        return Number.isFinite(ts) && now - ts <= MAGICLINK_REQUEST_WINDOW_MS;
-    });
+    localStorage.setItem(MAGICLINK_RATE_KEY, JSON.stringify({
+        cooldown_until: Number(state?.cooldown_until || 0)
+    }));
 }
 
 function updateLoginGuardHint(text) {
@@ -372,24 +363,16 @@ function evaluateMagicLinkGuard(email) {
         return { ok: false, reason: 'COOLDOWN', message: `재전송은 ${sec}초 후 가능합니다.` };
     }
 
-    const attempts = trimMagicLinkAttempts(state.attempts);
-    if (attempts.length >= MAGICLINK_MAX_PER_WINDOW) {
-        return { ok: false, reason: 'WINDOW_LIMIT', message: '요청이 너무 많습니다. 1시간 후 다시 시도해주세요.' };
-    }
-
     const normalized = String(email || '').trim().toLowerCase();
     if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
         return { ok: false, reason: 'INVALID_EMAIL', message: '올바른 이메일을 입력해주세요.' };
     }
 
-    return { ok: true, state, attempts, normalized_email: normalized };
+    return { ok: true, state, normalized_email: normalized };
 }
 
 function recordMagicLinkAttempt(email, success) {
     const state = readMagicLinkState();
-    const attempts = trimMagicLinkAttempts(state.attempts);
-    attempts.push({ ts: Date.now(), email: String(email || '').toLowerCase(), ok: !!success });
-    state.attempts = attempts;
     state.cooldown_until = Date.now() + MAGICLINK_COOLDOWN_MS;
     writeMagicLinkState(state);
     applyMagicLinkCooldown();
