@@ -1322,6 +1322,20 @@ return `${doc?.drafter_name||''}${deptText} ${displayLabel}`.trim();
 }
 return `${doc?.drafter_name||''}${deptText} 휴가`.trim();
 }
+function getMypageEmployeeDisplayNoValue(employee){
+const parsedDisplayNo=Number(employee?.display_emp_no);
+if(Number.isFinite(parsedDisplayNo)&&parsedDisplayNo>0){
+return String(Math.trunc(parsedDisplayNo));
+}
+const fallbackEmpId=String(employee?.emp_id||'').trim();
+return fallbackEmpId||'-';
+}
+function getMypageDocDrafterDisplayNo(doc){
+if(doc?.drafter_id===myInfo?.emp_id){
+return getMypageEmployeeDisplayNoValue(myInfo);
+}
+return String(doc?.drafter_id||'-').trim()||'-';
+}
 function buildLeaveCalendarEvent(doc){
 const leaveLedger=window.LeaveLedger||{};
 const periodLabel=typeof leaveLedger.extractLeavePeriodLabel==='function'?leaveLedger.extractLeavePeriodLabel(doc):'';
@@ -1337,7 +1351,7 @@ const endExclusive=endIso!==startIso?addDaysToIsoDate(endIso,1):'';
 const deptText=doc?.drafter_dept?`(${doc.drafter_dept})`:'';
 const periodText=typeof leaveLedger.formatLeavePeriodText==='function'?leaveLedger.formatLeavePeriodText(doc):periodLabel;
 const leaveTitle=buildLeaveCalendarTitle(doc,deptText,periodText);
-const memoLines=[`결재 처리된 휴가입니다.`,`상태: ${doc?.status||'-'}`,`사번: ${doc?.drafter_id||'-'}`,`기안자: ${doc?.drafter_name||'-'}`];
+const memoLines=[`결재 처리된 휴가입니다.`,`상태: ${doc?.status||'-'}`,`사번: ${getMypageDocDrafterDisplayNo(doc)}`,`기안자: ${doc?.drafter_name||'-'}`];
 if(periodText) memoLines.push(`휴가일: ${periodText}`);
 const event={title:leaveTitle,start:startIso,color:(doc?.drafter_id===myInfo.emp_id?'#0d6efd':'#198754'),allDay:true,extendedProps:{origin:{title:leaveTitle,start_date:startIso,end_date:endIso,type:'leave',visibility:'company',cal_memo:memoLines.join('\n')}}};
 if(endExclusive) event.end=endExclusive;
@@ -1415,13 +1429,11 @@ const tripSelect=mypageBusinessTripSnapshotSupported?MYPAGE_BUSINESS_TRIP_SELECT
 let tripQuery=_supabase.from('ref_approval').select(tripSelect).eq('doc_type','출장신청').in('status',approvedTripStatuses);
 if(coopId) tripQuery=tripQuery.eq('coop_id', coopId);
 const {data:bt}=await tripQuery;
-const employeePromise=safeScope==='google_ics'
-?(() => {
-let query=_supabase.from('ref_employees').select('emp_id,emp_name,department,hire_date,birth_date,resign_date');
+const employeePromise=(() => {
+let query=_supabase.from('ref_employees').select('emp_id,display_emp_no,emp_name,department,hire_date,birth_date,resign_date');
 if(coopId) query=query.eq('coop_id', coopId);
 return query;
-})()
-:_supabase.from('view_employees_calendar').select('*');
+})();
 let calendarQuery=_supabase.from('ref_calendar').select('*');
 if(coopId) calendarQuery=calendarQuery.eq('coop_id', coopId);
 const [{data:e},{data:c}]=await Promise.all([employeePromise,calendarQuery]);
@@ -1435,8 +1447,9 @@ if(shouldIncludeMypageCalendarSource(scope,'leave')) source.leaveDocs.forEach(x=
 if(shouldIncludeMypageCalendarSource(scope,'business_trip')) source.businessTripDocs.forEach(x=>{const tripEvent=buildBusinessTripCalendarEvent(x);if(tripEvent) evts.push(tripEvent);});
 source.employeeRows.forEach(p=>{
 const dn=p.department?`(${p.department})`:'';
-if(shouldIncludeMypageCalendarSource(scope,'birthdays')&&p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${p.emp_id}\n부서: ${p.department||'-'}`}}}));
-if(shouldIncludeMypageCalendarSource(scope,'hire_anniversaries')&&p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${p.emp_id}\n입사일: ${p.hire_date}`}}})})}
+const displayEmpNo=getMypageEmployeeDisplayNoValue(p);
+if(shouldIncludeMypageCalendarSource(scope,'birthdays')&&p.birth_date)yrs.forEach(y=>evts.push({title:`${p.emp_name}${dn} 🎂`,start:`${y}-${p.birth_date}`,color:'#ffc107',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 생일 🎂`,start_date:`${y}-${p.birth_date}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 생일입니다.\n사번: ${displayEmpNo}\n부서: ${p.department||'-'}`}}}));
+if(shouldIncludeMypageCalendarSource(scope,'hire_anniversaries')&&p.hire_date){const hY=parseInt(p.hire_date.substring(0,4));yrs.forEach(y=>{const diff=y-hY;if(diff>0)evts.push({title:`${p.emp_name}${dn} 입사 ${diff}주년 🎉`,start:`${y}-${p.hire_date.slice(5,10)}`,color:'#0dcaf0',textColor:'#000',allDay:true,extendedProps:{origin:{title:`${p.emp_name} 입사 ${diff}주년 🎉`,start_date:`${y}-${p.hire_date.slice(5,10)}`,type:'event',visibility:'company',cal_memo:`${p.emp_name}님의 입사 ${diff}주년입니다.\n사번: ${displayEmpNo}\n입사일: ${p.hire_date}`}}})})}
 });
 source.calendarRows.forEach(x=>{
 if(scope==='google_ics'){
@@ -1534,10 +1547,10 @@ appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`business-trip-${doc.id
 source.employeeRows.forEach(row=>{
 const deptLabel=row.department?`(${row.department})`:'';
 if(shouldIncludeMypageCalendarSource(scope,'birthdays')&&row.birth_date){
-appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`birthday-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 생일 🎂`,description:`${row.emp_name}님의 생일입니다.\n사번: ${row.emp_id}\n부서: ${row.department||'-'}`,start:`${new Date().getFullYear()}-${String(row.birth_date).slice(5,10)}`,allDay:true,rrule:'FREQ=YEARLY'}));
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`birthday-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 생일 🎂`,description:`${row.emp_name}님의 생일입니다.\n사번: ${getMypageEmployeeDisplayNoValue(row)}\n부서: ${row.department||'-'}`,start:`${new Date().getFullYear()}-${String(row.birth_date).slice(5,10)}`,allDay:true,rrule:'FREQ=YEARLY'}));
 }
 if(shouldIncludeMypageCalendarSource(scope,'hire_anniversaries')&&row.hire_date){
-appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`hire-anniversary-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 입사기념일 🎉`,description:`${row.emp_name}님의 입사기념일입니다.\n사번: ${row.emp_id}\n입사일: ${row.hire_date}`,start:row.hire_date,allDay:true,rrule:'FREQ=YEARLY'}));
+appendMypageIcsEvent(lines,buildMypageIcsEventLines({uid:`hire-anniversary-${row.emp_id}@erp.yonginsolar.kr`,title:`${row.emp_name}${deptLabel} 입사기념일 🎉`,description:`${row.emp_name}님의 입사기념일입니다.\n사번: ${getMypageEmployeeDisplayNoValue(row)}\n입사일: ${row.hire_date}`,start:row.hire_date,allDay:true,rrule:'FREQ=YEARLY'}));
 }
 });
 source.calendarRows.forEach(row=>{
@@ -1735,7 +1748,7 @@ async function printSalaryPopup() {
         titleDate: `${y}년 ${Number(m)}월`,
         attrDate: `${y}년 ${Number(m)}월 (귀속)`,
         payDate: payDateStr,
-        empInfo: `${myInfo.emp_id} / ${myInfo.emp_name}`,
+        empInfo: `${getMypageEmployeeDisplayNoValue(myInfo)} / ${myInfo.emp_name}`,
         dept: myInfo.department || "-",
         pos: myInfo.position || "-",
         

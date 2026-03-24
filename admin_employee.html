@@ -429,7 +429,7 @@ function getRoleBadge(roleKey) {
 }
 
 let settings = {}; let companyInfo = {}; let advancedSettingsRaw = [];
-let currentEmpId = null, currentEmpName = null, currentAnnualSalary = 0; 
+let currentEmpId = null, currentEmpDisplayNo = null, currentEmpName = null, currentAnnualSalary = 0; 
 let currentEmpHireDate = null, currentEmpResignDate = null; 
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
 let currentDurunuriSupport = { emp_support: 0, biz_support: 0, apply_month: '', source_month: '' };
@@ -1443,14 +1443,14 @@ function buildApprovalLineEmployeeOptionsHtml(selectedEmpId = '') {
             const safeALevel = Number.isFinite(aLevel) ? aLevel : 99;
             const safeBLevel = Number.isFinite(bLevel) ? bLevel : 99;
             if (safeALevel !== safeBLevel) return safeALevel - safeBLevel;
-            return String(a?.emp_id || '').localeCompare(String(b?.emp_id || ''));
+            return compareEmployeesByDisplayNo(a, b);
         });
     const options = ['<option value="">미설정</option>'];
     activeEmployees.forEach((item) => {
         const empId = String(item?.emp_id || '').trim();
         if (!empId) return;
         const isSelected = empId === selected ? ' selected' : '';
-        const label = `${item.emp_name || empId} (${item.position || '-'} / ${item.department || '미지정'})`;
+        const label = `${getEmployeeDisplayNoValue(item)} · ${item.emp_name || empId} (${item.position || '-'} / ${item.department || '미지정'})`;
         options.push(`<option value="${escapeHtml(empId)}"${isSelected}>${escapeHtml(label)}</option>`);
     });
     if (selected && !activeEmployees.some((item) => String(item?.emp_id || '').trim() === selected)) {
@@ -2192,21 +2192,44 @@ function buildEmployeeTelegramStatusHtml(empId) {
     `;
 } // End of buildEmployeeTelegramStatusHtml
 
+function getEmployeeDisplayNoValue(employee) {
+    const parsedDisplayNo = Number(employee?.display_emp_no);
+    if (Number.isFinite(parsedDisplayNo) && parsedDisplayNo > 0) {
+        return String(Math.trunc(parsedDisplayNo));
+    }
+    const fallbackEmpId = String(employee?.emp_id || '').trim();
+    return fallbackEmpId || '-';
+} // End of getEmployeeDisplayNoValue
+
+function compareEmployeesByDisplayNo(a, b) {
+    const aDisplayNo = Number(a?.display_emp_no);
+    const bDisplayNo = Number(b?.display_emp_no);
+    const hasADisplayNo = Number.isFinite(aDisplayNo) && aDisplayNo > 0;
+    const hasBDisplayNo = Number.isFinite(bDisplayNo) && bDisplayNo > 0;
+    if (hasADisplayNo && hasBDisplayNo && aDisplayNo !== bDisplayNo) {
+        return aDisplayNo - bDisplayNo;
+    }
+    if (hasADisplayNo !== hasBDisplayNo) {
+        return hasADisplayNo ? -1 : 1;
+    }
+    return String(a?.emp_id || '').localeCompare(String(b?.emp_id || ''));
+} // End of compareEmployeesByDisplayNo
+
 async function loadList() {
     const tbody = document.getElementById("empListBody");
     tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">로딩 중...</td></tr>';
-    const { data: list, error } = await _supabase.from('ref_employees').select('*').order('emp_id');
+    const { data: list, error } = await _supabase.from('ref_employees').select('*');
     if (error || !list) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">데이터 없음</td></tr>';
         return;
     }
     await loadTelegramApprovalLinkStatusMap();
-    employeeCache = Array.isArray(list) ? list.slice() : [];
+    employeeCache = Array.isArray(list) ? list.slice().sort(compareEmployeesByDisplayNo) : [];
     tbody.innerHTML = "";
     const threeYearsAgo = new Date();
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
     let expiredCount = 0;
-    list.forEach(u => {
+    employeeCache.forEach(u => {
         let isResigned = !!u.resign_date;
         let isExpired = false;
         if (isResigned && new Date(u.resign_date) <= threeYearsAgo) { isExpired = true; expiredCount++; }
@@ -2216,7 +2239,7 @@ async function loadList() {
         if (isResigned) tr.style.opacity = "0.7";
         if (isExpired) tr.style.backgroundColor = "#fff5f5";
         tr.onclick = () => openDetail(u);
-        const safeEmpId = escapeHtml(u.emp_id);
+        const safeEmpId = escapeHtml(getEmployeeDisplayNoValue(u));
         const safeName = escapeHtml(u.emp_name);
         const safeDept = escapeHtml(u.department || '-');
         const safePos = escapeHtml(u.position || '');
@@ -2768,13 +2791,13 @@ async function saveSettings() {
     }
 }
 async function openDetail(u) {
-    currentEmpId = u.emp_id; currentEmpName = u.emp_name; 
+    currentEmpId = u.emp_id; currentEmpDisplayNo = getEmployeeDisplayNoValue(u); currentEmpName = u.emp_name; 
     currentAnnualSalary = u.base_salary || 0;
     currentEmpHireDate = u.hire_date;
     currentEmpResignDate = u.resign_date;
 
     document.getElementById("detailName").innerText = u.emp_name; document.getElementById("viewMemberId").innerText = u.member_id || "-";
-    document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = u.emp_id;
+    document.getElementById("editMemberId").value = u.member_id || "";document.getElementById("detailId").innerText = `사번 ${currentEmpDisplayNo}`;
     document.getElementById("viewName").innerText = u.emp_name; document.getElementById("viewPhone").innerText = u.phone || "-"; document.getElementById("viewEmail").innerText = u.email || "-"; document.getElementById("viewPosition").innerText = u.position || "-"; document.getElementById("viewAuthLevel").innerText = formatHrAuthLevelLabel(u.auth_level); document.getElementById("viewDept").innerText = u.department || "-"; document.getElementById("viewAddress").innerText = u.address || "-"; document.getElementById("viewHireDate").innerText = u.hire_date || "-";
     document.getElementById("editName").value = u.emp_name; document.getElementById("editPhone").value = u.phone || ""; document.getElementById("editEmail").value = u.email || ""; 
     document.getElementById("editAddress").value = u.address || ""; document.getElementById("editAddressDetail").value = ""; 
@@ -3306,7 +3329,7 @@ async function printSalaryAdmin() {
         titleDate: `${y}년 ${Number(m)}월`, 
         attrDate: getSmartAttribution(d.year_month), 
         payDate: payDateStr, 
-        empInfo: `${currentEmpId} / ${currentEmpName}`, 
+        empInfo: `${currentEmpDisplayNo || currentEmpId} / ${currentEmpName}`, 
         dept: "", pos: "", 
         p_basic: fmt(d.pay_basic), p_meal: fmt(d.pay_meal), p_car: fmt(d.pay_car), 
         p_pos: fmt(d.pay_position), p_svc: fmt(d.pay_service), p_ot: fmt(d.pay_overtime), 
