@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.23
-Change: 2026-03-23 - Print 경력증명서 for resigned employees and preserve retired access policy.
+Version: v1.0.24
+Change: 2026-03-24 - Fix employee invite modal stacking and use global employee ID generator.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.23 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.24 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -94,7 +94,7 @@ Change: 2026-03-23 - Print 경력증명서 for resigned employees and preserve r
           <li class="nav-item">
             <a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
           <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">출자 1좌 금액</label><input type="number" id="set_memberShareUnitAmount" class="form-control form-control-sm" min="1" step="1" placeholder="예: 100000"><div class="form-text">조합원 명부 엑셀 다운로드의 출자좌수 계산과 시청 신고용 출력에 사용됩니다.</div></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
-<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">결재 레벨</label><select id="newAuthLevel" class="form-select"></select><div class="form-text">1이 최상위, 숫자가 클수록 하위 결재선입니다.</div></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
+<div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><div id="inviteStatus" class="alert d-none small py-2 px-3 mb-3" role="status" aria-live="polite"></div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">결재 레벨</label><select id="newAuthLevel" class="form-select"></select><div class="form-text">1이 최상위, 숫자가 클수록 하위 결재선입니다.</div></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button id="inviteSubmitBtn" class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -439,6 +439,7 @@ let myInfo = null;
 let permissionSet = new Set();
 let hrRuntimeProfile = 'legacy_full';
 let telegramApprovalLinkStatusMap = {};
+const HR_MODAL_BASE_Z_INDEX = 1050;
 let calendarIcsSettings = {
     enabled: false,
     feedToken: '',
@@ -462,6 +463,53 @@ const HR_WORKFORCE_LITE_APPROVAL_RULE_OPTION_CATALOG = Object.freeze({
     require_receiver: { label: '수신 필수', description: '공문 수신 항목을 반드시 입력해야 합니다.' },
     require_via: { label: '경유 필수', description: '공문 경유 항목을 반드시 입력해야 합니다.' }
 });
+
+function syncHrModalStack() {
+    const openModals = Array.from(document.querySelectorAll('.modal.show'));
+    openModals.forEach((modalEl, index) => {
+        modalEl.style.zIndex = String(HR_MODAL_BASE_Z_INDEX + 10 + (index * 20));
+        modalEl.removeAttribute('aria-hidden');
+    });
+    const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+    backdrops.forEach((backdropEl, index) => {
+        backdropEl.style.zIndex = String(HR_MODAL_BASE_Z_INDEX + (index * 20));
+    });
+    if (openModals.length > 0) document.body.classList.add('modal-open');
+} // End of syncHrModalStack
+
+function bindHrModalStacking(modalEl) {
+    if (!modalEl || modalEl.dataset.hrModalStackBound === '1') return;
+    modalEl.dataset.hrModalStackBound = '1';
+    const scheduleSync = () => window.setTimeout(syncHrModalStack, 0);
+    modalEl.addEventListener('show.bs.modal', scheduleSync);
+    modalEl.addEventListener('shown.bs.modal', scheduleSync);
+    modalEl.addEventListener('hide.bs.modal', () => {
+        const active = document.activeElement;
+        if (active && modalEl.contains(active) && typeof active.blur === 'function') active.blur();
+    });
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        modalEl.style.zIndex = '';
+        scheduleSync();
+    });
+} // End of bindHrModalStacking
+
+function setInviteStatus(message = '', tone = 'info') {
+    const statusEl = document.getElementById('inviteStatus');
+    if (!statusEl) return;
+    const toneClassMap = {
+        info: 'alert-info',
+        success: 'alert-success',
+        warning: 'alert-warning',
+        danger: 'alert-danger'
+    };
+    if (!message) {
+        statusEl.textContent = '';
+        statusEl.className = 'alert d-none small py-2 px-3 mb-3';
+        return;
+    }
+    statusEl.textContent = String(message || '').trim();
+    statusEl.className = `alert ${toneClassMap[tone] || toneClassMap.info} small py-2 px-3 mb-3`;
+} // End of setInviteStatus
 const HR_WORKFORCE_LITE_LEAVE_CONFIG_KEY = 'approval_leave_type_catalog_json';
 const HR_DEPARTMENT_CATALOG_KEY = 'hr_department_catalog_json';
 const HR_POSITION_CATALOG_KEY = 'hr_position_catalog_json';
@@ -1894,16 +1942,25 @@ window.onload = async function() {
     resignModal = new bootstrap.Modal(document.getElementById('resignModal'));
     orgChartModal = new bootstrap.Modal(document.getElementById('orgChartModal'));
 
-    // aria-hidden 경고 방지: 모달 숨김 전 포커스 이동
     const modalIds = ['inviteModal', 'detailModal', 'statsModal', 'settingsModal', 'alertModal', 'confirmModal', 'adminCertModal', 'loadingModal', 'ledgerModal', 'resignModal', 'orgChartModal'];
     modalIds.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('hide.bs.modal', () => {
-            const active = document.activeElement;
-            if (active && el.contains(active)) active.blur();
-        });
+        bindHrModalStacking(el);
     });
+    const inviteModalEl = document.getElementById('inviteModal');
+    if (inviteModalEl && !inviteModalEl.dataset.inviteStatusResetBound) {
+        inviteModalEl.dataset.inviteStatusResetBound = '1';
+        inviteModalEl.addEventListener('hidden.bs.modal', () => {
+            setInviteStatus('');
+            const submitBtn = document.getElementById('inviteSubmitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '등록하기';
+            }
+            runInvite._inFlight = false;
+        });
+    }
 
     document.getElementById("btnConfirmYes").onclick = function() { if(confirmCallback) confirmCallback(); confirmModal.hide(); };
     document.getElementById("salaryMonth").value = formatAdminEmployeeKstMonth();
@@ -1946,6 +2003,7 @@ window.onload = async function() {
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
     syncHrStructureSettingsUi();
+    syncHrModalStack();
     } catch (error) {
         console.error('[admin_employee] boot failed:', error);
         showAlert('직원관리 초기화 중 오류가 발생했습니다.\n' + (error?.message || '잠시 후 다시 시도해 주세요.'));
@@ -1954,7 +2012,11 @@ window.onload = async function() {
     }
 };
 
-function showAlert(msg) { document.getElementById("alertBody").textContent = msg || ""; alertModal.show(); }
+function showAlert(msg) {
+    document.getElementById("alertBody").textContent = msg || "";
+    alertModal.show();
+    window.setTimeout(syncHrModalStack, 0);
+} // End of showAlert
 // [수정] 인자가 2개(메시지, 콜백)일 때와 3개(제목, 메시지, 콜백)일 때를 모두 처리
 function showConfirm(arg1, arg2, arg3) {
     let title = "확인";
@@ -1980,7 +2042,8 @@ function showConfirm(arg1, arg2, arg3) {
     document.getElementById("confirmBody").textContent = msg || "";
     confirmCallback = cb;
     confirmModal.show();
-}
+    window.setTimeout(syncHrModalStack, 0);
+} // End of showConfirm
 
 function getDurunuriModuleAdmin() {
     if (isHrWorkforceLiteProfile()) return null;
@@ -2346,22 +2409,25 @@ function openInviteModal() {
     document.getElementById("newRole").value = "staff";
     populateInviteDepartmentOptions('');
     document.getElementById("newDeptCustom").value = "";
+    setInviteStatus('');
     inviteModal.show();
-}
+} // End of openInviteModal
+
 async function runInvite() {
     if (runInvite._inFlight) {
-        showAlert("이미 등록 처리 중입니다. 잠시만 기다려주세요.");
+        setInviteStatus("이미 등록 처리 중입니다. 잠시만 기다려주세요.", 'warning');
         return;
     }
 
     const name = document.getElementById("newName").value.trim();
     const email = document.getElementById("newEmail").value.trim();
     if (!name || !email) {
-        showAlert("이름/이메일 입력 필요");
+        setInviteStatus("이름과 이메일을 모두 입력해 주세요.", 'warning');
         return;
     }
 
-    const submitBtn = document.querySelector('#inviteModal .btn.btn-primary.w-100');
+    setInviteStatus('');
+    const submitBtn = document.getElementById('inviteSubmitBtn');
     if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerText = '등록 중...';
@@ -2369,24 +2435,13 @@ async function runInvite() {
 
     runInvite._inFlight = true;
     try {
-        const year = new Date().getFullYear();
         let savedEmpId = null;
 
         for (let attempt = 1; attempt <= 5; attempt += 1) {
-            const { data: latestRows, error: latestErr } = await _supabase
-                .from('ref_employees')
-                .select('emp_id')
-                .like('emp_id', `${year}%`)
-                .order('emp_id', { ascending: false })
-                .limit(1);
-            if (latestErr) throw latestErr;
-
-            let nextSeq = 1;
-            if (Array.isArray(latestRows) && latestRows.length > 0 && latestRows[0]?.emp_id) {
-                const matched = String(latestRows[0].emp_id).match(new RegExp(`^${year}(\\d{3})$`));
-                if (matched) nextSeq = Number(matched[1]) + 1;
-            }
-            const empId = `${year}${String(nextSeq).padStart(3, '0')}`;
+            const { data: issuedEmpId, error: issueErr } = await _supabase.rpc('platform_generate_employee_id');
+            if (issueErr) throw issueErr;
+            const empId = String(issuedEmpId || '').trim();
+            if (!empId) throw new Error('사원번호를 생성하지 못했습니다.');
 
             const { error } = await _supabase.from('ref_employees').insert({
                 emp_id: empId,
@@ -2411,11 +2466,11 @@ async function runInvite() {
             if (!isEmpIdConflict || attempt === 5) throw error;
         }
 
-        showAlert(`등록됨: ${savedEmpId}`);
         inviteModal.hide();
-        loadList();
+        await loadList();
     } catch (err) {
-        showAlert("오류: " + err.message);
+        console.error('[admin_employee] runInvite failed:', err);
+        setInviteStatus("등록 실패: " + (err?.message || '잠시 후 다시 시도해 주세요.'), 'danger');
     } finally {
         runInvite._inFlight = false;
         if (submitBtn) {
@@ -2423,7 +2478,7 @@ async function runInvite() {
             submitBtn.innerText = '등록하기';
         }
     }
-}
+} // End of runInvite
 // 1. 설정 모달 열기 (연도 초기화 로직 추가)
 function openSettings() {
     // 1. 연도 Select 박스 초기화 (올해 ~ 2년 전까지)
