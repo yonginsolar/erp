@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.69 | Change: 2026-03-24 - Stabilize approval draft restore modal cleanup to prevent black-screen freeze. -->
+<!-- Version: v1.1.72 | Change: 2026-03-24 - Use canonical ERP origin for Telegram approval links when running locally. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.69 | approval.html');</script>
+  <script>console.log('[Version] v1.1.72 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -805,6 +805,7 @@ let delegationModalInstance = null;
 let approvalTemplateCandidates = [];
 let approvalTemplateSelectedId = '';
 let approvalEditorMode = 'html';
+let approvalDraftRestoreEditorModeHint = '';
 let generalProposalQuill = null;
 let generalProposalQuillSyncing = false;
 let lastGeneralProposalTableSelection = null;
@@ -1433,6 +1434,29 @@ function closeApprovalDraftModal(options = {}) {
     normalizeModalStacking();
 } // End of closeApprovalDraftModal
 
+function waitForModalHidden(modalEl, timeoutMs = 500) {
+    const isVisible = !!modalEl && (
+        modalEl.classList.contains('show')
+        || modalEl.style.display === 'block'
+        || modalEl.getAttribute('aria-hidden') !== 'true'
+    );
+    if (!isVisible) return Promise.resolve();
+    return new Promise((resolve) => {
+        let settled = false;
+        let timerId = 0;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            if (timerId) window.clearTimeout(timerId);
+            resolve();
+        };
+        const onHidden = () => finish();
+        timerId = window.setTimeout(finish, Math.max(Number(timeoutMs) || 0, 0));
+        modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+    });
+} // End of waitForModalHidden
+
 async function loadApprovalDraftFromServer(draftId) {
     const safeDraftId = Number(draftId);
     if (!Number.isInteger(safeDraftId) || safeDraftId <= 0) return;
@@ -1449,16 +1473,36 @@ async function loadApprovalDraftFromServer(draftId) {
         draftRow = data;
     }
 
+    const draftModalEl = document.getElementById('approvalDraftModal');
+    const confirmModalEl = document.getElementById('confirmModal');
+    const wasDraftModalOpen = !!draftModalEl?.classList.contains('show');
+    let draftModalClosedBeforeRestore = false;
+
     if (Number(currentApprovalDraftId || 0) !== safeDraftId && isApprovalComposerDirty()) {
+        if (wasDraftModalOpen) {
+            closeApprovalDraftModal();
+            draftModalClosedBeforeRestore = true;
+            await waitForModalHidden(draftModalEl);
+        }
         const replaceOk = await showConfirm('현재 작성 중인 내용이 있습니다.\n선택한 임시문서를 불러오면 현재 내용은 화면에서 사라집니다.', {
             title: '임시문서 불러오기',
             okText: '불러오기',
             okClass: 'btn-primary'
         });
-        if (!replaceOk) return;
+        await waitForModalHidden(confirmModalEl);
+        if (!replaceOk) {
+            if (wasDraftModalOpen && approvalDraftModalInstance) {
+                approvalDraftModalInstance.show();
+                setTimeout(normalizeModalStacking, 0);
+            }
+            return;
+        }
     }
 
-    closeApprovalDraftModal();
+    if (wasDraftModalOpen && !draftModalClosedBeforeRestore) {
+        closeApprovalDraftModal();
+        await waitForModalHidden(draftModalEl);
+    }
 
     try {
         resetApprovalComposerForm({ keepDraftIdentity: true });
@@ -1466,6 +1510,7 @@ async function loadApprovalDraftFromServer(draftId) {
         const payload = draftRow?.form_payload && typeof draftRow.form_payload === 'object' ? draftRow.form_payload : {};
         const fields = payload?.fields && typeof payload.fields === 'object' ? payload.fields : {};
         const category = String(payload?.category || draftRow?.doc_type || document.getElementById('appCategory')?.value || '일반품의').trim() || '일반품의';
+        approvalDraftRestoreEditorModeHint = shouldPreferHtmlEditorForRestore(category, payload?.body) ? 'html' : '';
 
         const proxyCheckEl = document.getElementById('chkProxy');
         if (proxyCheckEl) proxyCheckEl.checked = !!payload?.proxy?.enabled;
@@ -1574,6 +1619,8 @@ async function loadApprovalDraftFromServer(draftId) {
         console.error('Approval draft restore failed:', error);
         closeApprovalDraftModal({ force: true });
         showAlert('임시저장 문서를 불러오는 중 화면 구성에 실패했습니다.\n페이지를 새로고침한 뒤 다시 시도해 주세요.');
+    } finally {
+        approvalDraftRestoreEditorModeHint = '';
     }
 } // End of loadApprovalDraftFromServer
 
@@ -3700,6 +3747,15 @@ function renderApprovalContent(rawValue, allowHtml = false) {
     return escapeHtml(trimmed).replace(/\n/g, '<br>');
 }
 
+function shouldPreferHtmlEditorForRestore(docType, rawContent) {
+    const safeDocType = String(docType || '').trim();
+    const raw = String(rawContent || '');
+    const trimmed = raw.trim();
+    if (!isApprovalHtmlEditorType(safeDocType) || !trimmed || !hasHtmlTag(trimmed)) return false;
+    if (trimmed.length >= 8000) return true;
+    return /hwpEditorBoardContent|data-hwpjson|mso-|<o:p>/i.test(trimmed);
+} // End of shouldPreferHtmlEditorForRestore
+
 function mergeSystemAppendContent(baseContent, appendContent, allowHtml = false) {
     const base = String(baseContent || '');
     const extra = String(appendContent || '');
@@ -4137,6 +4193,10 @@ function setApprovalEditorContent(rawValue) {
     if (!source) return;
     source.value = String(rawValue || '');
     const currentCategory = getCurrentApprovalCategory();
+    if (approvalDraftRestoreEditorModeHint === 'html' && isApprovalHtmlEditorType(currentCategory)) {
+        approvalEditorMode = 'html';
+        return;
+    }
     if (hasGeneralProposalEnhancedEditor(currentCategory)) syncGeneralProposalQuillFromSource();
     else syncApprovalVisualFromSource();
 }
@@ -4232,15 +4292,37 @@ window.switchApprovalEditorTab = (mode = 'visual') => {
 function setApprovalEditorForCategory(docType) {
     const controls = document.getElementById('appDescEditorControls');
     const legacyToolbar = document.getElementById('legacyApprovalEditorToolbar');
+    const visualBtn = document.getElementById('app-desc-tab-visual');
+    const htmlBtn = document.getElementById('app-desc-tab-html');
     const visualPanel = document.getElementById('app-desc-panel-visual');
     const htmlPanel = document.getElementById('app-desc-panel-html');
     if (!controls || !visualPanel || !htmlPanel) return;
 
     const supportsHtmlEditor = isApprovalHtmlEditorType(docType);
     const useGeneralProposalEditor = hasGeneralProposalEnhancedEditor(docType);
+    const preferHtmlMode = supportsHtmlEditor && approvalDraftRestoreEditorModeHint === 'html';
     if (legacyToolbar) legacyToolbar.classList.toggle('hidden', useGeneralProposalEditor);
     if (supportsHtmlEditor) {
         controls.classList.remove('hidden');
+        if (preferHtmlMode) {
+            const quillWrap = getGeneralProposalQuillWrap();
+            const visual = getApprovalVisualEditor();
+            if (quillWrap) quillWrap.classList.toggle('hidden', !useGeneralProposalEditor);
+            if (visual) visual.classList.toggle('hidden', useGeneralProposalEditor);
+            syncGeneralProposalTemplateToolbar(docType);
+            approvalEditorMode = 'html';
+            visualPanel.classList.remove('active');
+            htmlPanel.classList.add('active');
+            if (visualBtn) {
+                visualBtn.classList.remove('btn-primary');
+                visualBtn.classList.add('btn-outline-primary');
+            }
+            if (htmlBtn) {
+                htmlBtn.classList.add('btn-primary');
+                htmlBtn.classList.remove('btn-outline-primary');
+            }
+            return;
+        }
         syncApprovalVisualSurface(docType);
         window.switchApprovalEditorTab('visual');
     } else {
@@ -4447,13 +4529,27 @@ function buildApprovalNotificationEventKey(targetEmpId, title, linkUrl, meta = n
     ].join('::');
 } // End of buildApprovalNotificationEventKey
 
+function getApprovalNotificationBaseUrl() {
+    const fallbackOrigin = 'https://erp.yonginsolar.kr';
+    const protocol = String(window.location?.protocol || '').trim().toLowerCase();
+    const hostname = String(window.location?.hostname || '').trim().toLowerCase();
+    const isLocal = protocol === 'file:' || hostname === 'localhost' || hostname === '127.0.0.1';
+    if (isLocal) return `${fallbackOrigin}/`;
+
+    const origin = String(window.location?.origin || '').trim();
+    if (origin && origin !== 'null') {
+        return `${origin.replace(/\/+$/, '')}/`;
+    }
+    return `${fallbackOrigin}/`;
+} // End of getApprovalNotificationBaseUrl
+
 async function sendTelegramApprovalNotification(payload) {
     try {
         const targetEmpId = String(payload?.targetEmpId || '').trim();
         if (!targetEmpId) return false;
         let accessToken = await getApprovalFunctionAccessToken(false);
         if (!accessToken) return false;
-        const erpBaseUrl = new URL('./', window.location.href).toString();
+        const erpBaseUrl = getApprovalNotificationBaseUrl();
         const runRequest = async (token) => fetch(`${SUPABASE_URL}/functions/v1/erp-approval-telegram-dm`, {
             method: 'POST',
             headers: {
