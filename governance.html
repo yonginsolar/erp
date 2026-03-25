@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.6 -->
+<!-- Version: v1.0.7 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.6 | governance.html');</script>
+  <script>console.log('[Version] v1.0.7 | governance.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -29,7 +29,7 @@
         <button class="btn btn-outline-secondary btn-sm" onclick="location.href='index.html'">ERP 메인</button>
       </div>
 
-      <button type="button" class="menu-card d-none" id="cardMinutesAdmin" onclick="location.href='../minutes/minutes_admin.html'">
+      <button type="button" class="menu-card d-none" id="cardMinutesAdmin" onclick="openMinutesAdmin()">
         <strong>회의·문서 관리</strong>
         <span>의사록, 공문, 총회 자료를 한 곳에서 관리</span>
       </button>
@@ -58,6 +58,7 @@
   <script>
     const SUPABASE_URL = "https://ifdqlwxgqgsvnawmhlfc.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k";
+    const MINUTES_ADMIN_URL = 'https://www.yonginsolar.kr/minutes/minutes_admin';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     function readStoredUser() {
@@ -88,6 +89,57 @@
       const { data, error } = await _supabase.rpc('get_my_erp_runtime');
       if (error) throw error;
       return data || null;
+    }
+
+    async function buildMinutesAdminTransferUrl() {
+      const destination = new URL(MINUTES_ADMIN_URL);
+      const { data: sessionData, error: sessionError } = await _supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      const currentSession = sessionData?.session || null;
+      if (!currentSession?.refresh_token && !currentSession?.access_token) {
+        throw new Error('ERP_LOGIN_SESSION_REQUIRED');
+      }
+
+      const { data: refreshedData, error: refreshError } = await _supabase.auth.refreshSession();
+      const activeSession = refreshedData?.session || currentSession;
+      if (refreshError && !activeSession?.access_token) {
+        throw new Error('ERP_LOGIN_SESSION_REQUIRED');
+      }
+
+      const accessToken = String(activeSession?.access_token || '').trim();
+      const refreshToken = String(activeSession?.refresh_token || '').trim();
+      if (!accessToken || !refreshToken) {
+        throw new Error('ERP_LOGIN_SESSION_REQUIRED');
+      }
+
+      const transferParams = new URLSearchParams();
+      transferParams.set('erp_access_token', accessToken);
+      transferParams.set('erp_refresh_token', refreshToken);
+      transferParams.set('source', 'erp_governance');
+      destination.hash = transferParams.toString();
+      return destination.href;
+    }
+
+    async function openMinutesAdmin() {
+      const button = document.getElementById('cardMinutesAdmin');
+      if (button) {
+        button.disabled = true;
+        button.style.pointerEvents = 'none';
+      }
+
+      try {
+        const targetUrl = await buildMinutesAdminTransferUrl();
+        window.location.replace(targetUrl);
+      } catch (error) {
+        console.error('governance minutes handoff failed:', error);
+        location.href = `index.html?next=${encodeURIComponent(window.location.href)}`;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.style.pointerEvents = '';
+        }
+      }
     }
 
     async function init() {
