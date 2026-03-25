@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.4 -->
+<!-- Version: v1.0.5 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.4 | vote_hub.html');</script>
+  <script>console.log('[Version] v1.0.5 | vote_hub.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -32,27 +32,27 @@
         <button class="btn btn-outline-secondary btn-sm" onclick="location.href='index.html'">ERP 메인</button>
       </div>
 
-      <button type="button" class="menu-card d-none" id="cardVoteCreate" onclick="location.href='../vote/admin_setup.html?mode=create'">
+      <button type="button" class="menu-card d-none" id="cardVoteCreate" onclick="openVoteTarget('create')">
         <strong>선거 생성</strong>
         <span>새 선거를 만들고 기본 정보, 선거구, 유권자 배정을 시작</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardVoteSetup" onclick="location.href='../vote/admin_setup.html'">
+      <button type="button" class="menu-card d-none" id="cardVoteSetup" onclick="openVoteTarget('setup')">
         <strong>선거 설정</strong>
         <span>기존 선거의 설정을 이어서 수정하고 선거구/명부를 정리</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardVoteAdmin" onclick="location.href='../vote/admin.html'">
+      <button type="button" class="menu-card d-none" id="cardVoteAdmin" onclick="openVoteTarget('admin')">
         <strong>선거 관리</strong>
         <span>후보 승인, 개표, 결과 확인과 운영 관리</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardCandidateApply" onclick="location.href='../vote/candidate_apply.html'">
+      <button type="button" class="menu-card d-none" id="cardCandidateApply" onclick="openVoteTarget('candidate')">
         <strong>후보자 등록</strong>
         <span>후보자 본인 또는 대표자가 등록 신청 화면으로 이동</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardVotePortal" onclick="location.href='../vote/vote_login.html?portal=1'">
+      <button type="button" class="menu-card d-none" id="cardVotePortal" onclick="openVoteTarget('portal')">
         <strong>투표 포털</strong>
         <span>조합원/대표자 본인 확인 후 투표소로 진입</span>
       </button>
@@ -120,6 +120,54 @@
         return false;
       }
       return Array.isArray(data) && data.length > 0;
+    }
+
+    function isLocalVoteHubHost() {
+      return /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+    }
+
+    function buildVoteTargetUrl(key) {
+      const isLocal = isLocalVoteHubHost();
+      const targetMap = isLocal
+        ? {
+            create: '../vote/admin_setup.html?mode=create',
+            setup: '../vote/admin_setup.html',
+            admin: '../vote/admin.html',
+            candidate: '../vote/index.html',
+            portal: '../vote/index.html'
+          }
+        : {
+            create: 'https://www.yonginsolar.kr/vote/admin_setup?mode=create',
+            setup: 'https://www.yonginsolar.kr/vote/admin_setup',
+            admin: 'https://www.yonginsolar.kr/vote/admin',
+            candidate: 'https://www.yonginsolar.kr/vote',
+            portal: 'https://www.yonginsolar.kr/vote'
+          };
+      return targetMap[key] || '';
+    }
+
+    async function openVoteTarget(key) {
+      const targetUrl = buildVoteTargetUrl(key);
+      if (!targetUrl) return;
+
+      try {
+        const { data, error } = await _supabase.auth.getSession();
+        const session = data?.session;
+        if (error || !session?.access_token || !session?.refresh_token) {
+          location.href = targetUrl;
+          return;
+        }
+
+        const nextUrl = new URL(targetUrl, window.location.href);
+        const hashParams = new URLSearchParams();
+        hashParams.set('access_token', session.access_token);
+        hashParams.set('refresh_token', session.refresh_token);
+        nextUrl.hash = hashParams.toString();
+        location.href = nextUrl.toString();
+      } catch (error) {
+        console.error('vote_hub target handoff failed:', error);
+        location.href = targetUrl;
+      }
     }
 
     async function init() {

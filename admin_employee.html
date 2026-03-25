@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.25
-Change: 2026-03-24 - Block duplicate login emails on employee create/update using active or recent-retired window.
+Version: v1.0.29
+Change: 2026-03-25 - Refresh HR print service cache and prefer shrinking long company names before wrapping.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.25 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.29 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -17,7 +17,7 @@ Change: 2026-03-24 - Block duplicate login emails on employee create/update usin
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="print_service.js?v=20260323-3"></script>
+  <script src="print_service.js?v=20260325-3"></script>
   <script src="payroll_durunuri_module.js"></script>
   <script src="salary_ledger_module.js?v=20260323-1"></script>
   <script src="leave_ledger.js"></script>
@@ -93,7 +93,7 @@ Change: 2026-03-24 - Block duplicate login emails on employee create/update usin
         <ul class="nav nav-tabs mb-3" id="settingTab" role="tablist">
           <li class="nav-item">
             <a class="nav-link active" data-bs-toggle="tab" href="#setTax">📊 주요 요율/비과세</a></li>
-          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">출자 1좌 금액</label><input type="number" id="set_memberShareUnitAmount" class="form-control form-control-sm" min="1" step="1" placeholder="예: 100000"><div class="form-text">조합원 명부 엑셀 다운로드의 출자좌수 계산과 시청 신고용 출력에 사용됩니다.</div></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
+          <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setCompany">🏢 회사 정보</a></li><li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#setAdvanced" onclick="loadAdvancedSettings()">⚙️ 고급 설정 (전체)</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="setTax"><h6 class="fw-bold text-primary small border-bottom pb-1 mb-2">4대보험 총 요율 (자동 50:50 분할)</h6><div class="row g-2 mb-3"><div class="col-6"><label class="small text-muted">국민연금 총합 (%)</label><input type="number" id="set_pension_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('pension')"><div class="x-small text-secondary mt-1">인당: <span id="half_pension">0</span>%</div></div><div class="col-6"><label class="small text-muted">건강보험 총합 (%)</label><input type="number" id="set_health_total" class="form-control form-control-sm" step="0.01" oninput="calcHalf('health')"><div class="x-small text-secondary mt-1">인당: <span id="half_health">0</span>%</div></div></div><h6 class="fw-bold text-success small border-bottom pb-1 mb-2">비과세 한도 설정</h6><div class="row g-2 mb-3"><div class="col-4"><label class="small text-muted">식대비과세</label><input type="number" id="set_meal" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">차량비과세</label><input type="number" id="set_car" class="form-control form-control-sm"></div><div class="col-4"><label class="small text-muted">육아비과세</label><input type="number" id="set_child" class="form-control form-control-sm"></div></div></div><div class="tab-pane fade" id="setCompany"><div class="row g-2"><div class="col-12"><label class="small text-muted">법인명(조합명)</label><input type="text" id="set_orgName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">이사장명(이사장)</label><input type="text" id="set_ceoName" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">사업자등록번호</label><input type="text" id="set_bizNum" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 주소</label><input type="text" id="set_address" class="form-control form-control-sm"></div><div class="col-12"><label class="small text-muted">회사 직인</label><input type="hidden" id="set_sealPath"><input type="file" id="set_sealFile" class="form-control form-control-sm" accept="image/*" onchange="handleCompanySealFileChange()"><div class="d-flex justify-content-end mt-2"><button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetCompanySealSelection()">선택 취소</button></div><div class="form-text">설정 저장 시 재직·경력증명서와 급여 출력에 자동 반영됩니다. 새 파일을 선택하지 않으면 현재 직인을 유지합니다.</div><div id="set_sealPreviewWrap" class="mt-2 p-2 border rounded text-center bg-light hidden"><img id="set_sealPreviewImg" src="" alt="회사 직인 미리보기" style="max-height: 96px; max-width: 100%; object-fit: contain;"><div id="set_sealPreviewMeta" class="small text-muted mt-2"></div></div><div id="set_sealEmpty" class="form-text text-muted">등록된 회사 직인이 없습니다.</div></div><div class="col-12"><label class="small text-muted">출자 1좌 금액</label><input type="number" id="set_memberShareUnitAmount" class="form-control form-control-sm" min="1" step="1" placeholder="예: 100000"><div class="form-text">조합원 명부 엑셀 다운로드의 출자좌수 계산과 시청 신고용 출력에 사용됩니다.</div></div></div></div><div class="tab-pane fade" id="setAdvanced"><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm adv-table align-middle"><thead class="table-light"><tr><th>항목 키</th><th style="width: 120px;">값</th><th>설명</th></tr></thead><tbody id="advSettingsBody"></tbody></table></div></div></div></div><div class="modal-footer p-2 border-0"><button class="btn btn-primary w-100 btn-rounded" onclick="saveSettings()">설정 통합 저장</button></div></div></div></div>
 <div class="modal fade" id="inviteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">✨ 직원 신규 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border text-center small mb-3">🆔 사원번호는 자동 생성됩니다.</div><div id="inviteStatus" class="alert d-none small py-2 px-3 mb-3" role="status" aria-live="polite"></div><label class="small text-muted ms-1">이름</label><input type="text" id="newName" class="form-control mb-2" placeholder="홍길동"><label class="small text-muted ms-1">이메일</label><input type="email" id="newEmail" class="form-control mb-2" placeholder="user@gmail.com"><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">직급</label><select id="newRank" class="form-select"></select></div><div class="col"><label class="small text-muted ms-1">권한</label><select id="newRole" class="form-select"><option value="admin_all">전체 관리자 (모든 접근)</option><option value="admin_home">홈페이지 관리자 (전자결재/마이페이지/홈페이지)</option><option value="admin_accounting">회계 관리자 (전자결재/마이페이지/회계관리)</option><option value="staff">일반 직원 (전자결재/마이페이지)</option></select></div></div><div class="row g-2 mb-2"><div class="col"><label class="small text-muted ms-1">결재 레벨</label><select id="newAuthLevel" class="form-select"></select><div class="form-text">1이 최상위, 숫자가 클수록 하위 결재선입니다.</div></div></div><div class="mb-2"><label class="small text-muted ms-1">부서</label><select id="newDeptSelect" class="form-select" onchange="syncInviteDepartmentInput()"><option value="">미지정</option></select></div><div class="mb-3 hidden" id="newDeptCustomWrap"><label class="small text-muted ms-1">직접 입력 부서명</label><input type="text" id="newDeptCustom" class="form-control" placeholder="기획팀"></div><button id="inviteSubmitBtn" class="btn btn-primary w-100 btn-rounded py-2" onclick="runInvite()">등록하기</button></div></div></div></div>
 
 <div class="modal fade" id="detailModal" tabindex="-1">
@@ -429,6 +429,8 @@ function getRoleBadge(roleKey) {
 }
 
 let settings = {}; let companyInfo = {}; let advancedSettingsRaw = [];
+let companySealPreviewObjectUrl = '';
+const COMPANY_SEAL_STORAGE_PREFIX = 'company-seals';
 let currentEmpId = null, currentEmpDisplayNo = null, currentEmpName = null, currentAnnualSalary = 0; 
 let currentEmpHireDate = null, currentEmpResignDate = null; 
 let confirmCallback = null; let currentSalaryDataForPrint = null; 
@@ -2113,6 +2115,185 @@ async function logHrAudit(action, summary, detail = null) {
   
 function showLoading() { loadingModal.show(); }
 function hideLoading() { loadingModal.hide(); }
+
+function trimAdminEmployeeCompanyValue(value) {
+    return String(value == null ? '' : value).trim();
+} // End of trimAdminEmployeeCompanyValue
+
+function escapeAdminEmployeeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+} // End of escapeAdminEmployeeRegExp
+
+function resolveAdminEmployeeCompanyName(info) {
+    return trimAdminEmployeeCompanyValue(info?.company_name || info?.orgName);
+} // End of resolveAdminEmployeeCompanyName
+
+function resolveAdminEmployeeChairmanName(info) {
+    return trimAdminEmployeeCompanyValue(info?.chairman_name || info?.ceoName);
+} // End of resolveAdminEmployeeChairmanName
+
+function buildAdminEmployeeCompanyContact(info) {
+    const direct = trimAdminEmployeeCompanyValue(info?.company_contact);
+    if (direct) return direct;
+
+    const parts = [
+        trimAdminEmployeeCompanyValue(info?.company_contact_name),
+        trimAdminEmployeeCompanyValue(info?.company_contact_phone)
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join(' ');
+
+    return trimAdminEmployeeCompanyValue(info?.email);
+} // End of buildAdminEmployeeCompanyContact
+
+function buildAdminEmployeeCompanyAddress(info) {
+    const rawAddress = trimAdminEmployeeCompanyValue(info?.company_address);
+    if (!rawAddress) return '';
+
+    const nameCandidates = Array.from(new Set([
+        resolveAdminEmployeeCompanyName(info),
+        trimAdminEmployeeCompanyValue(info?.orgName)
+    ].filter(Boolean)));
+    let normalized = rawAddress;
+
+    nameCandidates.forEach((name) => {
+        const safeName = escapeAdminEmployeeRegExp(name);
+        normalized = normalized.replace(new RegExp(`^${safeName}\\s*`, 'g'), '').trim();
+        normalized = normalized.replace(new RegExp(`\\s*${safeName}$`, 'g'), '').trim();
+    });
+
+    return normalized || rawAddress;
+} // End of buildAdminEmployeeCompanyAddress
+
+function buildAdminEmployeeCompanyPrintProfile() {
+    return {
+        companyName: resolveAdminEmployeeCompanyName(companyInfo),
+        chairmanName: resolveAdminEmployeeChairmanName(companyInfo),
+        address: buildAdminEmployeeCompanyAddress(companyInfo),
+        contact: buildAdminEmployeeCompanyContact(companyInfo),
+        logoUrl: trimAdminEmployeeCompanyValue(companyInfo?.logo_horizontal_url),
+        sealUrl: trimAdminEmployeeCompanyValue(companyInfo?.seal_url)
+    };
+} // End of buildAdminEmployeeCompanyPrintProfile
+
+function ensureAdminEmployeeCompanyPrintProfile(profile, contextLabel) {
+    if (!trimAdminEmployeeCompanyValue(profile?.companyName)) {
+        throw new Error(`${contextLabel} 전에 회사 정보에서 법인명(조합명)을 먼저 저장해주세요.`);
+    }
+    if (!trimAdminEmployeeCompanyValue(profile?.chairmanName)) {
+        throw new Error(`${contextLabel} 전에 회사 정보에서 이사장명을 먼저 저장해주세요.`);
+    }
+} // End of ensureAdminEmployeeCompanyPrintProfile
+
+function revokeCompanySealPreviewObjectUrl() {
+    if (!companySealPreviewObjectUrl) return;
+    try {
+        URL.revokeObjectURL(companySealPreviewObjectUrl);
+    } catch (_) {
+        void 0;
+    }
+    companySealPreviewObjectUrl = '';
+} // End of revokeCompanySealPreviewObjectUrl
+
+function syncCompanySealSettingsUi(previewUrl, previewMetaText) {
+    const hiddenInput = document.getElementById('set_sealPath');
+    const fileInput = document.getElementById('set_sealFile');
+    const previewWrap = document.getElementById('set_sealPreviewWrap');
+    const previewImg = document.getElementById('set_sealPreviewImg');
+    const previewMeta = document.getElementById('set_sealPreviewMeta');
+    const emptyState = document.getElementById('set_sealEmpty');
+    if (!hiddenInput || !fileInput || !previewWrap || !previewImg || !previewMeta || !emptyState) return;
+
+    const rawPath = String(companyInfo?._seal_storage_path || '').trim();
+    const activePreviewUrl = String(previewUrl ?? companyInfo?._seal_preview_url ?? companyInfo?.seal_url ?? '').trim();
+    hiddenInput.value = rawPath;
+
+    if (activePreviewUrl) {
+        previewImg.src = activePreviewUrl;
+        previewWrap.classList.remove('hidden');
+        emptyState.classList.add('hidden');
+    } else {
+        previewImg.removeAttribute('src');
+        previewWrap.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+    }
+
+    if (previewMetaText) {
+        previewMeta.textContent = previewMetaText;
+    } else if (fileInput.files && fileInput.files.length > 0) {
+        previewMeta.textContent = `선택한 파일: ${fileInput.files[0].name} (저장 전 미리보기)`;
+    } else if (rawPath) {
+        previewMeta.textContent = '현재 저장된 회사 직인';
+    } else {
+        previewMeta.textContent = '';
+    }
+} // End of syncCompanySealSettingsUi
+
+function resetCompanySealSelection() {
+    const fileInput = document.getElementById('set_sealFile');
+    if (fileInput) fileInput.value = '';
+    revokeCompanySealPreviewObjectUrl();
+    syncCompanySealSettingsUi();
+} // End of resetCompanySealSelection
+
+function handleCompanySealFileChange() {
+    const fileInput = document.getElementById('set_sealFile');
+    const file = fileInput?.files?.[0] || null;
+    if (!file) {
+        revokeCompanySealPreviewObjectUrl();
+        syncCompanySealSettingsUi();
+        return;
+    }
+
+    const safeMime = String(file.type || '').toLowerCase();
+    const safeName = String(file.name || '');
+    const isImageFile = safeMime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safeName);
+    if (!isImageFile) {
+        showAlert('직인 이미지만 업로드할 수 있습니다.');
+        resetCompanySealSelection();
+        return;
+    }
+
+    revokeCompanySealPreviewObjectUrl();
+    companySealPreviewObjectUrl = URL.createObjectURL(file);
+    syncCompanySealSettingsUi(companySealPreviewObjectUrl, `선택한 파일: ${safeName} (저장 전 미리보기)`);
+} // End of handleCompanySealFileChange
+
+function getManagedCompanySealStoragePath(coopId) {
+    return `${COMPANY_SEAL_STORAGE_PREFIX}/${coopId}/company_seal`;
+} // End of getManagedCompanySealStoragePath
+
+async function uploadCompanySealIfNeeded(coopId) {
+    const fileInput = document.getElementById('set_sealFile');
+    const hiddenInput = document.getElementById('set_sealPath');
+    const currentPath = String(hiddenInput?.value || '').trim();
+    const file = fileInput?.files?.[0] || null;
+    if (!file) return currentPath;
+
+    const safeMime = String(file.type || '').toLowerCase();
+    const safeName = String(file.name || '');
+    const isImageFile = safeMime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safeName);
+    if (!isImageFile) throw new Error('직인 이미지만 업로드할 수 있습니다.');
+
+    const storagePath = getManagedCompanySealStoragePath(coopId);
+    const uploadOptions = { upsert: true };
+    if (safeMime) uploadOptions.contentType = safeMime;
+    const { error: uploadError } = await _supabase.storage.from('attachments').upload(storagePath, file, uploadOptions);
+    if (uploadError) throw uploadError;
+
+    const { data: signedData } = await _supabase.storage.from('attachments').createSignedUrl(storagePath, 3600);
+    const signedUrl = String(signedData?.signedUrl || '').trim();
+
+    if (hiddenInput) hiddenInput.value = storagePath;
+    if (fileInput) fileInput.value = '';
+    revokeCompanySealPreviewObjectUrl();
+
+    companyInfo._seal_storage_path = storagePath;
+    companyInfo._seal_preview_url = signedUrl;
+    companyInfo._seal_row_present = true;
+    companyInfo.seal_url = signedUrl;
+    syncCompanySealSettingsUi(signedUrl, '현재 저장된 회사 직인');
+    return storagePath;
+} // End of uploadCompanySealIfNeeded
 function autoHyphen(target) { target.value = target.value.replace(/[^0-9]/g, '').replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g, "$1-$2-$3").replace(/(\-{1,2})$/g, ""); }
 function openAddressSearch() { new daum.Postcode({ oncomplete: function(data) { let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress; if(data.buildingName) addr += ' (' + data.buildingName + ')'; document.getElementById("editAddress").value = addr; document.getElementById("editAddressDetail").focus(); } }).open(); }
 
@@ -2291,7 +2472,47 @@ async function loadList() {
     }
 }
 
-async function loadCompanyInfo() { companyInfo = {}; const coopId = String(myInfo?.coop_id || '').trim(); if (!coopId) { companyInfo.chairman_name = "이사장"; syncHrStructureSettingsUi(); return; } const { data } = await _supabase.from('ref_company_info').select('*').eq('coop_id', coopId); if(data) data.forEach(r => { companyInfo[r.key] = r.value; }); companyInfo.chairman_name = companyInfo.ceoName || "이사장"; if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) { const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url); companyInfo.logo_horizontal_url = logoData.publicUrl; } if (companyInfo.seal_url) { let sealPath = companyInfo.seal_url.startsWith('http') ? companyInfo.seal_url.split('/').pop() : companyInfo.seal_url; const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600); if (sealData) companyInfo.seal_url = sealData.signedUrl; } syncHrStructureSettingsUi(); }
+async function loadCompanyInfo() {
+    companyInfo = {};
+    const coopId = String(myInfo?.coop_id || '').trim();
+    if (!coopId) {
+        companyInfo.chairman_name = '';
+        companyInfo._seal_storage_path = '';
+        companyInfo._seal_preview_url = '';
+        companyInfo._seal_row_present = false;
+        syncCompanySealSettingsUi();
+        syncHrStructureSettingsUi();
+        return;
+    }
+
+    const { data } = await _supabase.from('ref_company_info').select('*').eq('coop_id', coopId);
+    if (data) data.forEach((r) => { companyInfo[r.key] = r.value; });
+    companyInfo.chairman_name = resolveAdminEmployeeChairmanName(companyInfo);
+
+    if (companyInfo.logo_horizontal_url && !companyInfo.logo_horizontal_url.startsWith('http')) {
+        const { data: logoData } = _supabase.storage.from('assets').getPublicUrl(companyInfo.logo_horizontal_url);
+        companyInfo.logo_horizontal_url = logoData.publicUrl;
+    }
+
+    companyInfo._seal_row_present = Object.prototype.hasOwnProperty.call(companyInfo, 'seal_url');
+    companyInfo._seal_storage_path = String(companyInfo.seal_url || '').trim();
+    companyInfo._seal_preview_url = '';
+    if (companyInfo._seal_storage_path) {
+        const sealPath = companyInfo._seal_storage_path.startsWith('http')
+            ? companyInfo._seal_storage_path.split('/').pop()
+            : companyInfo._seal_storage_path;
+        if (sealPath) {
+            const { data: sealData } = await _supabase.storage.from('attachments').createSignedUrl(sealPath, 3600);
+            if (sealData?.signedUrl) {
+                companyInfo.seal_url = sealData.signedUrl;
+                companyInfo._seal_preview_url = sealData.signedUrl;
+            }
+        }
+    }
+
+    syncCompanySealSettingsUi();
+    syncHrStructureSettingsUi();
+} // End of loadCompanyInfo
 async function loadAdvancedSettings() { const tbody = document.getElementById("advSettingsBody"); tbody.innerHTML = '<tr><td colspan="3">로딩...</td></tr>'; const coopId = String(myInfo?.coop_id || '').trim(); if (!coopId) { advancedSettingsRaw = []; tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">조합 정보를 확인할 수 없습니다.</td></tr>'; return; } const { data } = await _supabase.from('ref_settings').select('*').eq('coop_id', coopId).order('category'); if(data) { advancedSettingsRaw = data; tbody.innerHTML = data.map((r, i) => `<tr><td><small class="text-muted">${r.item_key}</small></td><td><input type="number" step="0.00001" value="${r.item_value}" id="adv_val_${i}"></td><td><small>${r.description||'-'}</small></td></tr>`).join(""); } }
 
 function calcHalf(type) { document.getElementById(`half_${type}`).innerText = (Number(document.getElementById(`set_${type}_total`).value)/2).toFixed(3); }
@@ -2629,11 +2850,12 @@ async function loadSettings() {
 
     // 회사 정보는 연도와 무관하게 공통 관리 (원본 그대로 로드)
     // *회사 정보는 보통 매년 바뀌지 않으므로 ref_company_info 하나만 씁니다.
-    document.getElementById("set_orgName").value = companyInfo['orgName'] || "";
-    document.getElementById("set_ceoName").value = companyInfo['ceoName'] || "";
+    document.getElementById("set_orgName").value = resolveAdminEmployeeCompanyName(companyInfo);
+    document.getElementById("set_ceoName").value = resolveAdminEmployeeChairmanName(companyInfo);
     document.getElementById("set_bizNum").value = companyInfo['bizNum'] || "";
     document.getElementById("set_address").value = companyInfo['company_address'] || "";
     document.getElementById("set_memberShareUnitAmount").value = companyInfo['member_export_share_unit_amount'] || "";
+    syncCompanySealSettingsUi();
     await loadCalendarIcsSettings();
     applyHrRuntimeProfileUi();
     syncHrProfileCompanySettingsUi();
@@ -2730,6 +2952,7 @@ async function saveSettings() {
         const org = document.getElementById("set_orgName").value;
         const ceo = document.getElementById("set_ceoName").value;
         const memberShareUnitAmount = String(document.getElementById("set_memberShareUnitAmount").value || '').trim();
+        const sealStoragePath = await uploadCompanySealIfNeeded(coopId);
         const departmentCatalog = collectHrDepartmentCatalogFromUi();
         const positionCatalog = collectHrPositionCatalogFromUi();
         const overtimePolicy = collectHrOvertimePolicyFromUi();
@@ -2757,6 +2980,9 @@ async function saveSettings() {
             { coop_id: coopId, key: HR_APPROVAL_DEFAULT_MIDDLE_APPROVER_KEY, value: approvalLineConfig.middleApproverEmpId },
             { coop_id: coopId, key: HR_APPROVAL_DEFAULT_FINAL_APPROVER_KEY, value: approvalLineConfig.finalApproverEmpId }
         ];
+        if (sealStoragePath || companyInfo._seal_row_present) {
+            cUpdates.push({ coop_id: coopId, key: 'seal_url', value: sealStoragePath });
+        }
         const approvalRuleCatalog = collectWorkforceLiteApprovalRuleCatalogFromUi();
         WORKFORCE_LITE_APPROVAL_SETTING_CATALOG.forEach((item) => {
             cUpdates.push({
@@ -3309,9 +3535,8 @@ async function reqIssueCert() {
     }
     
     // 4. 회사 정보 준비
-    const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
-    const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
-    let cleanAddr = (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim();
+    const companyProfile = buildAdminEmployeeCompanyPrintProfile();
+    ensureAdminEmployeeCompanyPrintProfile(companyProfile, certType);
     
     // 부서/직급 정보 확인
     let dept="", pos=""; 
@@ -3321,7 +3546,6 @@ async function reqIssueCert() {
     // 5. 인쇄 데이터 패키징 (DB에서 받은 안전한 cert_num 사용)
     const certData = { 
         docNum: newCert.cert_num, // DB가 생성한 번호
-        logo: companyInfo.logo_horizontal_url || "", 
         name: currentEmpName, 
         birth: birthStr, 
         dept: dept, 
@@ -3332,11 +3556,13 @@ async function reqIssueCert() {
         today: new Date().toLocaleDateString('ko-KR', { timeZone: KST_TZ_ADMIN_EMP, year: 'numeric', month: 'long', day: 'numeric' }), 
         certTitle: certType,
         employmentStatement: certStatement,
-        chairman: ceoName, 
-        compName: compName, 
-        compAddr: cleanAddr, 
-        contact: companyInfo.company_contact, 
-        seal: companyInfo.seal_url 
+        chairman: companyProfile.chairmanName, 
+        compName: companyProfile.companyName, 
+        compAddr: companyProfile.address, 
+        contact: companyProfile.contact, 
+        logo: companyProfile.logoUrl,
+        seal: companyProfile.sealUrl,
+        siteUrl: ''
     };
     
     // 6. 인쇄 서비스 호출
@@ -3370,8 +3596,8 @@ async function printSalaryAdmin() {
     const fmt = (n) => Number(n || 0).toLocaleString(); 
     
     // 회사 정보 안전하게 참조
-    const compName = companyInfo.company_name || companyInfo.orgName || "용인모두의햇빛협동조합";
-    const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
+    const companyProfile = buildAdminEmployeeCompanyPrintProfile();
+    ensureAdminEmployeeCompanyPrintProfile(companyProfile, '급여명세서 출력');
 
     // 데이터 패키징
     const salaryData = { 
@@ -3387,10 +3613,10 @@ async function printSalaryAdmin() {
         d_emp: fmt(d.ded_employ), d_inc: fmt(d.ded_income), d_loc: fmt(d.ded_local), 
         d_adv: fmt(d.ded_advance), d_adv_label: dedAdvanceLabel, d_cap: fmt(d.ded_capital), d_total: fmt(d.ded_total), 
         net: fmt(d.net_pay), 
-        logo: companyInfo.logo_horizontal_url || "", 
-        seal: companyInfo.seal_url, 
-        chairman: ceoName, 
-        compName: compName 
+        logo: companyProfile.logoUrl, 
+        seal: companyProfile.sealUrl, 
+        chairman: companyProfile.chairmanName, 
+        compName: companyProfile.companyName 
     };
 
     // 부서/직급 조회 후 인쇄 모듈 호출
@@ -3433,13 +3659,14 @@ async function printLedger() {
 
     // 2. 공통 모듈로 급여대장 출력
     const [y, m] = ym.split('-');
-    const ceoName = companyInfo.chairman_name || companyInfo.ceoName || "이사장";
+    const companyProfile = buildAdminEmployeeCompanyPrintProfile();
+    ensureAdminEmployeeCompanyPrintProfile(companyProfile, '급여대장 출력');
     const state = window.SalaryLedgerModule.createStateFromRows(adjustedList, ym);
     try {
         window.SalaryLedgerModule.openPrintWindow(state, {
             title: `${y}년 ${Number(m)}월 급여대장`,
-            logoUrl: companyInfo.logo_horizontal_url || "",
-            chairmanName: ceoName,
+            logoUrl: companyProfile.logoUrl,
+            chairmanName: companyProfile.chairmanName,
             showApprovalBox: true,
             showPrintDate: true,
             footerText: 'ERP 급여관리 출력본'

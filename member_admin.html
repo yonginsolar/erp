@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.2 -->
+<!-- Version: v1.0.3 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.2 | member_admin.html');</script>
+  <script>console.log('[Version] v1.0.3 | member_admin.html');</script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow">
@@ -49,7 +49,7 @@
     (function () {
       const params = new URLSearchParams(window.location.search || '');
       params.set('scope', 'member_admin');
-      if (!params.get('tab')) params.set('tab', 'members');
+      if (!params.get('tab')) params.set('tab', 'dashboard');
       window.location.replace('admin_member.html?' + params.toString());
     })();
   </script>
@@ -57,9 +57,9 @@
 <body>
   <div class="redirect-card">
     <div class="redirect-title">조합원 관리로 이동 중입니다</div>
-    <p class="redirect-copy">조합원 명부, 신청 처리, 자금/배당 관리 화면으로 바로 연결합니다.</p>
+    <p class="redirect-copy">운영 대시보드를 먼저 보여준 뒤 조합원 명부, 신청 처리, 자금/배당 관리로 이어집니다.</p>
     <noscript>
-      <a class="redirect-link" href="admin_member.html?scope=member_admin&tab=members">직접 열기</a>
+      <a class="redirect-link" href="admin_member.html?scope=member_admin&tab=dashboard">직접 열기</a>
     </noscript>
   </div>
 </body>

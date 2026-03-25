@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.35 | Change: 2026-03-24 - Reflect display employee number in mypage outputs and employee lookups. -->
+<!-- Version: v1.0.38 | Change: 2026-03-25 - Refresh print service cache and prefer shrinking long company names in mypage certificate signatures. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.35 | mypage.html');</script>
+  <script>console.log('[Version] v1.0.38 | mypage.html');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -13,7 +13,7 @@
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="erp_runtime_guard.js"></script>
-<script src="print_service.js?v=20260323-3"></script>
+<script src="print_service.js?v=20260325-3"></script>
 <script src="payroll_durunuri_module.js"></script>
 <script src="leave_ledger.js"></script>
   
@@ -661,10 +661,61 @@ data:{...(infoMap||{})}
 void 0;
 }
 }
+function trimMypageCompanyValue(value){
+return String(value==null?'':value).trim();
+}
+function escapeMypageCompanyRegExp(value){
+return String(value||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+}
+function resolveMypageCompanyName(info){
+return trimMypageCompanyValue(info?.company_name||info?.orgName);
+}
+function resolveMypageChairmanName(info){
+return trimMypageCompanyValue(info?.chairman_name||info?.ceoName);
+}
+function buildMypageCompanyContact(info){
+const direct=trimMypageCompanyValue(info?.company_contact);
+if(direct) return direct;
+const parts=[
+trimMypageCompanyValue(info?.company_contact_name),
+trimMypageCompanyValue(info?.company_contact_phone)
+].filter(Boolean);
+if(parts.length>0) return parts.join(' ');
+return trimMypageCompanyValue(info?.email);
+}
+function buildMypageCompanyAddress(info){
+const rawAddress=trimMypageCompanyValue(info?.company_address);
+if(!rawAddress) return '';
+const nameCandidates=Array.from(new Set([
+resolveMypageCompanyName(info),
+trimMypageCompanyValue(info?.orgName)
+].filter(Boolean)));
+let normalized=rawAddress;
+nameCandidates.forEach((name)=>{
+const safeName=escapeMypageCompanyRegExp(name);
+normalized=normalized.replace(new RegExp(`^${safeName}\\s*`,'g'),'').trim();
+normalized=normalized.replace(new RegExp(`\\s*${safeName}$`,'g'),'').trim();
+});
+return normalized||rawAddress;
+}
+function buildMypageCompanyPrintProfile(){
+return {
+companyName:resolveMypageCompanyName(companyInfo),
+chairmanName:resolveMypageChairmanName(companyInfo),
+address:buildMypageCompanyAddress(companyInfo),
+contact:buildMypageCompanyContact(companyInfo),
+logoUrl:trimMypageCompanyValue(companyInfo?.logo_horizontal_url),
+sealUrl:trimMypageCompanyValue(companyInfo?.seal_url)
+};
+}
+function ensureMypageCompanyPrintProfile(profile,contextLabel){
+if(!trimMypageCompanyValue(profile?.companyName)) throw new Error(`${contextLabel} 전에 회사 정보의 법인명(조합명)을 먼저 확인해주세요.`);
+if(!trimMypageCompanyValue(profile?.chairmanName)) throw new Error(`${contextLabel} 전에 회사 정보의 이사장명을 먼저 확인해주세요.`);
+}
 function applyMypageCompanyInfoState(infoMap={}){
 companyInfo={...(infoMap||{})};
 syncMypageLeaveTypeRuntime();
-companyInfo.chairman=companyInfo.ceoName||"이사장";
+companyInfo.chairman=resolveMypageChairmanName(companyInfo);
 }
 async function refreshMypageCompanyInfo(coopId){
 try{
@@ -1744,6 +1795,9 @@ async function printSalaryPopup() {
     const payDateStr = `${payDateObj.getFullYear()}년 ${payDateObj.getMonth() + 1}월 ${payDateObj.getDate()}일`;
 
     // 데이터 패키징 (PrintService 규격에 맞춤)
+    const companyProfile = buildMypageCompanyPrintProfile();
+    ensureMypageCompanyPrintProfile(companyProfile,'급여명세서 출력');
+
     const salaryData = {
         titleDate: `${y}년 ${Number(m)}월`,
         attrDate: `${y}년 ${Number(m)}월 (귀속)`,
@@ -1766,10 +1820,10 @@ async function printSalaryPopup() {
         net: fmt(d.net_pay),
         
         // 회사 정보
-        logo: companyInfo.logo_horizontal_url || "",
-        seal: companyInfo.seal_url,
-        chairman: companyInfo.chairman || "이사장",
-        compName: companyInfo.company_name || "용인모두의햇빛협동조합"
+        logo: companyProfile.logoUrl,
+        seal: companyProfile.sealUrl,
+        chairman: companyProfile.chairmanName,
+        compName: companyProfile.companyName
     };
 
     // 모듈 호출
@@ -1857,10 +1911,13 @@ async function runCertIssue() {
         return showAlert("발급 중 오류 발생: " + error.message);
     }
 
+    const companyProfile = buildMypageCompanyPrintProfile();
+    ensureMypageCompanyPrintProfile(companyProfile, certMeta.type);
+
     // 4. 인쇄 데이터 준비 (DB에서 받은 cert_num 사용)
     const certData = {
         docNum: newCert.cert_num, // DB가 생성한 안전한 번호
-        logo: companyInfo.logo_horizontal_url || "",
+        logo: companyProfile.logoUrl,
         name: myInfo.emp_name,
         birth: birthStr,
         dept: myInfo.department || "-",
@@ -1871,11 +1928,12 @@ async function runCertIssue() {
         today: dateStr,
         certTitle: certMeta.type,
         employmentStatement: certMeta.statement,
-        chairman: companyInfo.chairman || "이사장",
-        compName: companyInfo.company_name || "용인모두의햇빛협동조합",
-        compAddr: (companyInfo.company_address || "").replace(/용인모두의\s?햇빛협동조합/g, '').trim(),
-        contact: companyInfo.company_contact || "",
-        seal: companyInfo.seal_url
+        chairman: companyProfile.chairmanName,
+        compName: companyProfile.companyName,
+        compAddr: companyProfile.address,
+        contact: companyProfile.contact,
+        seal: companyProfile.sealUrl,
+        siteUrl: ''
     };
 
     // 모듈 호출

@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.39
-Change: 2026-03-23 - 자금 및 이용고배당관리의 자산수증이익 탭에 수동 입력/엑셀 업로드/양식 다운로드를 추가.
+Version: v1.0.42
+Change: 2026-03-25 - Refresh certificate generator cache and prefer shrinking long company names in member PDFs.
 -->
 <html lang="ko">
 <head>
   <script>
-  window.ADMIN_MEMBER_VERSION = 'v1.0.39';
+  window.ADMIN_MEMBER_VERSION = 'v1.0.42';
   console.log('[Version] ' + window.ADMIN_MEMBER_VERSION + ' | admin_member.html');
   document.addEventListener('DOMContentLoaded', function () {
     var badge = document.getElementById('appVersionBadge');
@@ -27,7 +27,7 @@ Change: 2026-03-23 - 자금 및 이용고배당관리의 자산수증이익 탭�
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="https://www.yonginsolar.kr/badges.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="../cert_generator.js?v=20260303_06"></script>
+<script src="../cert_generator.js?v=20260325_03"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 
@@ -2431,9 +2431,9 @@ async function ensureCertGeneratorReady() {
     if (!g_certGeneratorEnsurePromise) {
         g_certGeneratorEnsurePromise = (async () => {
             const candidates = [
-                '../cert_generator.js?v=20260303_06',
-                '/cert_generator.js?v=20260303_06',
-                'https://www.yonginsolar.kr/cert_generator.js?v=20260303_06'
+                '../cert_generator.js?v=20260325_03',
+                '/cert_generator.js?v=20260325_03',
+                'https://www.yonginsolar.kr/cert_generator.js?v=20260325_03'
             ];
             for (const src of candidates) {
                 try {
@@ -5553,10 +5553,10 @@ return cachedRoleIsAdmin;
 function canAccessAdminMemberTab(tabName) {
 const safeTab = String(tabName || '').trim();
 if (!safeTab) return true;
-if (ADMIN_MEMBER_PAGE_SCOPE && safeTab === 'dashboard') return false;
+if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin' && safeTab === 'dashboard') return false;
 if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin' && ADMIN_MEMBER_TABS.site_admin.includes(safeTab)) return false;
 if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin' && ADMIN_MEMBER_TABS.member_admin.includes(safeTab)) return false;
-if (safeTab === 'dashboard') return true;
+if (safeTab === 'dashboard') return ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
 if (ADMIN_MEMBER_TABS.member_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin');
 if (ADMIN_MEMBER_TABS.site_admin.includes(safeTab)) return isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin');
 return true;
@@ -5567,7 +5567,7 @@ g_adminMemberRuntime = runtime && typeof runtime === 'object' ? runtime : null;
 const memberAdminEnabled = isAdminMemberRuntimeModuleEnabled('member_admin') && hasAdminMemberScopePermission('member_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
 const voteEnabled = memberAdminEnabled && isAdminMemberRuntimeModuleEnabled('vote');
 const siteAdminEnabled = isAdminMemberRuntimeModuleEnabled('site_admin') && hasAdminMemberScopePermission('site_admin') && ADMIN_MEMBER_PAGE_SCOPE !== 'member_admin';
-const dashboardEnabled = !ADMIN_MEMBER_PAGE_SCOPE;
+const dashboardEnabled = ADMIN_MEMBER_PAGE_SCOPE !== 'site_admin';
 [
 ['nav-dashboard', dashboardEnabled],
 ['memberAdminCategory', memberAdminEnabled],
@@ -5593,7 +5593,7 @@ function getInitialAdminMemberTab() {
     const requested = String(params.get('tab') || '').trim();
     if (requested && canAccessAdminMemberTab(requested)) return requested;
   } catch (_) { void 0; }
-  if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin') return 'members';
+  if (ADMIN_MEMBER_PAGE_SCOPE === 'member_admin') return 'dashboard';
   if (ADMIN_MEMBER_PAGE_SCOPE === 'site_admin') return 'site';
   return 'dashboard';
 }
@@ -6492,7 +6492,8 @@ async function submitIssueDoc() {
                     cutoff_date: cutoffDate || null,
                     period_from: periodFrom || null,
                     period_to: periodTo || null,
-                    details: detailRows
+                    details: detailRows,
+                    coopId: String(g_adminMemberRuntime?.coop_id || '').trim() || null
                 },
                 receiptNo,
                 chairmanName,
@@ -6516,7 +6517,8 @@ async function submitIssueDoc() {
             if (error) throw error;
 
             await generateContributionCert(memberData, amount, cert.cert_number, chairmanName, _supabase, {
-                issueDate: mode === 'cutoff' ? cutoffDate : null
+                issueDate: mode === 'cutoff' ? cutoffDate : null,
+                coopId: String(g_adminMemberRuntime?.coop_id || '').trim() || null
             });
         }
 

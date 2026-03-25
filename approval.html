@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.1.72 | Change: 2026-03-24 - Use canonical ERP origin for Telegram approval links when running locally. -->
+<!-- Version: v1.1.73 | Change: 2026-03-25 - Close preview modal before showing approval confirmation to avoid nested modal stacking regressions. -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.1.72 | approval.html');</script>
+  <script>console.log('[Version] v1.1.73 | approval.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -7541,8 +7541,44 @@ async function submitApprovalActionModal() {
     showAlert(finishNotice);
 } // End of submitApprovalActionModal
 
-function procDoc(docId, action) {
-    openApprovalActionModal(docId, action);
+async function procDoc(docId, action) {
+    const safeDocId = toPositiveDocId(docId);
+    const safeAction = String(action || '').trim() === '반려' ? '반려' : '승인';
+    const relViewModalEl = document.getElementById('relViewModal');
+    const isPreviewFlow = !!(
+        safeDocId
+        && relViewModal
+        && relViewModalEl
+        && relViewModalEl.classList.contains('show')
+        && Number(currentViewingDocId || 0) === Number(safeDocId)
+    );
+
+    if (!isPreviewFlow) {
+        openApprovalActionModal(safeDocId, safeAction);
+        return;
+    }
+
+    relViewModal.hide();
+    await waitForModalHidden(relViewModalEl);
+
+    const ok = await showConfirm(
+        safeAction === '반려' ? '이 문서를 반려하시겠습니까?' : '이 문서를 승인하시겠습니까?',
+        {
+            title: safeAction === '반려' ? '문서 반려' : '문서 승인',
+            okText: safeAction === '반려' ? '반려' : '승인',
+            okClass: safeAction === '반려' ? 'btn-danger' : 'btn-success'
+        }
+    );
+
+    if (!ok) {
+        await openRelView(safeDocId);
+        return;
+    }
+
+    const result = await processApprovalDoc(safeDocId, safeAction, '');
+    if (result?.ok) {
+        showAlert(String(result.notice || '처리되었습니다.'));
+    }
 } // End of procDoc
 
 // [핵심] 결재 처리

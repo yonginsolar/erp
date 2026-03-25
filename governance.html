@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- Version: v1.0.8 -->
+<!-- Version: v1.0.9 -->
 <html lang="ko">
 <head>
-  <script>console.log('[Version] v1.0.8 | governance.html');</script>
+  <script>console.log('[Version] v1.0.9 | governance.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -29,17 +29,17 @@
         <button class="btn btn-outline-secondary btn-sm" onclick="location.href='index.html'">ERP 메인</button>
       </div>
 
-      <button type="button" class="menu-card d-none" id="cardMinutesAdmin" onclick="openMinutesAdmin()">
+      <button type="button" class="menu-card d-none" id="cardMinutesAdmin" onclick="openMinutesRoute('integrated_admin')">
         <strong>회의·문서 관리</strong>
         <span>의사록, 공문, 총회 자료를 한 곳에서 관리</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardDocuments" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_view'">
+      <button type="button" class="menu-card d-none" id="cardDocuments" onclick="openMinutesRoute('documents')">
         <strong>문서함</strong>
         <span>공개 문서와 자료집 열람</span>
       </button>
 
-      <button type="button" class="menu-card d-none" id="cardSignature" onclick="location.href='https://www.yonginsolar.kr/minutes/minutes_sign'">
+      <button type="button" class="menu-card d-none" id="cardSignature" onclick="openMinutesRoute('signature')">
         <strong>전자서명</strong>
         <span>임원·대의원 서명 요청 확인</span>
       </button>
@@ -58,7 +58,12 @@
   <script>
     const SUPABASE_URL = "https://ifdqlwxgqgsvnawmhlfc.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k";
-    const MINUTES_ADMIN_URL = 'https://www.yonginsolar.kr/minutes/admin_minutes';
+    const MINUTES_ROUTE_TARGETS = Object.freeze({
+      integrated_admin: 'https://www.yonginsolar.kr/minutes/admin_minutes',
+      documents: 'https://www.yonginsolar.kr/minutes/minutes_view',
+      signature: 'https://www.yonginsolar.kr/minutes/minutes_sign'
+    });
+    const MINUTES_ROUTE_SESSION_KEYS = new Set(['integrated_admin']);
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     function readStoredUser() {
@@ -91,8 +96,24 @@
       return data || null;
     }
 
-    async function buildMinutesAdminTransferUrl() {
-      const destination = new URL(MINUTES_ADMIN_URL);
+    function getMinutesRouteTarget(routeKey) {
+      const safeKey = String(routeKey || '').trim();
+      const target = MINUTES_ROUTE_TARGETS[safeKey];
+      if (!target) throw new Error('MINUTES_ROUTE_NOT_FOUND');
+      return target;
+    }
+
+    function requiresMinutesRouteSession(routeKey) {
+      return MINUTES_ROUTE_SESSION_KEYS.has(String(routeKey || '').trim());
+    }
+
+    async function buildMinutesRouteUrl(routeKey) {
+      const safeKey = String(routeKey || '').trim();
+      const destination = new URL(getMinutesRouteTarget(safeKey));
+      if (!requiresMinutesRouteSession(safeKey)) {
+        return destination.href;
+      }
+
       const { data: sessionData, error: sessionError } = await _supabase.auth.getSession();
       if (sessionError) throw sessionError;
 
@@ -121,18 +142,23 @@
       return destination.href;
     }
 
-    async function openMinutesAdmin() {
-      const button = document.getElementById('cardMinutesAdmin');
+    async function openMinutesRoute(routeKey) {
+      const buttonByRoute = {
+        integrated_admin: 'cardMinutesAdmin',
+        documents: 'cardDocuments',
+        signature: 'cardSignature'
+      };
+      const button = document.getElementById(buttonByRoute[String(routeKey || '').trim()] || '');
       if (button) {
         button.disabled = true;
         button.style.pointerEvents = 'none';
       }
 
       try {
-        const targetUrl = await buildMinutesAdminTransferUrl();
-        window.location.replace(targetUrl);
+        const targetUrl = await buildMinutesRouteUrl(routeKey);
+        window.location.href = targetUrl;
       } catch (error) {
-        console.error('governance minutes handoff failed:', error);
+        console.error('governance minutes route failed:', routeKey, error);
         location.href = `index.html?next=${encodeURIComponent(window.location.href)}`;
       } finally {
         if (button) {
