@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-Version: v1.0.24
-Change: 2026-03-24 - Fix employee invite modal stacking and use global employee ID generator.
+Version: v1.0.25
+Change: 2026-03-24 - Block duplicate login emails on employee create/update using active or recent-retired window.
 -->
 <html>
 <head>
-  <script>console.log('[Version] v1.0.24 | admin_employee.html');</script>
+  <script>console.log('[Version] v1.0.25 | admin_employee.html');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -2215,6 +2215,44 @@ function compareEmployeesByDisplayNo(a, b) {
     return String(a?.emp_id || '').localeCompare(String(b?.emp_id || ''));
 } // End of compareEmployeesByDisplayNo
 
+function normalizeAdminEmployeeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+} // End of normalizeAdminEmployeeEmail
+
+function isLoginRelevantEmployeeRow(row) {
+    if (!row) return false;
+    if (row.is_active === false) return false;
+    if (!row.resign_date) return true;
+    const resignDate = new Date(row.resign_date);
+    if (Number.isNaN(resignDate.getTime())) return false;
+    const threshold = new Date();
+    threshold.setFullYear(threshold.getFullYear() - 3);
+    return resignDate >= threshold;
+} // End of isLoginRelevantEmployeeRow
+
+function buildEmployeeLoginConflictLabel(row) {
+    const displayNo = getEmployeeDisplayNoValue(row);
+    const name = String(row?.emp_name || '').trim() || '직원';
+    return `${displayNo} / ${name}`;
+} // End of buildEmployeeLoginConflictLabel
+
+async function findEmployeeEmailConflict(email, options = {}) {
+    const safeEmail = normalizeAdminEmployeeEmail(email);
+    if (!safeEmail) return null;
+    const excludeEmpId = String(options?.excludeEmpId || '').trim();
+    const { data, error } = await _supabase
+        .from('ref_employees')
+        .select('emp_id, emp_name, display_emp_no, resign_date, is_active, email')
+        .ilike('email', safeEmail);
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    return rows.find((row) => {
+        const rowEmpId = String(row?.emp_id || '').trim();
+        if (excludeEmpId && rowEmpId === excludeEmpId) return false;
+        return normalizeAdminEmployeeEmail(row?.email) === safeEmail && isLoginRelevantEmployeeRow(row);
+    }) || null;
+} // End of findEmployeeEmailConflict
+
 async function loadList() {
     const tbody = document.getElementById("empListBody");
     tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">로딩 중...</td></tr>';
@@ -2443,7 +2481,7 @@ async function runInvite() {
     }
 
     const name = document.getElementById("newName").value.trim();
-    const email = document.getElementById("newEmail").value.trim();
+    const email = normalizeAdminEmployeeEmail(document.getElementById("newEmail").value);
     if (!name || !email) {
         setInviteStatus("이름과 이메일을 모두 입력해 주세요.", 'warning');
         return;
@@ -2458,6 +2496,12 @@ async function runInvite() {
 
     runInvite._inFlight = true;
     try {
+        const emailConflict = await findEmployeeEmailConflict(email);
+        if (emailConflict) {
+            setInviteStatus(`이미 로그인 이메일로 사용 중인 직원이 있습니다: ${buildEmployeeLoginConflictLabel(emailConflict)}`, 'danger');
+            return;
+        }
+
         let savedEmpId = null;
 
         for (let attempt = 1; attempt <= 5; attempt += 1) {
@@ -2846,7 +2890,7 @@ async function saveBasicInfo() {
     const name = document.getElementById("editName").value; 
     const memberId = document.getElementById("editMemberId").value; // [추가됨]
     const phone = document.getElementById("editPhone").value; 
-    const email = document.getElementById("editEmail").value; 
+    const email = normalizeAdminEmployeeEmail(document.getElementById("editEmail").value); 
     
     let fullAddress = document.getElementById("editAddress").value; 
     const detail = document.getElementById("editAddressDetail").value; 
@@ -2861,12 +2905,17 @@ async function saveBasicInfo() {
     const normalizedHireDate = hireDate ? hireDate : null;
     const normalizedSalaryApplyDate = date ? date : null;
 
+    const emailConflict = await findEmployeeEmailConflict(email, { excludeEmpId: currentEmpId });
+    if (emailConflict) {
+        return showAlert(`이미 로그인 이메일로 사용 중인 직원이 있습니다: ${buildEmployeeLoginConflictLabel(emailConflict)}`);
+    }
+
     // 2. 업데이트 객체 생성 (빈 값이면 null 처리)
     const updates = { 
         emp_name: name, 
         member_id: memberId ? String(memberId).trim() : null,
         phone: phone, 
-        email: email, 
+        email: email || null, 
         position: position,
         auth_level: authLevel,
         department: department,
